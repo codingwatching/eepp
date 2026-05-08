@@ -455,7 +455,8 @@ function build_link_configuration( package_name, use_ee_icon )
 		targetname ( package_name .. extension )
 
 	filter { "system:windows", "action:not vs*" }
-		linkoptions { "-static-libgcc -static-libstdc++ -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic" }
+	    linkoptions { "-static-libgcc", "-static-libstdc++" }
+	    linkoptions { "-Wl,-Bstatic", "-lstdc++", "-Wl,--whole-archive", "-lwinpthread", "-Wl,--no-whole-archive", "-Wl,-Bdynamic" }
 
 	filter { "system:windows", "action:vs*" }
 		if table.contains( backends, "SDL2" ) then

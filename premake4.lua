@@ -455,12 +455,13 @@ end
 
 function add_cross_config_links()
 	if not is_vs() then
-		if os.is_real("mingw32") or os.is_real("mingw64") or os.is_real("windows") or os.is_real("ios") then -- if is crosscompiling from *nix
-			linkoptions { "-static-libgcc -static-libstdc++ -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic" }
+		if os.is_real("mingw32") or os.is_real("mingw64") or os.is_real("windows") then -- if is crosscompiling from *nix
+	    	linkoptions { "-static-libgcc", "-static-libstdc++" }
+	    	linkoptions { "-Wl,-Bstatic", "-lstdc++", "-Wl,--whole-archive", "-lwinpthread", "-Wl,--no-whole-archive", "-Wl,-Bdynamic" }
 		end
 
-		if os.is_real("mingw32") or os.is_real("mingw64") then
-			linkoptions { "-Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic" }
+		if os.is_real("ios") then
+			linkoptions { "-static-libgcc -static-libstdc++ -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic" }
 		end
 	end
 end
