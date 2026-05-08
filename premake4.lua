@@ -935,8 +935,13 @@ function select_backend()
 		elseif os_findlib("SDL2", "SDL2") then
 			add_sdl2()
 		else
-			print("ERROR: Couldnt find any backend. Forced SDL2.")
-			add_sdl2( true )
+			if table.contains( backends, "SDL3" ) then
+				add_sdl3()
+				print("ERROR: Couldnt find any backend. Forced SDL3.")
+			else
+				add_sdl2()
+				print("ERROR: Couldnt find any backend. Forced SDL2.")
+			end
 		end
 	end
 end
