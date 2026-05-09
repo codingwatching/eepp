@@ -45,6 +45,14 @@ std::string UITextNode::getPropertyString( const PropertyDefinition* propertyDef
 			break;
 	}
 
+	const StyleSheetProperty* prop = getUIStyle()->getProperty( propertyDef->getPropertyId() );
+	if ( prop )
+		return prop->value();
+
+	if ( propertyDef->isInherited() && getParent() && getParent()->isWidget() )
+		return static_cast<UIWidget*>( getParent() )
+			->getPropertyString( propertyDef, propertyIndex );
+
 	return UIWidget::getPropertyString( propertyDef, propertyIndex );
 }
 

@@ -541,7 +541,12 @@ int TerminalDisplay::resetColor( const Uint32& index, const char* name ) {
 				}
 			}
 		}
-	} else {
+	} else if ( String::iequals( "default", name ) ) {
+		unsigned char r, g, b;
+		getColor( index, &r, &g, &b );
+		col = Color( r, g, b, 255 );
+		colorParsed = true;
+	} else if ( Color::isColorString( std::string_view{ name }, true ) ) {
 		col = Color::fromString( name );
 		colorParsed = true;
 	}
