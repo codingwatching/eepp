@@ -53,4 +53,12 @@ void UITextNode::setText( const String& text ) {
 	}
 }
 
+bool UITextNode::isWhitespaceOnly() const {
+	for ( char c : mText ) {
+		if ( c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != '\v' )
+			return false;
+	}
+	return true;
+}
+
 }} // namespace EE::UI

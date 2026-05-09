@@ -7,19 +7,73 @@
 #include <eepp/ui/css/stylesheetspecification.hpp>
 #include <eepp/ui/uinode.hpp>
 #include <eepp/ui/uinodedrawable.hpp>
+#include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uiwidget.hpp>
 using namespace EE::Math::easing;
 
 namespace EE { namespace UI {
 
-UINodeDrawable::Repeat UINodeDrawable::repeatFromText( const std::string& text ) {
-	if ( "repeat" == text )
-		return UINodeDrawable::Repeat::RepeatXY;
-	if ( "repeat-x" == text )
-		return UINodeDrawable::Repeat::RepeatX;
-	if ( "repeat-y" == text )
-		return UINodeDrawable::Repeat::RepeatY;
-	return UINodeDrawable::Repeat::NoRepeat;
+void UINodeDrawable::repeatFromText( const std::string& text, RepeatX& repeatX, RepeatY& repeatY ) {
+	auto parts = String::split( text, ' ' );
+
+	std::string xVal;
+	std::string yVal;
+
+	if ( parts.size() == 1 ) {
+		if ( "repeat-x" == parts[0] ) {
+			xVal = "repeat";
+			yVal = "no-repeat";
+		} else if ( "repeat-y" == parts[0] ) {
+			xVal = "no-repeat";
+			yVal = "repeat";
+		} else {
+			xVal = parts[0];
+			yVal = parts[0];
+		}
+	} else if ( parts.size() >= 2 ) {
+		xVal = parts[0];
+		yVal = parts[1];
+	}
+
+	auto parseOne = []( const std::string& val ) {
+		if ( "no-repeat" == val )
+			return RepeatX::NoRepeat;
+		if ( "space" == val )
+			return RepeatX::Space;
+		if ( "round" == val )
+			return RepeatX::Round;
+		return RepeatX::Repeat;
+	};
+
+	repeatX = parseOne( xVal );
+	repeatY = static_cast<RepeatY>( parseOne( yVal ) );
+}
+
+UINodeDrawable::LayerDrawable::Origin
+UINodeDrawable::LayerDrawable::originFromText( const std::string& text ) {
+	if ( "border-box" == text )
+		return Origin::BorderBox;
+	if ( "content-box" == text )
+		return Origin::ContentBox;
+	return Origin::PaddingBox;
+}
+
+UINodeDrawable::LayerDrawable::Clip
+UINodeDrawable::LayerDrawable::clipFromText( const std::string& text ) {
+	if ( "padding-box" == text )
+		return Clip::PaddingBox;
+	if ( "content-box" == text )
+		return Clip::ContentBox;
+	return Clip::BorderBox;
+}
+
+UINodeDrawable::LayerDrawable::Attachment
+UINodeDrawable::LayerDrawable::attachmentFromText( const std::string& text ) {
+	if ( "fixed" == text )
+		return Attachment::Fixed;
+	if ( "local" == text )
+		return Attachment::Local;
+	return Attachment::Scroll;
 }
 
 UINodeDrawable* UINodeDrawable::New( UINode* owner ) {
@@ -64,8 +118,18 @@ bool UINodeDrawable::layerExists( int index ) {
 UINodeDrawable::LayerDrawable* UINodeDrawable::getLayer( int index ) {
 	auto it = mGroup.find( index );
 
-	if ( it == mGroup.end() )
+	if ( it == mGroup.end() ) {
 		mGroup[index] = UINodeDrawable::LayerDrawable::New( this );
+
+		// HTML background-repeat defaults to "repeat", non-HTML to
+		// "no-repeat". The LayerDrawable constructor uses NoRepeat
+		// (the eepp/non-HTML default), so reset it for Html mode.
+		if ( mBackgroundMode == BackgroundMode::Html ) {
+			auto* layer = mGroup[index];
+			layer->setRepeatX( RepeatX::Repeat );
+			layer->setRepeatY( RepeatY::Repeat );
+		}
+	}
 
 	return mGroup[index];
 }
@@ -91,10 +155,15 @@ void UINodeDrawable::setDrawablePositionY( int index, const std::string& positio
 }
 
 void UINodeDrawable::setDrawableRepeat( int index, const std::string& repeatRule ) {
-	getLayer( index )->setRepeat( repeatFromText( repeatRule ) );
+	RepeatX rx;
+	RepeatY ry;
+	repeatFromText( repeatRule, rx, ry );
+	getLayer( index )->setRepeatX( rx );
+	getLayer( index )->setRepeatY( ry );
 
 	for ( auto& layIt : mGroup ) {
-		if ( layIt.second->getRepeat() != Repeat::NoRepeat ) {
+		if ( layIt.second->getRepeatX() != RepeatX::NoRepeat ||
+			 layIt.second->getRepeatY() != RepeatY::NoRepeat ) {
 			setClipEnabled( true );
 			break;
 		}
@@ -103,6 +172,18 @@ void UINodeDrawable::setDrawableRepeat( int index, const std::string& repeatRule
 
 void UINodeDrawable::setDrawableSize( int index, const std::string& sizeEq ) {
 	getLayer( index )->setSizeEq( sizeEq );
+}
+
+void UINodeDrawable::setDrawableOrigin( int index, const std::string& origin ) {
+	getLayer( index )->setOrigin( origin );
+}
+
+void UINodeDrawable::setDrawableClip( int index, const std::string& clip ) {
+	getLayer( index )->setClip( clip );
+}
+
+void UINodeDrawable::setDrawableAttachment( int index, const std::string& attachment ) {
+	getLayer( index )->setAttachment( attachment );
 }
 
 void UINodeDrawable::setDrawableColor( int index, const Color& color ) {
@@ -147,6 +228,28 @@ void UINodeDrawable::setSmooth( bool smooth ) {
 	getBackgroundDrawable().setSmooth( smooth );
 }
 
+void UINodeDrawable::setBackgroundMode( BackgroundMode mode ) {
+	mBackgroundMode = mode;
+
+	// HTML background-repeat defaults to "repeat", non-HTML defaults to
+	// "no-repeat". When switching mode, update any existing layers that
+	// still carry the LayerDrawable default (NoRepeat for both axes).
+	if ( mode == BackgroundMode::Html ) {
+		for ( auto& entry : mGroup ) {
+			auto* layer = entry.second;
+			if ( layer->getRepeatX() == RepeatX::NoRepeat &&
+				 layer->getRepeatY() == RepeatY::NoRepeat ) {
+				layer->setRepeatX( RepeatX::Repeat );
+				layer->setRepeatY( RepeatY::Repeat );
+			}
+		}
+	}
+}
+
+BackgroundMode UINodeDrawable::getBackgroundMode() const {
+	return mBackgroundMode;
+}
+
 Sizef UINodeDrawable::getSize() {
 	return mSize;
 }
@@ -180,7 +283,7 @@ void UINodeDrawable::draw( const Vector2f& position, const Sizef& size, const Ui
 	if ( mNeedsUpdate )
 		update();
 
-	if ( mClipEnabled )
+	if ( mClipEnabled || mBackgroundMode == BackgroundMode::Html )
 		GLi->getClippingMask()->clipPlaneEnable( mPosition.x, mPosition.y, mSize.x, mSize.y );
 
 	if ( mBackgroundColor.getColor().a != 0 ) {
@@ -221,6 +324,20 @@ void UINodeDrawable::draw( const Vector2f& position, const Sizef& size, const Ui
 	for ( auto drawableIt = mGroup.rbegin(); drawableIt != mGroup.rend(); ++drawableIt ) {
 		UINodeDrawable::LayerDrawable* drawable = drawableIt->second;
 
+		bool clipContent = mBackgroundMode == BackgroundMode::Html &&
+						   drawable->getClip() == LayerDrawable::Clip::ContentBox;
+		Rectf contentRect;
+		if ( clipContent && mOwner->isWidget() ) {
+			Rectf pad = mOwner->asType<UIWidget>()->getPixelsPadding();
+			contentRect.Left = mPosition.x + pad.Left;
+			contentRect.Top = mPosition.y + pad.Top;
+			contentRect.Right = mPosition.x + mSize.x - pad.Right;
+			contentRect.Bottom = mPosition.y + mSize.y - pad.Bottom;
+			GLi->getClippingMask()->clipPlaneEnable( contentRect.Left, contentRect.Top,
+													 contentRect.Right - contentRect.Left,
+													 contentRect.Bottom - contentRect.Top );
+		}
+
 		if ( alpha != 255 ) {
 			Color color = drawable->getColor();
 			drawable->setAlpha( alpha * color.a / 255 );
@@ -229,6 +346,9 @@ void UINodeDrawable::draw( const Vector2f& position, const Sizef& size, const Ui
 		} else {
 			drawable->draw( position, size );
 		}
+
+		if ( clipContent )
+			GLi->getClippingMask()->clipPlaneDisable();
 	}
 
 	if ( mSmooth ) {
@@ -243,7 +363,7 @@ void UINodeDrawable::draw( const Vector2f& position, const Sizef& size, const Ui
 		clippingMask->stencilMaskDisable();
 	}
 
-	if ( mClipEnabled )
+	if ( mClipEnabled || mBackgroundMode == BackgroundMode::Html )
 		GLi->getClippingMask()->clipPlaneDisable();
 }
 
@@ -285,7 +405,14 @@ UINodeDrawable::LayerDrawable::LayerDrawable( UINodeDrawable* container ) :
 	mOwnsDrawable( false ),
 	mDrawable( NULL ),
 	mResourceChangeCbId( 0 ),
-	mRepeat( Repeat::NoRepeat ) {}
+	mRepeatX( RepeatX::NoRepeat ),
+	mRepeatY( RepeatY::NoRepeat ),
+	mOriginEq( "padding-box" ),
+	mClipEq( "border-box" ),
+	mAttachmentEq( "scroll" ),
+	mOrigin( Origin::PaddingBox ),
+	mClip( Clip::BorderBox ),
+	mAttachment( Attachment::Scroll ) {}
 
 UINodeDrawable::LayerDrawable::~LayerDrawable() {
 	if ( NULL != mDrawable && 0 != mResourceChangeCbId && mDrawable->isDrawableResource() ) {
@@ -344,48 +471,112 @@ void UINodeDrawable::LayerDrawable::draw( const Vector2f& position, const Sizef&
 		mDrawable->setColorFilter( getColor() );
 	mDrawable->setAlpha( getAlpha() );
 
-	switch ( mRepeat ) {
-		case Repeat::NoRepeat:
-			mDrawable->draw( mPosition + mOffset, mDrawableSize );
+	Vector2f effectivePos = mPosition;
+	if ( mAttachment == Attachment::Fixed ) {
+		auto* sceneNode = mContainer->getOwner()->getUISceneNode();
+		if ( sceneNode )
+			effectivePos = sceneNode->getPosition();
+	}
+
+	auto drawY = [this, &effectivePos]( Float xPos, Float drawH, Sizef tileSz ) {
+		switch ( mRepeatY ) {
+			case RepeatY::NoRepeat:
+				mDrawable->draw( Vector2f( xPos, effectivePos.y + mOffset.y ), tileSz );
+				break;
+			case RepeatY::Repeat:
+				repeatYdraw( mDrawable, effectivePos, Vector2f( xPos - effectivePos.x, mOffset.y ),
+							 mSize, tileSz );
+				break;
+			case RepeatY::Space: {
+				if ( drawH <= 0 )
+					break;
+				int count = (int)( mSize.getHeight() / drawH );
+				if ( count < 1 )
+					count = 1;
+				Float totalTilesH = count * drawH;
+				Float gap = ( mSize.getHeight() - totalTilesH ) / (Float)( count + 1 );
+				for ( int i = 0; i < count; ++i ) {
+					Float y = effectivePos.y + gap + (Float)i * ( drawH + gap );
+					mDrawable->draw( Vector2f( xPos, y ), tileSz );
+				}
+				break;
+			}
+			case RepeatY::Round: {
+				if ( drawH <= 0 )
+					break;
+				Float scale = mSize.getHeight() / drawH;
+				int count = (int)Math::round( scale );
+				if ( count < 1 )
+					count = 1;
+				Float roundedH = mSize.getHeight() / (Float)count;
+				Float aspect = drawH > 0 ? tileSz.getWidth() / tileSz.getHeight() : 1.0f;
+				Sizef roundSz( roundedH * aspect, roundedH );
+				for ( int i = 0; i < count; ++i ) {
+					Float y = effectivePos.y + (Float)i * roundedH;
+					mDrawable->draw( Vector2f( xPos, y ), roundSz );
+				}
+				break;
+			}
+			default:
+				break;
+		}
+	};
+
+	switch ( mRepeatX ) {
+		case RepeatX::NoRepeat:
+			drawY( effectivePos.x + mOffset.x, mDrawableSize.getHeight(), mDrawableSize );
 			break;
-		case Repeat::RepeatX: {
+		case RepeatX::Repeat: {
 			if ( mDrawableSize.getWidth() > 0 ) {
-				Float startX = mPosition.x + mOffset.x - mDrawableSize.getWidth();
-				while ( startX > mPosition.x - mDrawableSize.getWidth() ) {
-					mDrawable->draw( Vector2f( startX, mPosition.y + mOffset.y ), mDrawableSize );
+				Float startX = effectivePos.x + mOffset.x - mDrawableSize.getWidth();
+				while ( startX > effectivePos.x - mDrawableSize.getWidth() ) {
+					drawY( startX, mDrawableSize.getHeight(), mDrawableSize );
 					startX -= mDrawableSize.getWidth();
-				};
-				mDrawable->draw( mPosition + mOffset, mDrawableSize );
-				startX = mPosition.x + mOffset.x + mDrawableSize.getWidth();
-				while ( startX < mPosition.x + mSize.getWidth() ) {
-					mDrawable->draw( Vector2f( startX, mPosition.y + mOffset.y ), mDrawableSize );
+				}
+				drawY( effectivePos.x + mOffset.x, mDrawableSize.getHeight(), mDrawableSize );
+				startX = effectivePos.x + mOffset.x + mDrawableSize.getWidth();
+				while ( startX < effectivePos.x + mSize.getWidth() ) {
+					drawY( startX, mDrawableSize.getHeight(), mDrawableSize );
 					startX += mDrawableSize.getWidth();
-				};
+				}
 			}
 			break;
 		}
-		case Repeat::RepeatY: {
-			repeatYdraw( mDrawable, mPosition, mOffset, mSize, mDrawableSize );
-			break;
-		}
-		case Repeat::RepeatXY: {
-			if ( mDrawableSize.getWidth() > 0 ) {
-				Float startX = mPosition.x + mOffset.x - mDrawableSize.getWidth();
-				while ( startX > mPosition.x - mDrawableSize.getWidth() ) {
-					repeatYdraw( mDrawable, mPosition, Vector2f( startX - mPosition.x, mOffset.y ),
-								 mSize, mDrawableSize );
-					startX -= mDrawableSize.getWidth();
-				};
-				repeatYdraw( mDrawable, mPosition, mOffset, mSize, mDrawableSize );
-				startX = mPosition.x + mOffset.x + mDrawableSize.getWidth();
-				while ( startX < mPosition.x + mSize.getWidth() ) {
-					repeatYdraw( mDrawable, mPosition, Vector2f( startX - mPosition.x, mOffset.y ),
-								 mSize, mDrawableSize );
-					startX += mDrawableSize.getWidth();
-				};
+		case RepeatX::Space: {
+			if ( mDrawableSize.getWidth() <= 0 )
+				break;
+			int count = (int)( mSize.getWidth() / mDrawableSize.getWidth() );
+			if ( count < 1 )
+				count = 1;
+			Float totalTilesW = count * mDrawableSize.getWidth();
+			Float gap = ( mSize.getWidth() - totalTilesW ) / (Float)( count + 1 );
+			for ( int i = 0; i < count; ++i ) {
+				Float x = effectivePos.x + gap + (Float)i * ( mDrawableSize.getWidth() + gap );
+				drawY( x, mDrawableSize.getHeight(), mDrawableSize );
 			}
 			break;
 		}
+		case RepeatX::Round: {
+			if ( mDrawableSize.getWidth() <= 0 )
+				break;
+			Float scale = mSize.getWidth() / mDrawableSize.getWidth();
+			int count = (int)Math::round( scale );
+			if ( count < 1 )
+				count = 1;
+			Float roundedW = mSize.getWidth() / (Float)count;
+			Float aspect = mDrawableSize.getWidth() > 0
+							   ? mDrawableSize.getHeight() / mDrawableSize.getWidth()
+							   : 1.0f;
+			Float roundedH = roundedW * aspect;
+			Sizef roundSz( roundedW, roundedH );
+			for ( int i = 0; i < count; ++i ) {
+				Float x = effectivePos.x + (Float)i * roundedW;
+				drawY( x, roundedH, roundSz );
+			}
+			break;
+		}
+		default:
+			break;
 	}
 	if ( mColorWasSet )
 		mDrawable->setColorFilter( prevColor );
@@ -471,13 +662,24 @@ const Vector2f& UINodeDrawable::LayerDrawable::getOffset() const {
 	return mOffset;
 }
 
-const UINodeDrawable::Repeat& UINodeDrawable::LayerDrawable::getRepeat() const {
-	return mRepeat;
+UINodeDrawable::RepeatX UINodeDrawable::LayerDrawable::getRepeatX() const {
+	return mRepeatX;
 }
 
-void UINodeDrawable::LayerDrawable::setRepeat( const UINodeDrawable::Repeat& repeat ) {
-	if ( mRepeat != repeat ) {
-		mRepeat = repeat;
+UINodeDrawable::RepeatY UINodeDrawable::LayerDrawable::getRepeatY() const {
+	return mRepeatY;
+}
+
+void UINodeDrawable::LayerDrawable::setRepeatX( RepeatX repeatX ) {
+	if ( mRepeatX != repeatX ) {
+		mRepeatX = repeatX;
+		invalidate();
+	}
+}
+
+void UINodeDrawable::LayerDrawable::setRepeatY( RepeatY repeatY ) {
+	if ( mRepeatY != repeatY ) {
+		mRepeatY = repeatY;
 		invalidate();
 	}
 }
@@ -515,12 +717,8 @@ Sizef UINodeDrawable::LayerDrawable::calcDrawableSize( const std::string& drawab
 		Sizef drawableSize( mDrawable->getSize() );
 		Float Scale1 = mSize.getWidth() / drawableSize.getWidth();
 		Float Scale2 = mSize.getHeight() / drawableSize.getHeight();
-		if ( Scale1 < 1 || Scale2 < 1 ) {
-			Scale1 = eemin( Scale1, Scale2 );
-			size = Sizef( drawableSize.getWidth() * Scale1, drawableSize.getHeight() * Scale1 );
-		} else {
-			size = drawableSize;
-		}
+		Scale1 = eemin( Scale1, Scale2 );
+		size = Sizef( drawableSize.getWidth() * Scale1, drawableSize.getHeight() * Scale1 );
 	} else if ( drawableSizeEq == "cover" ) {
 		Sizef drawableSize( mDrawable->getSize() );
 		Float Scale1 = mSize.getWidth() / drawableSize.getWidth();
@@ -588,39 +786,57 @@ Vector2f UINodeDrawable::LayerDrawable::calcPosition( std::string positionXEq,
 	bool needsRoundingX = positionXEq.back() == '%';
 	bool needsRoundingY = positionYEq.back() == '%';
 
+	Sizef ownerSize = mContainer->getOwner()->getPixelsSize();
+	Float refWidth = ownerSize.getWidth();
+	Float refHeight = ownerSize.getHeight();
+	Float originOffX = 0;
+	Float originOffY = 0;
+
+	if ( mContainer->getBackgroundMode() == BackgroundMode::Html &&
+		 mOrigin == Origin::ContentBox ) {
+		Rectf pad = mContainer->getOwner()->getPixelsPadding();
+		refWidth -= pad.Left + pad.Right;
+		refHeight -= pad.Top + pad.Bottom;
+		originOffX = pad.Left;
+		originOffY = pad.Top;
+	}
+
 	if ( posX.size() == 2 ) {
 		CSS::StyleSheetLength xl1( posX[0] );
 		CSS::StyleSheetLength xl2( posX[1] );
 
-		position.x = mContainer->getOwner()->convertLength(
-			xl1, mContainer->getOwner()->getPixelsSize().getWidth() - mDrawableSize.getWidth() );
+		position.x =
+			mContainer->getOwner()->convertLength( xl1, refWidth - mDrawableSize.getWidth() );
 
-		Float xl2Val = mContainer->getOwner()->convertLength(
-			xl2, mContainer->getOwner()->getPixelsSize().getWidth() - mDrawableSize.getWidth() );
+		Float xl2Val =
+			mContainer->getOwner()->convertLength( xl2, refWidth - mDrawableSize.getWidth() );
 
 		position.x += ( posX[0] == "right" ) ? -xl2Val : xl2Val;
 	} else {
 		CSS::StyleSheetLength xl( posX[0] );
-		position.x = mContainer->getOwner()->convertLength(
-			xl, mContainer->getOwner()->getPixelsSize().getWidth() - mDrawableSize.getWidth() );
+		position.x =
+			mContainer->getOwner()->convertLength( xl, refWidth - mDrawableSize.getWidth() );
 	}
 
 	if ( posY.size() == 2 ) {
 		CSS::StyleSheetLength yl1( posY[0] );
 		CSS::StyleSheetLength yl2( posY[1] );
 
-		position.y = mContainer->getOwner()->convertLength(
-			yl1, mContainer->getOwner()->getPixelsSize().getHeight() - mDrawableSize.getHeight() );
+		position.y =
+			mContainer->getOwner()->convertLength( yl1, refHeight - mDrawableSize.getHeight() );
 
-		Float xl2Val = mContainer->getOwner()->convertLength(
-			yl2, mContainer->getOwner()->getPixelsSize().getHeight() - mDrawableSize.getHeight() );
+		Float xl2Val =
+			mContainer->getOwner()->convertLength( yl2, refHeight - mDrawableSize.getHeight() );
 
 		position.y += ( posY[0] == "bottom" ) ? -xl2Val : xl2Val;
 	} else {
 		CSS::StyleSheetLength yl( posY[0] );
-		position.y = mContainer->getOwner()->convertLength(
-			yl, mContainer->getOwner()->getPixelsSize().getHeight() - mDrawableSize.getHeight() );
+		position.y =
+			mContainer->getOwner()->convertLength( yl, refHeight - mDrawableSize.getHeight() );
 	}
+
+	position.x += originOffX;
+	position.y += originOffY;
 
 	if ( needsRoundingX )
 		position.x = Math::round( position.x );
@@ -640,6 +856,54 @@ void UINodeDrawable::LayerDrawable::setSizeEq( const std::string& sizeEq ) {
 		mSizeEq = sizeEq;
 		invalidate();
 	}
+}
+
+void UINodeDrawable::LayerDrawable::setOrigin( const std::string& origin ) {
+	if ( mOriginEq != origin ) {
+		mOriginEq = origin;
+		mOrigin = originFromText( origin );
+		invalidate();
+	}
+}
+
+void UINodeDrawable::LayerDrawable::setClip( const std::string& clip ) {
+	if ( mClipEq != clip ) {
+		mClipEq = clip;
+		mClip = clipFromText( clip );
+		invalidate();
+	}
+}
+
+void UINodeDrawable::LayerDrawable::setAttachment( const std::string& attachment ) {
+	if ( mAttachmentEq != attachment ) {
+		mAttachmentEq = attachment;
+		mAttachment = attachmentFromText( attachment );
+		invalidate();
+	}
+}
+
+UINodeDrawable::LayerDrawable::Origin UINodeDrawable::LayerDrawable::getOrigin() const {
+	return mOrigin;
+}
+
+UINodeDrawable::LayerDrawable::Clip UINodeDrawable::LayerDrawable::getClip() const {
+	return mClip;
+}
+
+UINodeDrawable::LayerDrawable::Attachment UINodeDrawable::LayerDrawable::getAttachment() const {
+	return mAttachment;
+}
+
+const std::string& UINodeDrawable::LayerDrawable::getOriginEq() const {
+	return mOriginEq;
+}
+
+const std::string& UINodeDrawable::LayerDrawable::getClipEq() const {
+	return mClipEq;
+}
+
+const std::string& UINodeDrawable::LayerDrawable::getAttachmentEq() const {
+	return mAttachmentEq;
 }
 
 const std::string& UINodeDrawable::LayerDrawable::getPositionY() const {

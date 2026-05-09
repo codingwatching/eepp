@@ -175,10 +175,11 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			return bounds;
 
 		// UITextNode is a logical marker; its text is rendered by the
-		// RichText engine — just advance the character index and return
+		// RichText engine just advance the character index and return
 		// empty bounds so it does not affect any widget's geometry.
 		if ( node->isTextNode() ) {
-			curCharIdx += static_cast<UITextNode*>( node )->getText().length();
+			auto* tn = static_cast<UITextNode*>( node );
+			curCharIdx += tn->getLayoutCharCount();
 			return bounds;
 		}
 

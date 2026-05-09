@@ -9,6 +9,7 @@
 #include <eepp/ui/css/transitiondefinition.hpp>
 #include <eepp/ui/uiborderdrawable.hpp>
 #include <eepp/ui/uieventdispatcher.hpp>
+#include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uistyle.hpp>
@@ -1001,6 +1002,16 @@ bool UIWidget::isWidgetElement() const {
 	return !isTextNode();
 }
 
+bool UIWidget::isInlineDisplay() const {
+	if ( isTextNode() )
+		return true;
+	if ( isType( UI_TYPE_HTML_WIDGET ) ) {
+		CSSDisplay d = static_cast<const UIHTMLWidget*>( this )->getDisplay();
+		return d == CSSDisplay::Inline || d == CSSDisplay::InlineBlock;
+	}
+	return false;
+}
+
 Uint32 UIWidget::getElementIndex() const {
 	Uint32 index = 0;
 	if ( NULL != mParentNode ) {
@@ -1760,6 +1771,12 @@ std::string UIWidget::getPropertyString( const PropertyDefinition* propertyDef,
 			return getBackground()->getLayer( propertyIndex )->getPositionX();
 		case PropertyId::BackgroundPositionY:
 			return getBackground()->getLayer( propertyIndex )->getPositionY();
+		case PropertyId::BackgroundOrigin:
+			return getBackground()->getLayer( propertyIndex )->getOriginEq();
+		case PropertyId::BackgroundClip:
+			return getBackground()->getLayer( propertyIndex )->getClipEq();
+		case PropertyId::BackgroundAttachment:
+			return getBackground()->getLayer( propertyIndex )->getAttachmentEq();
 		case PropertyId::ForegroundPositionX:
 			return getForeground()->getLayer( propertyIndex )->getPositionX();
 		case PropertyId::ForegroundPositionY:
@@ -1971,6 +1988,15 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 			break;
 		case PropertyId::BackgroundSize:
 			setBackgroundSize( attribute.value(), attribute.getIndex() );
+			break;
+		case PropertyId::BackgroundOrigin:
+			setBackgroundOrigin( attribute.value(), attribute.getIndex() );
+			break;
+		case PropertyId::BackgroundClip:
+			setBackgroundClip( attribute.value(), attribute.getIndex() );
+			break;
+		case PropertyId::BackgroundAttachment:
+			setBackgroundAttachment( attribute.value(), attribute.getIndex() );
 			break;
 		case PropertyId::ForegroundColor:
 			setForegroundColor( attribute.asColor() );

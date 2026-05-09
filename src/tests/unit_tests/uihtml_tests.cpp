@@ -16,6 +16,7 @@
 #include <eepp/ui/uihtmltable.hpp>
 #include <eepp/ui/uihtmltextarea.hpp>
 #include <eepp/ui/uihtmltextinput.hpp>
+#include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uithememanager.hpp>
@@ -1315,4 +1316,78 @@ UTEST( UIHTML, ContactFormLayout ) {
 	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 0 );
 
 	Engine::destroySingleton();
+}
+
+UTEST( UIBackground, imageAtlasPositioning ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 960, 256, "Background Atlas Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/background_atlas.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	// Verify the atlas image was actually loaded — scan all nodes for a loaded drawable
+	bool foundLoadedImage = false;
+	sceneNode->getRoot()->forEachNode( [&foundLoadedImage]( Node* node ) {
+		if ( foundLoadedImage || !node->isWidget() )
+			return;
+		auto* bg = node->asType<UIWidget>()->getBackground();
+		if ( !bg )
+			return;
+		auto* layer = bg->getLayer( 0 );
+		if ( layer && layer->getDrawable() ) {
+			Sizef sz = layer->getDrawable()->getPixelsSize();
+			if ( sz.getWidth() == 1024.f && sz.getHeight() == 512.f )
+				foundLoadedImage = true;
+		}
+	} );
+	ASSERT_TRUE( foundLoadedImage );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	compareImages( utest_state, utest_result, win, "eepp-ui-background-atlas", "html", 4 );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 960, 256, "Background Atlas Test PD2", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	EE::Graphics::PixelDensity::setPixelDensity( 2.0f );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/background_atlas.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	compareImages( utest_state, utest_result, win, "eepp-ui-background-atlas-pd2", "html", 4 );
+
+	Engine::destroySingleton();
+	EE::Graphics::PixelDensity::setPixelDensity( 1.0f );
 }

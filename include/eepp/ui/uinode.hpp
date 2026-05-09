@@ -416,6 +416,12 @@ class EE_API UINode : public Node {
 	 */
 	UINode* setBackgroundSize( const std::string& size, int index = 0 );
 
+	UINode* setBackgroundOrigin( const std::string& origin, int index = 0 );
+
+	UINode* setBackgroundClip( const std::string& clip, int index = 0 );
+
+	UINode* setBackgroundAttachment( const std::string& attachment, int index = 0 );
+
 	/**
 	 * @brief Gets the background color.
 	 *

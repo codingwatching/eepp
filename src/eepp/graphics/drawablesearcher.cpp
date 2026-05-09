@@ -5,6 +5,7 @@
 #include <eepp/graphics/textureatlasmanager.hpp>
 #include <eepp/graphics/texturefactory.hpp>
 #include <eepp/system/base64.hpp>
+#include <eepp/system/filesystem.hpp>
 #include <eepp/system/md5.hpp>
 
 #include <eepp/network/http.hpp>
@@ -152,6 +153,8 @@ Drawable* DrawableSearcher::searchByName( const std::string& name, bool firstSea
 				filePath = filePath.substr( 1 );
 			}
 #endif
+
+			FileSystem::filePathRemoveProcessPath( filePath );
 
 			drawable = TextureFactory::instance()->getByName( filePath );
 

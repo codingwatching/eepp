@@ -2,7 +2,6 @@
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
-#include <eepp/ui/tools/htmlformatter.hpp>
 #include <eepp/ui/uiborderdrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextnode.hpp>
@@ -409,18 +408,16 @@ void UITextSpan::loadFromXmlNode( const pugi::xml_node& node ) {
 					widget->loadFromXmlNode( child );
 				}
 			} else if ( child.type() == pugi::node_pcdata ) {
-				String text = Tools::HTMLFormatter::collapseXmlWhitespace( child.value(), child );
-				if ( !text.empty() ) {
-					UITextNode* span = UITextNode::New();
-					span->setParent( this );
-					span->setText( text );
-				}
+				String collapsed = UIRichText::collapseInternalWhitespace( child.value() );
+				UITextNode* textNode = UITextNode::New();
+				textNode->setParent( this );
+				textNode->setText( collapsed );
 			}
 		}
 	} else {
 		for ( pugi::xml_node child = node.first_child(); child; child = child.next_sibling() ) {
 			if ( child.type() == pugi::node_pcdata ) {
-				mText += Tools::HTMLFormatter::collapseXmlWhitespace( child.value(), child );
+				mText += UIRichText::collapseInternalWhitespace( child.value() );
 			}
 		}
 	}

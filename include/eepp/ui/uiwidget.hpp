@@ -803,6 +803,17 @@ class EE_API UIWidget : public UINode {
 	/** @return True if the widget is not a text node. */
 	bool isWidgetElement() const;
 
+	/**
+	 * @brief Returns whether this widget participates in inline formatting (for whitespace
+	 * collapsing).
+	 *
+	 * Inline display types (CSSDisplay::Inline, CSSDisplay::InlineBlock) and text nodes
+	 * are considered inline. All other widgets default to block.
+	 *
+	 * @return True if this widget is inline-level.
+	 */
+	bool isInlineDisplay() const;
+
 	/** @return The index of this element among its sibling elements. */
 	Uint32 getElementIndex() const;
 

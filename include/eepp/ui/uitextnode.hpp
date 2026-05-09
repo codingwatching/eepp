@@ -26,8 +26,15 @@ class EE_API UITextNode : public UIWidget {
 
 	void setText( const String& text );
 
+	bool isWhitespaceOnly() const;
+
+	size_t getLayoutCharCount() const { return mLayoutCharCount; }
+
+	void setLayoutCharCount( size_t count ) { mLayoutCharCount = count; }
+
   protected:
 	String mText;
+	size_t mLayoutCharCount{ 0 };
 };
 
 }} // namespace EE::UI

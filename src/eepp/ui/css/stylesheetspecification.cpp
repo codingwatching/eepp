@@ -111,6 +111,9 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "background-size", "auto" )
 		.setType( PropertyType::BackgroundSize )
 		.setIndexed();
+	registerProperty( "background-origin", "padding-box" ).setIndexed();
+	registerProperty( "background-clip", "border-box" ).setIndexed();
+	registerProperty( "background-attachment", "scroll" ).setIndexed();
 	registerProperty( "foreground-color", "" ).setType( PropertyType::Color );
 	registerProperty( "foreground-image", "none" ).setIndexed();
 	registerProperty( "foreground-tint", "" ).setIndexed().setType( PropertyType::Color );
@@ -496,10 +499,11 @@ void StyleSheetSpecification::registerDefaultProperties() {
 					   { "margin-top", "margin-right", "margin-bottom", "margin-left" }, "box" );
 	registerShorthand(
 		"padding", { "padding-top", "padding-right", "padding-bottom", "padding-left" }, "box" );
-	registerShorthand(
-		"background",
-		{ "background-color", "background-image", "background-repeat", "background-position" },
-		"background" );
+	registerShorthand( "background",
+					   { "background-color", "background-image", "background-position",
+						 "background-size", "background-repeat", "background-attachment",
+						 "background-origin", "background-clip" },
+					   "background" );
 	registerShorthand(
 		"foreground",
 		{ "foreground-color", "foreground-image", "foreground-repeat", "foreground-position" },
@@ -1014,42 +1018,122 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			return {};
 		std::vector<StyleSheetProperty> properties;
 		const std::vector<std::string>& propNames = shorthand->getProperties();
-		std::vector<std::string> tokens = String::split( value, " ", "", "(" );
-		std::string positionStr;
 
-		for ( auto& tok : tokens ) {
-			auto open = tok.find_first_of( '(' );
+		auto isRepeatKeyword = []( const std::string& s ) {
+			return -1 != String::valueIndex( s, "repeat;repeat-x;repeat-y;no-repeat;space;round" );
+		};
 
-			if ( open != std::string::npos &&
-				 mDrawableImageParser.exists( tok.substr( 0, open ) ) ) {
-				int pos = getIndexEndingWith( propNames, "-image" );
-				if ( pos != -1 )
-					properties.emplace_back( StyleSheetProperty( propNames[pos], tok ) );
-			} else if ( -1 != String::valueIndex( tok, "repeat;repeat-x;repeat-y;no-repeat" ) ) {
-				int pos = getIndexEndingWith( propNames, "-repeat" );
-				if ( pos != -1 )
-					properties.emplace_back( StyleSheetProperty( propNames[pos], value ) );
-			} else if ( -1 != String::valueIndex( tok, "left;right;top;bottom;center" ) ||
-						String::isNumber( tok[0] ) || tok[0] == '-' || tok[0] == '.' ||
-						tok[0] == '+' ) {
-				positionStr += tok + " ";
+		auto isBoxKeyword = []( const std::string& s ) {
+			return s == "border-box" || s == "padding-box" || s == "content-box";
+		};
+
+		auto isAttachmentKeyword = []( const std::string& s ) {
+			return s == "scroll" || s == "fixed" || s == "local";
+		};
+
+		auto isPositionKeyword = []( const std::string& s ) {
+			return s == "left" || s == "right" || s == "top" || s == "bottom" || s == "center";
+		};
+
+		// Split by comma for multi-layer support
+		std::vector<std::string> layers = String::split( value, ',' );
+
+		std::vector<std::string> imageValues;
+		std::vector<std::string> repeatValues;
+		std::vector<std::string> attachmentValues;
+		std::vector<std::string> originValues;
+		std::vector<std::string> clipValues;
+		std::vector<std::string> positionValues;
+		std::vector<std::string> sizeValues;
+		std::string colorValue;
+
+		for ( size_t layerIdx = 0; layerIdx < layers.size(); ++layerIdx ) {
+			std::string layerVal = String::trim( layers[layerIdx] );
+
+			std::vector<std::string> tokens = String::split( layerVal, " ", "", "(" );
+			std::string positionStr;
+			std::string sizeStr;
+			bool hasSlash{ false };
+			std::string firstBox;
+			std::string secondBox;
+
+			for ( size_t ti = 0; ti < tokens.size(); ++ti ) {
+				auto& tok = tokens[ti];
+				auto open = tok.find_first_of( '(' );
+
+				if ( open != std::string::npos &&
+					 mDrawableImageParser.exists( tok.substr( 0, open ) ) ) {
+					imageValues.push_back( tok );
+				} else if ( isRepeatKeyword( tok ) ) {
+					repeatValues.push_back( tok );
+				} else if ( isAttachmentKeyword( tok ) ) {
+					attachmentValues.push_back( tok );
+				} else if ( isBoxKeyword( tok ) ) {
+					if ( firstBox.empty() )
+						firstBox = tok;
+					else
+						secondBox = tok;
+				} else if ( tok == "/" ) {
+					hasSlash = true;
+				} else if ( hasSlash && !tok.empty() && tok != "/" ) {
+					sizeStr += tok + " ";
+				} else if ( isPositionKeyword( tok ) || String::isNumber( tok[0] ) ||
+							tok[0] == '-' || tok[0] == '.' || tok[0] == '+' ) {
+					positionStr += tok + " ";
+				} else {
+					if ( colorValue.empty() )
+						colorValue = tok;
+				}
+			}
+
+			originValues.push_back( firstBox.empty() ? "padding-box" : firstBox );
+			clipValues.push_back( secondBox.empty() ? "border-box" : secondBox );
+
+			if ( !positionStr.empty() ) {
+				String::trimInPlace( positionStr );
+				positionValues.push_back( positionStr );
 			} else {
-				int pos = getIndexEndingWith( propNames, "-color" );
-				if ( pos != -1 )
-					properties.emplace_back( StyleSheetProperty( propNames[pos], value ) );
+				positionValues.push_back( "0% 0%" );
+			}
+
+			if ( !sizeStr.empty() ) {
+				String::trimInPlace( sizeStr );
+				sizeValues.push_back( sizeStr );
+			} else {
+				sizeValues.push_back( "auto" );
 			}
 		}
 
-		if ( !positionStr.empty() ) {
-			String::trimInPlace( positionStr );
-			int pos = getIndexEndingWith( propNames, "-position" );
-			if ( pos != -1 ) {
-				const ShorthandDefinition* shorthand = getShorthand( propNames[pos] );
-				if ( NULL != shorthand ) {
-					auto bpVec = mShorthandParsers["background-position"]( shorthand, positionStr );
+		for ( auto& propName : propNames ) {
+			if ( String::endsWith( propName, "-color" ) && !colorValue.empty() ) {
+				properties.emplace_back( StyleSheetProperty( propName, colorValue ) );
+			} else if ( String::endsWith( propName, "-image" ) && !imageValues.empty() ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( imageValues, ',' ) ) );
+			} else if ( String::endsWith( propName, "-repeat" ) && !repeatValues.empty() ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( repeatValues, ',' ) ) );
+			} else if ( String::endsWith( propName, "-attachment" ) && !attachmentValues.empty() ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( attachmentValues, ',' ) ) );
+			} else if ( String::endsWith( propName, "-origin" ) ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( originValues, ',' ) ) );
+			} else if ( String::endsWith( propName, "-clip" ) ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( clipValues, ',' ) ) );
+			} else if ( String::endsWith( propName, "-position" ) ) {
+				// Let background-position sub-parser handle this
+				const ShorthandDefinition* posShorthand = getShorthand( propName );
+				if ( NULL != posShorthand ) {
+					auto bpVec = mShorthandParsers["background-position"](
+						posShorthand, String::join( positionValues, ',' ) );
 					for ( auto& bp : bpVec )
 						properties.emplace_back( bp );
 				}
+			} else if ( String::endsWith( propName, "-size" ) ) {
+				properties.emplace_back(
+					StyleSheetProperty( propName, String::join( sizeValues, ',' ) ) );
 			}
 		}
 

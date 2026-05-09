@@ -11,6 +11,8 @@ class EE_API UIRichText : public UIHTMLWidget {
   public:
 	enum class IntrinsicMode { None, Min, Max };
 
+	static String collapseInternalWhitespace( const String& s );
+
 	static void rebuildRichText( UILayout* container, RichText& richText,
 								 IntrinsicMode mode = IntrinsicMode::None );
 

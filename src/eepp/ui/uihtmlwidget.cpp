@@ -11,7 +11,9 @@ UIHTMLWidget* UIHTMLWidget::New() {
 	return eeNew( UIHTMLWidget, () );
 }
 
-UIHTMLWidget::UIHTMLWidget( const std::string& tag ) : UILayout( tag ) {}
+UIHTMLWidget::UIHTMLWidget( const std::string& tag ) : UILayout( tag ) {
+	mFlags |= UI_HTML_ELEMENT;
+}
 
 UIHTMLWidget::~UIHTMLWidget() {
 	if ( mScrollTarget && mScrollCb )

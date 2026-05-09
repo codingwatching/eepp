@@ -772,6 +772,21 @@ UINode* UINode::setBackgroundSize( const std::string& size, int index ) {
 	return this;
 }
 
+UINode* UINode::setBackgroundOrigin( const std::string& origin, int index ) {
+	setBackgroundFillEnabled( true )->setDrawableOrigin( index, origin );
+	return this;
+}
+
+UINode* UINode::setBackgroundClip( const std::string& clip, int index ) {
+	setBackgroundFillEnabled( true )->setDrawableClip( index, clip );
+	return this;
+}
+
+UINode* UINode::setBackgroundAttachment( const std::string& attachment, int index ) {
+	setBackgroundFillEnabled( true )->setDrawableAttachment( index, attachment );
+	return this;
+}
+
 Color UINode::getBackgroundColor() const {
 	return NULL != mBackground ? mBackground->getBackgroundColor() : Color::Transparent;
 }
@@ -1186,6 +1201,8 @@ const Rectf& UINode::getPixelsPadding() const {
 UINodeDrawable* UINode::getBackground() const {
 	if ( NULL == mBackground ) {
 		mBackground = UINodeDrawable::New( const_cast<UINode*>( this ) );
+		if ( mFlags & UI_HTML_ELEMENT )
+			mBackground->setBackgroundMode( BackgroundMode::Html );
 	}
 
 	return mBackground;

@@ -2,7 +2,6 @@
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
-#include <eepp/ui/tools/htmlformatter.hpp>
 #include <eepp/ui/uicodeeditor.hpp>
 #include <eepp/ui/uilayouter.hpp>
 #include <eepp/ui/uirichtext.hpp>
@@ -596,12 +595,10 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 				}
 			}
 		} else if ( child.type() == pugi::node_pcdata ) {
-			String text = Tools::HTMLFormatter::collapseXmlWhitespace( child.value(), child );
-			if ( !text.empty() ) {
-				UITextNode* span = UITextNode::New();
-				span->setParent( this );
-				span->setText( text );
-			}
+			String collapsed = UIRichText::collapseInternalWhitespace( child.value() );
+			UITextNode* textNode = UITextNode::New();
+			textNode->setParent( this );
+			textNode->setText( collapsed );
 		}
 	}
 
@@ -638,6 +635,24 @@ void UIRichText::onFontChanged() {
 void UIRichText::onFontStyleChanged() {
 	notifyLayoutAttrChange();
 	notifyLayoutAttrChangeParent();
+}
+
+String UIRichText::UIRichText::collapseInternalWhitespace( const String& s ) {
+	String out;
+	out.reserve( s.size() );
+	bool inSpace = false;
+	for ( size_t i = 0; i < s.size(); ++i ) {
+		if ( s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' || s[i] == '\v' ) {
+			if ( !inSpace ) {
+				out += ' ';
+				inSpace = true;
+			}
+		} else {
+			out += s[i];
+			inSpace = false;
+		}
+	}
+	return out;
 }
 
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
@@ -682,20 +697,78 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 	}
 
 	auto processNode = [&]( Node* node, auto& processNodeRef ) -> void {
-		if ( node->isTextNode() ) {
-			UITextNode* textNode = static_cast<UITextNode*>( node );
-			if ( !textNode->getText().empty() ) {
-				FontStyleConfig style;
-				if ( node->getParent()->isType( UI_TYPE_TEXTSPAN ) ) {
-					style = node->getParent()->asType<UITextSpan>()->getFontStyleConfig();
-				} else if ( node->getParent()->isType( UI_TYPE_RICHTEXT ) ) {
-					style =
-						node->getParent()->asType<UIRichText>()->getRichText().getFontStyleConfig();
-				} else {
-					style = richText.getFontStyleConfig();
+		// Helper: walk up through inline ancestors to find the logical prev/next widget
+		auto findLogicalPrev = []( Node* n ) -> Node* {
+			while ( n ) {
+				Node* sib = n->getPrevNode();
+				while ( sib && sib->isTextNode() ) {
+					auto* tn = sib->asType<UITextNode>();
+					if ( !tn->isWhitespaceOnly() )
+						return sib;
+					sib = sib->getPrevNode();
 				}
-				richText.addSpan( textNode->getText(), style );
+				if ( sib && sib->isWidget() )
+					return sib;
+				n = n->getParent();
+				if ( !n || !n->isWidget() || !n->asType<UIWidget>()->isInlineDisplay() )
+					break;
 			}
+			return nullptr;
+		};
+		auto findLogicalNext = []( Node* n ) -> Node* {
+			while ( n ) {
+				Node* sib = n->getNextNode();
+				while ( sib && sib->isTextNode() ) {
+					auto* tn = sib->asType<UITextNode>();
+					if ( !tn->isWhitespaceOnly() )
+						return sib;
+					sib = sib->getNextNode();
+				}
+				if ( sib && sib->isWidget() )
+					return sib;
+				n = n->getParent();
+				if ( !n || !n->isWidget() || !n->asType<UIWidget>()->isInlineDisplay() )
+					break;
+			}
+			return nullptr;
+		};
+
+		if ( node->isTextNode() ) {
+			UITextNode* textNode = node->asType<UITextNode>();
+			String text = textNode->getText();
+
+			Node* prev = findLogicalPrev( node );
+			bool prevIsInline =
+				prev && prev->isWidget() && prev->asType<UIWidget>()->isInlineDisplay();
+
+			Node* next = findLogicalNext( node );
+			bool nextIsInline =
+				next && next->isWidget() && next->asType<UIWidget>()->isInlineDisplay();
+
+			// Strip leading space if prev is not inline (block boundary)
+			if ( !prevIsInline && !text.empty() && text[0] == ' ' )
+				text = text.substr( 1 );
+
+			// Strip trailing space if next is not inline
+			if ( !nextIsInline && !text.empty() && text.back() == ' ' )
+				text = text.substr( 0, text.size() - 1 );
+
+			if ( text.empty() ) {
+				textNode->setLayoutCharCount( 0 );
+				return;
+			}
+
+			textNode->setLayoutCharCount( text.length() );
+
+			FontStyleConfig style;
+			if ( node->getParent()->isType( UI_TYPE_TEXTSPAN ) ) {
+				style = node->getParent()->asType<UITextSpan>()->getFontStyleConfig();
+			} else if ( node->getParent()->isType( UI_TYPE_RICHTEXT ) ) {
+				style = node->getParent()->asType<UIRichText>()->getRichText().getFontStyleConfig();
+			} else {
+				style = richText.getFontStyleConfig();
+			}
+			richText.addSpan( text, style );
 			return;
 		}
 
@@ -712,7 +785,23 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			bool hasOwnText = !span->getText().empty() && NULL != span->getFontStyleConfig().Font;
 
 			if ( hasOwnText ) {
-				richText.addSpan( span->getText(), span->getFontStyleConfig(), margin, padding );
+				String::View spanText = span->getText().view();
+
+				Node* prev = findLogicalPrev( node );
+				bool prevIsInline =
+					prev && prev->isWidget() && prev->asType<UIWidget>()->isInlineDisplay();
+
+				Node* next = findLogicalNext( node );
+				bool nextIsInline =
+					next && next->isWidget() && next->asType<UIWidget>()->isInlineDisplay();
+
+				if ( !prevIsInline && !spanText.empty() && spanText[0] == ' ' )
+					spanText = spanText.substr( 1 );
+				if ( !nextIsInline && !spanText.empty() && spanText.back() == ' ' )
+					spanText = spanText.substr( 0, spanText.size() - 1 );
+
+				if ( !spanText.empty() )
+					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding );
 			} else if ( margin.Left > 0 || margin.Top > 0 || padding.Left > 0 || padding.Top > 0 ) {
 				Rectf leftOnly( margin.Left, margin.Top, 0, 0 );
 				Rectf padLeftOnly( padding.Left, padding.Top, 0, 0 );
