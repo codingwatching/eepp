@@ -9,6 +9,7 @@ UITextNode* UITextNode::New() {
 
 UITextNode::UITextNode() : UIWidget( "textnode" ) {
 	mNodeFlags |= NODE_FLAG_TEXTNODE;
+	mNodeFlags &= ~NODE_FLAG_OVER_FIND_ALLOWED;
 	mFlags |= UI_HTML_ELEMENT;
 }
 

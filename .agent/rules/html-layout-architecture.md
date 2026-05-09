@@ -19,7 +19,10 @@ Layout math has been extracted from widgets into stateless (or locally stateful)
 - It uses `rebuildRichText()` to recursively traverse its children.
 - Pure text nodes (`UITextSpan`, `<br>`) are appended to the core `RichText` engine via `RichText::addSpan()`.
 - Arbitrary inline widgets (e.g., `<input>`, `<button>`, or images) are passed to the engine via `RichText::addCustomSize()`.
-- After `RichText` performs line-wrapping, `BlockLayouter` iterates over the resulting `CustomBlock`s and calls `setPixelsPosition()` on those child widgets to match where the engine placed them.
+- After `RichText` performs line-wrapping, `BlockLayouter` iterates over the resulting `RenderSpan`s and calls `setPixelsPosition()` on those child widgets to match where the engine placed them.
+
+#### 3.1 UITextNode
+`UITextNode` is a lightweight, non-rendering node that represents raw text content parsed from HTML/XML (`node_pcdata`). It acts as a logical text marker in the DOM tree: its text is extracted during `rebuildRichText()` and handed to the `RichText` engine via `RichText::addSpan()`. After line-wrapping, `BlockLayouter` assigns it position and size for debugging, and it is excluded from hit testing by default. `UITextNode::draw()` is a no-op — the parent `UIRichText` handles all rendering.
 
 ### 4. Pixel (dp) Math strictly enforced
 All layouters **MUST** use Pixel (`Px`) variants of size and padding APIs.

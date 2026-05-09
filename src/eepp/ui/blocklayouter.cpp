@@ -174,12 +174,50 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 		if ( !node->isVisible() )
 			return bounds;
 
-		// UITextNode is a logical marker; its text is rendered by the
-		// RichText engine just advance the character index and return
-		// empty bounds so it does not affect any widget's geometry.
 		if ( node->isTextNode() ) {
 			auto* tn = static_cast<UITextNode*>( node );
+			Int64 startChar = curCharIdx;
 			curCharIdx += tn->getLayoutCharCount();
+			Int64 endChar = curCharIdx;
+
+			if ( startChar < endChar && !lines.empty() ) {
+				Rectf textBounds( maxF, maxF, lowF, lowF );
+
+				Vector2f offset;
+				Node* p = node->getParent();
+				while ( p && p != mContainer ) {
+					offset += p->isWidget() ? p->asType<UIWidget>()->getPixelsPosition()
+											: p->getPosition();
+					p = p->getParent();
+				}
+
+				for ( const auto& line : lines ) {
+					bool passedText = false;
+					for ( const auto& rspan : line.spans ) {
+						if ( rspan.startCharIndex >= startChar && rspan.endCharIndex <= endChar ) {
+							Rectf hb( mContainer->getPixelsContentOffset().Left + rspan.position.x,
+									  mContainer->getPixelsContentOffset().Top + line.y +
+										  rspan.position.y,
+									  mContainer->getPixelsContentOffset().Left + rspan.position.x +
+										  rspan.size.getWidth(),
+									  mContainer->getPixelsContentOffset().Top + line.y +
+										  rspan.position.y + rspan.size.getHeight() );
+							textBounds.expand( hb );
+						} else if ( rspan.startCharIndex >= endChar ) {
+							passedText = true;
+							break;
+						}
+					}
+					if ( passedText )
+						break;
+				}
+
+				if ( textBounds.Left <= textBounds.Right && textBounds.Top <= textBounds.Bottom ) {
+					tn->setPixelsPosition( textBounds.getPosition() - offset );
+					tn->setPixelsSize( textBounds.getSize() );
+				}
+			}
+
 			return bounds;
 		}
 
@@ -235,10 +273,6 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 				}
 			}
 
-			// Recurse into children.  UITextNode children advance
-			// curCharIdx but contribute no geometry (they are logical
-			// markers only).  Widget children get their own position
-			// and hit-boxes.
 			Node* spanChild = widget->getFirstChild();
 			while ( spanChild != NULL ) {
 				if ( spanChild->isWidget() )
