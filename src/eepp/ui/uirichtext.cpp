@@ -316,33 +316,12 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 				mDataProperties["data-language"] = attribute;
 			break;
 		}
-		case PropertyId::LineHeight: {
-			std::string val = attribute.value();
-			if ( val == "normal" || val.empty() ) {
-				setLineHeightPx( 0 );
-			} else {
-				// Unitless number: multiplier of font size
-				bool isUnitless = !val.empty();
-				for ( char c : val ) {
-					if ( c != '-' && c != '+' && c != '.' && !String::isNumber( c, false ) ) {
-						isUnitless = false;
-						break;
-					}
-				}
-
-				if ( isUnitless ) {
-					Float multiplier = StyleSheetLength::fromString( val, 0 ).getValue();
-					setLineHeightPx( multiplier * getFontSize() );
-				} else {
-					setLineHeightPx( lengthFromValue( attribute ) );
-				}
-			}
+		case PropertyId::LineHeight:
+			setLineHeightEq( attribute.value() );
 			break;
-		}
-		case PropertyId::TextIndent: {
-			setTextIndentPx( lengthFromValue( attribute ) );
+		case PropertyId::TextIndent:
+			setTextIndentEq( attribute.value() );
 			break;
-		}
 		default:
 			return UIHTMLWidget::applyProperty( attribute );
 	}
@@ -388,9 +367,9 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 					   ? "center"
 					   : ( getTextAlign() == TEXT_ALIGN_RIGHT ? "right" : "left" );
 		case PropertyId::LineHeight:
-			return mLineHeightPx > 0 ? String::fromFloat( mLineHeightPx, "px" ) : "normal";
+			return mLineHeightEq.empty() ? "normal" : mLineHeightEq;
 		case PropertyId::TextIndent:
-			return mTextIndentPx > 0 ? String::fromFloat( mTextIndentPx, "px" ) : "0";
+			return mTextIndentEq.empty() ? "0" : mTextIndentEq;
 		default:
 			return UIHTMLWidget::getPropertyString( propertyDef, propertyIndex );
 	}
@@ -431,6 +410,7 @@ UIRichText* UIRichText::setFontSize( const Uint32& characterSize ) {
 	if ( mRichText.getFontStyleConfig().CharacterSize != characterSize ) {
 		mRichText.getFontStyleConfig().CharacterSize = characterSize;
 		mRichText.invalidate();
+		mLineHeightPxDirty = true;
 
 		notifyLayoutAttrChange();
 		notifyLayoutAttrChangeParent();
@@ -573,22 +553,65 @@ UIRichText* UIRichText::setTextAlign( const Uint32& align ) {
 	return this;
 }
 
-UIRichText* UIRichText::setLineHeightPx( Float height ) {
-	if ( mLineHeightPx != height ) {
-		mLineHeightPx = height;
+UIRichText* UIRichText::setLineHeightEq( const std::string& eq ) {
+	if ( mLineHeightEq != eq ) {
+		mLineHeightEq = eq;
+		mLineHeightPxDirty = true;
 		notifyLayoutAttrChange();
 		notifyLayoutAttrChangeParent();
 	}
 	return this;
 }
 
-UIRichText* UIRichText::setTextIndentPx( Float indent ) {
-	if ( mTextIndentPx != indent ) {
-		mTextIndentPx = indent;
+Float UIRichText::getLineHeightPx() const {
+	if ( !mLineHeightPxDirty )
+		return mLineHeightPxCache;
+	mLineHeightPxDirty = false;
+	if ( mLineHeightEq.empty() || mLineHeightEq == "normal" ) {
+		mLineHeightPxCache = 0;
+		return 0;
+	}
+	bool isUnitless = !mLineHeightEq.empty();
+	for ( char c : mLineHeightEq ) {
+		if ( c != '-' && c != '+' && c != '.' && !String::isNumber( c, false ) ) {
+			isUnitless = false;
+			break;
+		}
+	}
+	if ( isUnitless ) {
+		Float multiplier;
+		if ( String::fromString( multiplier, mLineHeightEq ) )
+			mLineHeightPxCache = multiplier * getFontSize();
+		else
+			mLineHeightPxCache = 0;
+	} else {
+		mLineHeightPxCache = const_cast<UIRichText*>( this )->lengthFromValue(
+			mLineHeightEq, CSS::PropertyRelativeTarget::FontSize, 0, 0 );
+	}
+	return mLineHeightPxCache;
+}
+
+UIRichText* UIRichText::setTextIndentEq( const std::string& eq ) {
+	if ( mTextIndentEq != eq ) {
+		mTextIndentEq = eq;
+		mTextIndentPxDirty = true;
 		notifyLayoutAttrChange();
 		notifyLayoutAttrChangeParent();
 	}
 	return this;
+}
+
+Float UIRichText::getTextIndentPx() const {
+	if ( !mTextIndentPxDirty )
+		return mTextIndentPxCache;
+	mTextIndentPxDirty = false;
+	if ( mTextIndentEq.empty() ) {
+		mTextIndentPxCache = 0;
+		return 0;
+	}
+	mTextIndentPxCache = const_cast<UIRichText*>( this )->lengthFromValue(
+		mTextIndentEq, CSS::PropertyRelativeTarget::None, 0, 0 );
+	return mTextIndentPxCache;
 }
 
 void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
