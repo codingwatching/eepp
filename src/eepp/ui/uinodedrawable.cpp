@@ -710,6 +710,15 @@ Sizef UINodeDrawable::LayerDrawable::calcDrawableSize( const std::string& drawab
 			size = mSize;
 		} else {
 			size = mDrawable->getPixelsSize();
+			// For Html mode, mOffset (from calcPosition) is in CSS‑physical pixels
+			// (scaled by PixelDensity via convertLength -> dpToPx), but
+			// getPixelsSize() returns raw image pixels.  Scale the intrinsic
+			// size so both values use the same coordinate system, otherwise
+			// the visible sprite‑atlas region drifts when PixelDensity != 1.
+			if ( mContainer->getBackgroundMode() == BackgroundMode::Html ) {
+				size = Sizef( size.x * PixelDensity::getPixelDensity(),
+							  size.y * PixelDensity::getPixelDensity() );
+			}
 		}
 	} else if ( drawableSizeEq == "expand" ) {
 		size = mSize;

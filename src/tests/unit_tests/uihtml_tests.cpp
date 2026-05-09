@@ -1320,7 +1320,7 @@ UTEST( UIHTML, ContactFormLayout ) {
 
 UTEST( UIBackground, imageAtlasPositioning ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 960, 256, "Background Atlas Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -1365,7 +1365,7 @@ UTEST( UIBackground, imageAtlasPositioning ) {
 
 UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 960, 256, "Background Atlas Test PD2", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test PD2", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	EE::Graphics::PixelDensity::setPixelDensity( 2.0f );
