@@ -26,18 +26,24 @@ void UITextNode::draw() {
 	// Text nodes do not draw themselves; their parent handles rendering
 }
 
+std::vector<PropertyId> UITextNode::getPropertiesImplemented() const {
+	auto props = UIWidget::getPropertiesImplemented();
+	auto local = { PropertyId::Text };
+	props.insert( props.end(), local.begin(), local.end() );
+	return props;
+}
+
 std::string UITextNode::getPropertyString( const PropertyDefinition* propertyDef,
 										   const Uint32& propertyIndex ) const {
 	if ( NULL == propertyDef )
 		return "";
 
-	const StyleSheetProperty* prop = getUIStyle()->getProperty( propertyDef->getPropertyId() );
-	if ( prop )
-		return prop->value();
-
-	if ( propertyDef->isInherited() && getParent() && getParent()->isWidget() )
-		return static_cast<UIWidget*>( getParent() )
-			->getPropertyString( propertyDef, propertyIndex );
+	switch ( propertyDef->getPropertyId() ) {
+		case PropertyId::Text:
+			return mText;
+		default:
+			break;
+	}
 
 	return UIWidget::getPropertyString( propertyDef, propertyIndex );
 }
