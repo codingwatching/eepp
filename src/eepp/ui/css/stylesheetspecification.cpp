@@ -229,6 +229,8 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "font-style", "", true ).addAlias( "font-weight" );
 	registerProperty( "text-decoration", "", true );
 	registerProperty( "line-spacing", "", true ).setType( PropertyType::NumberLength );
+	registerProperty( "line-height", "", true ).setType( PropertyType::NumberLength );
+	registerProperty( "text-indent", "", true ).setType( PropertyType::NumberLength );
 	registerProperty( "text-stroke-width", "", true )
 		.setType( PropertyType::NumberLength )
 		.addAlias( "fontoutlinethickness" );

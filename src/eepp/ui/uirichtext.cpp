@@ -316,6 +316,33 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 				mDataProperties["data-language"] = attribute;
 			break;
 		}
+		case PropertyId::LineHeight: {
+			std::string val = attribute.value();
+			if ( val == "normal" || val.empty() ) {
+				setLineHeightPx( 0 );
+			} else {
+				// Unitless number: multiplier of font size
+				bool isUnitless = !val.empty();
+				for ( char c : val ) {
+					if ( c != '-' && c != '+' && c != '.' && !String::isNumber( c, false ) ) {
+						isUnitless = false;
+						break;
+					}
+				}
+
+				if ( isUnitless ) {
+					Float multiplier = StyleSheetLength::fromString( val, 0 ).getValue();
+					setLineHeightPx( multiplier * getFontSize() );
+				} else {
+					setLineHeightPx( lengthFromValue( attribute ) );
+				}
+			}
+			break;
+		}
+		case PropertyId::TextIndent: {
+			setTextIndentPx( lengthFromValue( attribute ) );
+			break;
+		}
 		default:
 			return UIHTMLWidget::applyProperty( attribute );
 	}
@@ -360,6 +387,10 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 			return getTextAlign() == TEXT_ALIGN_CENTER
 					   ? "center"
 					   : ( getTextAlign() == TEXT_ALIGN_RIGHT ? "right" : "left" );
+		case PropertyId::LineHeight:
+			return mLineHeightPx > 0 ? String::fromFloat( mLineHeightPx, "px" ) : "normal";
+		case PropertyId::TextIndent:
+			return mTextIndentPx > 0 ? String::fromFloat( mTextIndentPx, "px" ) : "0";
 		default:
 			return UIHTMLWidget::getPropertyString( propertyDef, propertyIndex );
 	}
@@ -372,7 +403,7 @@ std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 		PropertyId::Color,			 PropertyId::TextShadowColor,	 PropertyId::TextShadowOffset,
 		PropertyId::TextStrokeWidth, PropertyId::TextStrokeColor,	 PropertyId::TextAlign,
 		PropertyId::SelectionColor,	 PropertyId::SelectionBackColor, PropertyId::TextSelection,
-		PropertyId::TextDecoration };
+		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -542,6 +573,24 @@ UIRichText* UIRichText::setTextAlign( const Uint32& align ) {
 	return this;
 }
 
+UIRichText* UIRichText::setLineHeightPx( Float height ) {
+	if ( mLineHeightPx != height ) {
+		mLineHeightPx = height;
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
+	return this;
+}
+
+UIRichText* UIRichText::setTextIndentPx( Float indent ) {
+	if ( mTextIndentPx != indent ) {
+		mTextIndentPx = indent;
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
+	return this;
+}
+
 void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 	beginAttributesTransaction();
 
@@ -657,6 +706,11 @@ String UIRichText::UIRichText::collapseInternalWhitespace( const String& s ) {
 
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
 	richText.clear();
+	if ( container->isType( UI_TYPE_RICHTEXT ) ) {
+		auto* uiRt = static_cast<UIRichText*>( container );
+		richText.setLineHeight( uiRt->getLineHeightPx() );
+		richText.setTextIndent( uiRt->getTextIndentPx() );
+	}
 	Float maxWidth = 0;
 	if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 		maxWidth = container->getMatchParentWidth() - container->getPixelsContentOffset().Left -

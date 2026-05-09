@@ -130,6 +130,20 @@ void RichText::setSelection( TextSelectionRange range ) {
 	}
 }
 
+void RichText::setLineHeight( Float height ) {
+	if ( mLineHeight != height ) {
+		mLineHeight = height;
+		invalidate();
+	}
+}
+
+void RichText::setTextIndent( Float indent ) {
+	if ( mTextIndent != indent ) {
+		mTextIndent = indent;
+		invalidate();
+	}
+}
+
 void RichText::setSelectionColor( const Color& color ) {
 	mSelectionColor = color;
 }
@@ -466,7 +480,7 @@ void RichText::updateLayout() {
 		mLines.clear();
 		mLines.push_back( RenderParagraph() );
 
-		Float curX = 0;
+		Float curX = mTextIndent;
 		Float maxWidth = 0;
 		Int64 curCharIdx = 0;
 
@@ -524,7 +538,9 @@ void RichText::updateLayout() {
 						renderSpanText->setStyleConfig( fontStyle );
 
 						Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-						Float height = fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+						Float height = mLineHeight > 0
+										   ? mLineHeight
+										   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 						Float spanWidth = renderSpanText->getTextWidth();
 
 						RenderSpan renderSpan;
@@ -686,7 +702,7 @@ void RichText::updateLayout() {
 	mLines.clear();
 	mLines.push_back( RenderParagraph() );
 
-	Float curX = 0;
+	Float curX = mTextIndent;
 	Float maxWidth = 0;
 	Int64 curCharIdx = 0;
 
@@ -805,7 +821,9 @@ void RichText::updateLayout() {
 					renderSpanText->setStyleConfig( fontStyle );
 
 					Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-					Float height = fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+					Float height = mLineHeight > 0
+									   ? mLineHeight
+									   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 					Float spanWidth = renderSpanText->getTextWidth();
 
 					RenderSpan renderSpan;

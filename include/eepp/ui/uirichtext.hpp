@@ -113,6 +113,14 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	UIRichText* setTextAlign( const Uint32& align );
 
+	Float getLineHeightPx() const { return mLineHeightPx; }
+
+	UIRichText* setLineHeightPx( Float height );
+
+	Float getTextIndentPx() const { return mTextIndentPx; }
+
+	UIRichText* setTextIndentPx( Float indent );
+
 	bool isTextSelectionEnabled() const;
 
 	void setTextSelectionEnabled( bool active );
@@ -138,6 +146,8 @@ class EE_API UIRichText : public UIHTMLWidget {
 	Int64 mSelCurInit{ 0 };
 	Int64 mSelCurEnd{ 0 };
 	bool mSelecting{ false };
+	Float mLineHeightPx{ 0 };
+	Float mTextIndentPx{ 0 };
 
 	explicit UIRichText( const std::string& tag = "richtext" );
 

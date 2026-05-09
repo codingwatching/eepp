@@ -155,6 +155,19 @@ class EE_API RichText : public Drawable {
 	/** @return The list of rendered lines. */
 	const std::vector<RenderParagraph>& getLines() const { return mLines; }
 
+	/** Sets line-height as a multiplier of the font's default line spacing.
+	 *  Use 0 to reset to font default. */
+	void setLineHeight( Float height );
+
+	/** @return The line height multiplier. */
+	Float getLineHeight() const { return mLineHeight; }
+
+	/** Sets text-indent (pixels) for the first line. */
+	void setTextIndent( Float indent );
+
+	/** @return The text indent in pixels. */
+	Float getTextIndent() const { return mTextIndent; }
+
 	/** @brief Sets the text selection range. */
 	void setSelection( TextSelectionRange range );
 
@@ -207,6 +220,8 @@ class EE_API RichText : public Drawable {
 	Sizef mSize;
 	Int64 mTotalCharacterCount{ 0 };
 	bool mNeedsLayoutUpdate{ true };
+	Float mLineHeight{ 0 };
+	Float mTextIndent{ 0 };
 };
 
 }} // namespace EE::Graphics

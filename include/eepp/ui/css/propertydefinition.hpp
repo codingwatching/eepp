@@ -220,6 +220,8 @@ enum class PropertyId : Uint32 {
 	TextAsFallback = String::hash( "text-as-fallback" ),
 	SelectOnClick = String::hash( "select-on-click" ),
 	LineSpacing = String::hash( "line-spacing" ),
+	LineHeight = String::hash( "line-height" ),
+	TextIndent = String::hash( "text-indent" ),
 	GravityOwner = String::hash( "gravity-owner" ),
 	Href = String::hash( "href" ),
 	Focusable = String::hash( "focusable" ),
