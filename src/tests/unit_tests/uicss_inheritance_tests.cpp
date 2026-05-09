@@ -1,8 +1,10 @@
 #include "utest.hpp"
+#include <eepp/graphics/font.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/scene/node.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/ui/css/stylesheet.hpp>
+#include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/css/stylesheetproperty.hpp>
 #include <eepp/ui/css/stylesheetspecification.hpp>
 #include <eepp/ui/uiapplication.hpp>
@@ -11,12 +13,14 @@
 #include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uitextview.hpp>
+#include <eepp/ui/uithememanager.hpp>
 #include <eepp/ui/uiwidget.hpp>
 
 using namespace EE;
 using namespace EE::UI;
 using namespace EE::UI::CSS;
 using namespace EE::Scene;
+using namespace EE::Graphics;
 
 UTEST( CSSInheritance, HtmlXmlLoadingInheritance ) {
 	UIApplication app(
@@ -330,4 +334,89 @@ UTEST( CSSInheritance, ExplicitBackgroundColorInherit ) {
 	EXPECT_TRUE( child != nullptr );
 
 	EXPECT_TRUE( Color( "#00FF00" ) == child->getBackgroundColor() );
+}
+
+UTEST( CSSUnits, ExFallback ) {
+	StyleSheetLength len( "100ex" );
+	Float result = len.asPixels( 0, Sizef::Zero, 96, 16, 16 );
+	EXPECT_EQ( Math::round( 100.f * 16.f * 0.5f ), result );
+}
+
+UTEST( CSSUnits, ChFallback ) {
+	StyleSheetLength len( "100ch" );
+	Float result = len.asPixels( 0, Sizef::Zero, 96, 16, 16 );
+	EXPECT_EQ( Math::round( 100.f * 16.f * 0.5f ), result );
+}
+
+UTEST( CSSUnits, ExChWithFont ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Units Ex/Ch Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1.f );
+
+	Graphics::Font* font =
+		app.getUI()->getUIThemeManager()->getDefaultFont();
+	EXPECT_TRUE( font != nullptr );
+
+	Float elFontSize = 24.f;
+
+	Float resultEx = StyleSheetLength( "1ex" ).asPixels( 0, Sizef::Zero, 96, elFontSize, 16, font );
+	Float resultCh = StyleSheetLength( "1ch" ).asPixels( 0, Sizef::Zero, 96, elFontSize, 16, font );
+	Float resultEm = StyleSheetLength( "1em" ).asPixels( 0, Sizef::Zero, 96, elFontSize, 16, font );
+	Float fallback = Math::round( elFontSize * 0.5f );
+
+	EXPECT_GT( resultEx, 0.f );
+	EXPECT_GT( resultCh, 0.f );
+	EXPECT_EQ( elFontSize, resultEm );
+	EXPECT_LE( resultEx, resultEm );
+	EXPECT_LE( resultCh, resultEm );
+	EXPECT_NE( fallback, resultEx );
+	EXPECT_NE( fallback, resultCh );
+}
+
+UTEST( CSSUnits, Integration ) {
+	for ( Float scale : { 1.f, 1.5f, 2.f } ) {
+		UTEST_PRINT_STEP( String::format( "SCALE %.1f", scale ).c_str() );
+		UIApplication app( WindowSettings( 800, 600, "eepp - CSS Units Ex/Ch Integration Test",
+										   WindowStyle::Default, WindowBackend::Default, 32 ),
+						   UIApplication::Settings(
+							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
+
+		std::string xml = R"(
+<html>
+	<head>
+		<style>
+		.text {
+			font-size: 20px;
+		}
+		#exbox {
+			width: 10ex;
+			height: 2ex;
+		}
+		#chbox {
+			width: 10ch;
+			height: 2ch;
+		}
+		</style>
+	</head>
+<body>
+	<div id="exbox" class="text">x</div>
+	<div id="chbox" class="text">0</div>
+</body>
+</html>
+		)";
+
+		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+		EXPECT_TRUE( root != nullptr );
+
+		UIRichText* exbox = root->querySelector( "#exbox" )->asType<UIRichText>();
+		EXPECT_TRUE( exbox != nullptr );
+		EXPECT_GT( exbox->getPixelsSize().getWidth(), 0.f );
+		EXPECT_GT( exbox->getPixelsSize().getHeight(), 0.f );
+
+		UIRichText* chbox = root->querySelector( "#chbox" )->asType<UIRichText>();
+		EXPECT_TRUE( chbox != nullptr );
+		EXPECT_GT( chbox->getPixelsSize().getWidth(), 0.f );
+		EXPECT_GT( chbox->getPixelsSize().getHeight(), 0.f );
+	}
 }

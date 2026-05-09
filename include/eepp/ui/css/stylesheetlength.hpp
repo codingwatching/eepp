@@ -6,6 +6,10 @@
 #include <eepp/scene/scenenode.hpp>
 #include <string>
 
+namespace EE { namespace Graphics {
+class Font;
+}} // namespace EE::Graphics
+
 using namespace EE::Math;
 
 namespace EE { namespace UI { namespace CSS {
@@ -62,10 +66,12 @@ class EE_API StyleSheetLength {
 	const Unit& getUnit() const;
 
 	Float asPixels( const Float& parentSize, const Sizef& viewSize, const Float& displayDpi,
-					const Float& elFontSize = 12, const Float& globalFontSize = 12 ) const;
+					const Float& elFontSize = 12, const Float& globalFontSize = 12,
+					Graphics::Font* font = nullptr ) const;
 
 	Float asDp( const Float& parentSize, const Sizef& viewSize, const Float& displayDpi,
-				const Float& elFontSize = 12, const Float& globalFontSize = 12 ) const;
+				const Float& elFontSize = 12, const Float& globalFontSize = 12,
+				Graphics::Font* font = nullptr ) const;
 
 	bool operator==( const StyleSheetLength& val ) const;
 

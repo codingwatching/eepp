@@ -1,4 +1,5 @@
 #include <eepp/core/string.hpp>
+#include <eepp/graphics/font.hpp>
 #include <eepp/graphics/pixeldensity.hpp>
 #include <eepp/math/math.hpp>
 #include <eepp/system/luapattern.hpp>
@@ -220,7 +221,7 @@ const StyleSheetLength::Unit& StyleSheetLength::getUnit() const {
 
 Float StyleSheetLength::asPixels( const Float& parentSize, const Sizef& viewSize,
 								  const Float& displayDpi, const Float& elFontSize,
-								  const Float& globalFontSize ) const {
+								  const Float& globalFontSize, Graphics::Font* font ) const {
 	Float ret = 0;
 
 	// CSS dictates a base 96 DPI for logical pixels.
@@ -243,8 +244,28 @@ Float StyleSheetLength::asPixels( const Float& parentSize, const Sizef& viewSize
 			ret = Math::roundUp( PixelDensity::dpToPx( mValue ) );
 			break;
 		case Unit::Em:
-		case Unit::Ch: // Using Em for Ch is incorrect but not that incorrect, close enough
 			ret = Math::round( mValue * elFontSize );
+			break;
+		case Unit::Ex:
+			if ( font && elFontSize > 0 ) {
+				Glyph glyph =
+					font->getGlyph( 'x', static_cast<unsigned int>( elFontSize ), false, false );
+				Float xHeight = eemax( 0.f, -glyph.bounds.Top );
+				if ( xHeight <= 0 )
+					xHeight = elFontSize * 0.5f;
+				ret = Math::round( mValue * xHeight );
+			} else {
+				ret = Math::round( mValue * elFontSize * 0.5f );
+			}
+			break;
+		case Unit::Ch:
+			if ( font && elFontSize > 0 ) {
+				Glyph glyph =
+					font->getGlyph( '0', static_cast<unsigned int>( elFontSize ), false, false );
+				ret = Math::round( mValue * eemax( 0.f, glyph.advance ) );
+			} else {
+				ret = Math::round( mValue * elFontSize * 0.5f );
+			}
 			break;
 		case Unit::Pt:
 			ret = mValue * CSS_DPI / 72.f;
@@ -290,9 +311,9 @@ Float StyleSheetLength::asPixels( const Float& parentSize, const Sizef& viewSize
 
 Float StyleSheetLength::asDp( const Float& parentSize, const Sizef& viewSize,
 							  const Float& displayDpi, const Float& elFontSize,
-							  const Float& globalFontSize ) const {
+							  const Float& globalFontSize, Graphics::Font* font ) const {
 	return PixelDensity::pxToDp(
-		asPixels( parentSize, viewSize, displayDpi, elFontSize, globalFontSize ) );
+		asPixels( parentSize, viewSize, displayDpi, elFontSize, globalFontSize, font ) );
 }
 
 bool StyleSheetLength::operator==( const StyleSheetLength& length ) const {

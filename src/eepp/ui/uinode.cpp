@@ -1796,12 +1796,19 @@ Float UINode::convertLength( const CSS::StyleSheetLength& length,
 		} else {
 			rootFontSize = getAbsoluteFontSize( getUISceneNode()->getRoot() );
 		}
-	} else if ( length.getUnit() == StyleSheetLength::Unit::Em && isWidget() ) {
+	} else if ( ( length.getUnit() == StyleSheetLength::Unit::Em ||
+				  length.getUnit() == StyleSheetLength::Unit::Ex ||
+				  length.getUnit() == StyleSheetLength::Unit::Ch ) &&
+				isWidget() ) {
 		elFontSize = getAbsoluteFontSize( asConstType<UIWidget>() );
 	}
 
+	Graphics::Font* font = nullptr;
+	if ( getUISceneNode() && getUISceneNode()->getUIThemeManager() )
+		font = getUISceneNode()->getUIThemeManager()->getDefaultFont();
+
 	auto ret = length.asPixels( containerLength, getSceneNode()->getPixelsSize(),
-								getSceneNode()->getDPI(), elFontSize, rootFontSize );
+								getSceneNode()->getDPI(), elFontSize, rootFontSize, font );
 
 	if ( ( mFlags & UI_HTML_ELEMENT ) && length.getUnit() == StyleSheetLength::Unit::Px )
 		ret = PixelDensity::dpToPx( ret ); // scale px as if where dp in HTML elements
