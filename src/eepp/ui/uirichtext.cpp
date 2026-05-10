@@ -17,6 +17,35 @@
 
 namespace EE { namespace UI {
 
+UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string val ) {
+	String::toLowerInPlace( val );
+	if ( "preserve" == val )
+		return WhiteSpaceCollapse::Preserve;
+	if ( "preserve-breaks" == val || "preserve-breaks" == val )
+		return WhiteSpaceCollapse::PreserveBreaks;
+	if ( "preserve-spaces" == val || "preserve-spaces" == val )
+		return WhiteSpaceCollapse::PreserveSpaces;
+	if ( "break-spaces" == val || "break-spaces" == val )
+		return WhiteSpaceCollapse::BreakSpaces;
+	return WhiteSpaceCollapse::Collapse;
+}
+
+std::string UIRichText::fromWhiteSpaceCollapse( WhiteSpaceCollapse val ) {
+	switch ( val ) {
+		case WhiteSpaceCollapse::Preserve:
+			return "preserve";
+		case WhiteSpaceCollapse::PreserveBreaks:
+			return "preserve-breaks";
+		case WhiteSpaceCollapse::PreserveSpaces:
+			return "preserve-spaces";
+		case WhiteSpaceCollapse::BreakSpaces:
+			return "break-spaces";
+		case WhiteSpaceCollapse::Collapse:
+		default:
+			return "collapse";
+	}
+}
+
 UIHTMLHtml* UIHTMLHtml::New( const std::string& tag ) {
 	return eeNew( UIHTMLHtml, ( tag ) );
 }
@@ -322,6 +351,9 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextIndent:
 			setTextIndentEq( attribute.value() );
 			break;
+		case PropertyId::WhiteSpaceCollapse:
+			setWhiteSpaceCollapse( toWhiteSpaceCollapse( attribute.value() ) );
+			break;
 		default:
 			return UIHTMLWidget::applyProperty( attribute );
 	}
@@ -370,6 +402,8 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 			return mLineHeightEq.empty() ? "normal" : mLineHeightEq;
 		case PropertyId::TextIndent:
 			return mTextIndentEq.empty() ? "0" : mTextIndentEq;
+		case PropertyId::WhiteSpaceCollapse:
+			return fromWhiteSpaceCollapse( mWhiteSpaceCollapse );
 		default:
 			return UIHTMLWidget::getPropertyString( propertyDef, propertyIndex );
 	}
@@ -382,7 +416,8 @@ std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 		PropertyId::Color,			 PropertyId::TextShadowColor,	 PropertyId::TextShadowOffset,
 		PropertyId::TextStrokeWidth, PropertyId::TextStrokeColor,	 PropertyId::TextAlign,
 		PropertyId::SelectionColor,	 PropertyId::SelectionBackColor, PropertyId::TextSelection,
-		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent };
+		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent,
+		PropertyId::WhiteSpaceCollapse };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -551,6 +586,18 @@ UIRichText* UIRichText::setTextAlign( const Uint32& align ) {
 		notifyLayoutAttrChangeParent();
 	}
 	return this;
+}
+
+UIRichText::WhiteSpaceCollapse UIRichText::getWhiteSpaceCollapse() const {
+	return mWhiteSpaceCollapse;
+}
+
+void UIRichText::setWhiteSpaceCollapse( WhiteSpaceCollapse collapse ) {
+	if ( mWhiteSpaceCollapse != collapse ) {
+		mWhiteSpaceCollapse = collapse;
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
 }
 
 UIRichText* UIRichText::setLineHeightEq( const std::string& eq ) {
@@ -734,6 +781,12 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		richText.setLineHeight( uiRt->getLineHeightPx() );
 		richText.setTextIndent( uiRt->getTextIndentPx() );
 	}
+	bool shouldCollapse =
+		container->isType( UI_TYPE_RICHTEXT )
+			? static_cast<UIRichText*>( container )->getWhiteSpaceCollapse() ==
+				  WhiteSpaceCollapse::Collapse
+			: true;
+	bool lastSpanEndsWithSpace = false;
 	Float maxWidth = 0;
 	if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 		maxWidth = container->getMatchParentWidth() - container->getPixelsContentOffset().Left -
@@ -769,7 +822,10 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
 		if ( !selfSpan->getText().empty() && !selfSpan->isMergeable() &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
-			richText.addSpan( selfSpan->getText(), selfSpan->getFontStyleConfig() );
+			String::View selfText = selfSpan->getText().view();
+			richText.addSpan( selfText, selfSpan->getFontStyleConfig() );
+			if ( shouldCollapse )
+				lastSpanEndsWithSpace = !selfText.empty() && selfText.back() == ' ';
 		}
 	}
 
@@ -830,12 +886,18 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			if ( !nextIsInline && !text.empty() && text.back() == ' ' )
 				text = text.substr( 0, text.size() - 1 );
 
+			if ( shouldCollapse && lastSpanEndsWithSpace && !text.empty() && text[0] == ' ' )
+				text = text.substr( 1 );
+
 			if ( text.empty() ) {
 				textNode->setLayoutCharCount( 0 );
 				return;
 			}
 
 			textNode->setLayoutCharCount( text.length() );
+
+			if ( shouldCollapse )
+				lastSpanEndsWithSpace = text.back() == ' ';
 
 			FontStyleConfig style;
 			if ( node->getParent()->isType( UI_TYPE_TEXTSPAN ) ) {
@@ -877,8 +939,15 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				if ( !nextIsInline && !spanText.empty() && spanText.back() == ' ' )
 					spanText = spanText.substr( 0, spanText.size() - 1 );
 
-				if ( !spanText.empty() )
+				if ( shouldCollapse && lastSpanEndsWithSpace && !spanText.empty() &&
+					 spanText[0] == ' ' )
+					spanText = spanText.substr( 1 );
+
+				if ( !spanText.empty() ) {
 					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding );
+					if ( shouldCollapse )
+						lastSpanEndsWithSpace = spanText.back() == ' ';
+				}
 			} else if ( margin.Left > 0 || margin.Top > 0 || padding.Left > 0 || padding.Top > 0 ) {
 				Rectf leftOnly( margin.Left, margin.Top, 0, 0 );
 				Rectf padLeftOnly( padding.Left, padding.Top, 0, 0 );
@@ -903,6 +972,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		} else if ( widget->isType( UI_TYPE_BR ) ) {
 			richText.addSpan( "\n",
 							  widget->asType<UILineBreak>()->getRichText().getFontStyleConfig() );
+			lastSpanEndsWithSpace = false;
 		} else {
 			Rectf margin = widget->getLayoutPixelsMargin();
 			bool isBlock = widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
@@ -960,6 +1030,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			richText.addCustomSize( Sizef( w + margin.Left + margin.Right,
 										   size.getHeight() + margin.Top + margin.Bottom ),
 									isBlock, floatType, clearType );
+			lastSpanEndsWithSpace = false;
 		}
 	};
 

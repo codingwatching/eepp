@@ -80,6 +80,7 @@ enum class PropertyId : Uint32 {
 	FontStyle = String::hash( "font-style" ),
 	TextDecoration = String::hash( "text-decoration" ),
 	Wordwrap = String::hash( "word-wrap" ),
+	WhiteSpaceCollapse = String::hash( "white-space-collapse" ),
 	TextStrokeWidth = String::hash( "text-stroke-width" ),
 	TextStrokeColor = String::hash( "text-stroke-color" ),
 	TextSelection = String::hash( "text-selection" ),

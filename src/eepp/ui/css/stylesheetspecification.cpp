@@ -335,6 +335,8 @@ void StyleSheetSpecification::registerDefaultProperties() {
 
 	registerProperty( "word-wrap", "" ).setType( PropertyType::Bool );
 
+	registerProperty( "white-space-collapse", "collapse", true ).setType( PropertyType::String );
+
 	registerProperty( "hint", "" ).setType( PropertyType::String );
 	registerProperty( "hint-color", "" ).setType( PropertyType::Color );
 	registerProperty( "hint-shadow-color", "" ).setType( PropertyType::Color );
