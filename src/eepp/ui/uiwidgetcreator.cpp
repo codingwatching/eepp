@@ -195,6 +195,8 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["input"] = [] { return UIHTMLInput::New(); };
 		registeredWidget["header"] = [] { return UIRichText::NewWithTag( "header" ); };
 		registeredWidget["article"] = [] { return UIRichText::NewWithTag( "article" ); };
+		registeredWidget["figure"] = [] { return UIRichText::NewWithTag( "figure" ); };
+		registeredWidget["figcaption"] = [] { return UIRichText::NewWithTag( "figcaption" ); };
 		registeredWidget["footer"] = [] { return UIRichText::NewWithTag( "footer" ); };
 		registeredWidget["main"] = [] { return UIRichText::NewWithTag( "main" ); };
 		registeredWidget["section"] = [] { return UIRichText::NewWithTag( "section" ); };

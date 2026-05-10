@@ -91,7 +91,9 @@ void UIImage::onAutoSize() {
 	if ( nullptr == mDrawable )
 		return;
 
-	Sizef drawableSize = mDrawable->getPixelsSize();
+	Sizef drawableSize = mFlags & UI_HTML_ELEMENT
+							 ? mDrawable->getPixelsSize() * PixelDensity::getPixelDensity()
+							 : mDrawable->getPixelsSize();
 	if ( drawableSize.getWidth() <= 0 || drawableSize.getHeight() <= 0 )
 		return;
 

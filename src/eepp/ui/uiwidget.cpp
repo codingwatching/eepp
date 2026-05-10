@@ -2029,6 +2029,9 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::Visible:
 			setVisible( attribute.asBool() );
 			break;
+		case PropertyId::Visibility:
+			setVisible( attribute.value() == "hidden" ? false : true );
+			break;
 		case PropertyId::Enabled:
 			setEnabled( attribute.asBool() );
 			break;

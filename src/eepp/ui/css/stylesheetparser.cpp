@@ -123,7 +123,8 @@ bool StyleSheetParser::parse( std::string& css, std::vector<std::string>& import
 						mediaParse( css, rs, pos, buffer, importedList );
 					} else if ( String::startsWith( buffer, "@import" ) ) {
 						importParse( css, pos, buffer, importedList );
-					} else if ( String::startsWith( buffer, "@keyframes" ) ) {
+					} else if ( String::startsWith( buffer, "@keyframes" ) ||
+								String::startsWith( buffer, "@-webkit-keyframes" ) ) {
 						keyframesParse( css, rs, pos, buffer );
 					}
 				}

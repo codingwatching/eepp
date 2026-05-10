@@ -37,7 +37,8 @@ StyleSheetProperty::StyleSheetProperty( const PropertyDefinition* definition,
 	createIndexed();
 	checkVars();
 
-	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition ) {
+	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
+		 !String::startsWith( mName, "-" ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }
@@ -60,7 +61,8 @@ StyleSheetProperty::StyleSheetProperty( bool isVolatile, const PropertyDefinitio
 	checkImportant();
 	checkVars();
 
-	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition ) {
+	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
+		 !String::startsWith( mName, "-" ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }
@@ -86,7 +88,8 @@ StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::stri
 	createIndexed();
 	checkVars();
 
-	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition ) {
+	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
+		 !String::startsWith( mName, "-" ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }

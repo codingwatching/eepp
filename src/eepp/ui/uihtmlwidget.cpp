@@ -22,9 +22,8 @@ UIHTMLWidget::~UIHTMLWidget() {
 }
 
 UILayouter* UIHTMLWidget::getLayouter() {
-	if ( !mLayouter ) {
+	if ( nullptr == mLayouter )
 		mLayouter = UILayouterManager::create( mDisplay, this );
-	}
 	return mLayouter;
 }
 
@@ -52,6 +51,8 @@ void UIHTMLWidget::onDisplayChange() {
 void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 	if ( mDisplay != display ) {
 		mDisplay = display;
+		mNodeFlags |= NODE_FLAG_OVER_FIND_ALLOWED;
+
 		if ( mDisplay == CSSDisplay::InlineBlock || mDisplay == CSSDisplay::Inline ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::MatchParent )
 				setLayoutWidthPolicy( SizePolicy::WrapContent );
@@ -59,7 +60,10 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::WrapContent &&
 				 mPosition != CSSPosition::Absolute && mPosition != CSSPosition::Fixed )
 				setLayoutWidthPolicy( SizePolicy::MatchParent );
+		} else if ( mDisplay == CSSDisplay::None ) {
+			mNodeFlags &= ~NODE_FLAG_OVER_FIND_ALLOWED;
 		}
+
 		onDisplayChange();
 	}
 }

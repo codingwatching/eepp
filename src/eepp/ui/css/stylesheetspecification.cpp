@@ -130,6 +130,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 		.setType( PropertyType::ForegroundSize )
 		.setIndexed();
 	registerProperty( "visible", "true" ).setType( PropertyType::Bool );
+	registerProperty( "visibility", "visible" ).setType( PropertyType::String );
 	registerProperty( "enabled", "true" ).setType( PropertyType::Bool );
 	registerProperty( "theme", "" );
 	registerProperty( "skin", "" );

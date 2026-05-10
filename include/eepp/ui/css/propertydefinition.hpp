@@ -35,6 +35,7 @@ enum class PropertyId : Uint32 {
 	ForegroundBottomLeftRadius = String::hash( "foreground-bottom-left-radius" ),
 	ForegroundBottomRightRadius = String::hash( "foreground-bottom-right-radius" ),
 	Visible = String::hash( "visible" ),
+	Visibility = String::hash( "visibility" ),
 	Enabled = String::hash( "enabled" ),
 	Theme = String::hash( "theme" ),
 	Skin = String::hash( "skin" ),
