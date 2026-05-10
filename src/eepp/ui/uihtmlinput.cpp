@@ -15,7 +15,7 @@ UIHTMLInput* UIHTMLInput::New() {
 	return eeNew( UIHTMLInput, () );
 }
 
-UIHTMLInput::UIHTMLInput() : UIWidget( "input" ) {
+UIHTMLInput::UIHTMLInput() : UIHTMLWidget( "input" ) {
 	mFlags |= UI_HTML_ELEMENT;
 	mWidthPolicy = SizePolicy::WrapContent;
 	mHeightPolicy = SizePolicy::WrapContent;
@@ -27,7 +27,7 @@ Uint32 UIHTMLInput::getType() const {
 }
 
 bool UIHTMLInput::isType( const Uint32& type ) const {
-	return UIHTMLInput::getType() == type || UIWidget::isType( type );
+	return UIHTMLInput::getType() == type || UIHTMLWidget::isType( type );
 }
 
 bool UIHTMLInput::applyProperty( const StyleSheetProperty& attribute ) {
@@ -48,14 +48,15 @@ bool UIHTMLInput::applyProperty( const StyleSheetProperty& attribute ) {
 			break;
 	}
 
-	if ( id != PropertyId::Id && id != PropertyId::Class && id != PropertyId::Type ) {
+	if ( id != PropertyId::Id && id != PropertyId::Class && id != PropertyId::Type &&
+		 id != PropertyId::Display ) {
 		mProperties[id] = attribute;
 		if ( mChildWidget ) {
 			mChildWidget->applyProperty( attribute );
 		}
 	}
 
-	return UIWidget::applyProperty( attribute );
+	return UIHTMLWidget::applyProperty( attribute );
 }
 
 std::string UIHTMLInput::getPropertyString( const PropertyDefinition* propertyDef,
@@ -78,11 +79,11 @@ std::string UIHTMLInput::getPropertyString( const PropertyDefinition* propertyDe
 			return val;
 	}
 
-	return UIWidget::getPropertyString( propertyDef, propertyIndex );
+	return UIHTMLWidget::getPropertyString( propertyDef, propertyIndex );
 }
 
 std::vector<PropertyId> UIHTMLInput::getPropertiesImplemented() const {
-	auto props = UIWidget::getPropertiesImplemented();
+	auto props = UIHTMLWidget::getPropertiesImplemented();
 	props.push_back( PropertyId::Type );
 	props.push_back( PropertyId::Value );
 	return props;
@@ -172,7 +173,7 @@ String UIHTMLInput::getFormValue() const {
 }
 
 void UIHTMLInput::onSizeChange() {
-	UIWidget::onSizeChange();
+	UIHTMLWidget::onSizeChange();
 }
 
 }} // namespace EE::UI

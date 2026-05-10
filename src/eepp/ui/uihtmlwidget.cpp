@@ -50,6 +50,7 @@ void UIHTMLWidget::onDisplayChange() {
 
 void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 	if ( mDisplay != display ) {
+		auto oldDisplay = mDisplay;
 		mDisplay = display;
 		mNodeFlags |= NODE_FLAG_OVER_FIND_ALLOWED;
 
@@ -62,7 +63,11 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 				setLayoutWidthPolicy( SizePolicy::MatchParent );
 		} else if ( mDisplay == CSSDisplay::None ) {
 			mNodeFlags &= ~NODE_FLAG_OVER_FIND_ALLOWED;
+			setVisible( false );
 		}
+
+		if ( oldDisplay == CSSDisplay::None )
+			setVisible( true );
 
 		onDisplayChange();
 	}

@@ -1,11 +1,12 @@
 #ifndef EE_UI_UIHTMLINPUT_HPP
 #define EE_UI_UIHTMLINPUT_HPP
 
+#include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uiwidget.hpp>
 
 namespace EE { namespace UI {
 
-class EE_API UIHTMLInput : public UIWidget {
+class EE_API UIHTMLInput : public UIHTMLWidget {
   public:
 	static UIHTMLInput* New();
 

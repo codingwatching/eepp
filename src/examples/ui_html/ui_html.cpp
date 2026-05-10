@@ -48,7 +48,7 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 	Log::instance()->setLiveWrite( true );
 
 	Http::setDefaultUserAgent( "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like "
-							   "Gecko) eepp-html/0.0.1 Chrome/140.0.0.0 Safari/537.36" );
+							   "Gecko) Chrome/148.0.0.0 Safari/537.36" );
 
 	auto win = app.getWindow();
 	auto ui = app.getUI();
