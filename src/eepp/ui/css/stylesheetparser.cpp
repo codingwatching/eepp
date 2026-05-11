@@ -117,14 +117,15 @@ bool StyleSheetParser::parse( std::string& css, std::vector<std::string>& import
 		switch ( rs ) {
 			case ReadingSelector: {
 				pos = readSelector( css, rs, pos, buffer );
-
-				if ( buffer[0] == '@' ) {
-					if ( String::startsWith( buffer, "@media" ) ) {
+				std::string_view trimBuf = String::trim( std::string_view{ buffer } );
+				if ( !trimBuf.empty() && trimBuf[0] == '@' ) {
+					if ( String::startsWith( trimBuf, "@media" ) ) {
 						mediaParse( css, rs, pos, buffer, importedList );
-					} else if ( String::startsWith( buffer, "@import" ) ) {
+					} else if ( String::startsWith( trimBuf, "@import" ) ) {
 						importParse( css, pos, buffer, importedList );
-					} else if ( String::startsWith( buffer, "@keyframes" ) ||
-								String::startsWith( buffer, "@-webkit-keyframes" ) ) {
+						size = css.size();
+					} else if ( String::startsWith( trimBuf, "@keyframes" ) ||
+								String::startsWith( trimBuf, "@-webkit-keyframes" ) ) {
 						keyframesParse( css, rs, pos, buffer );
 					}
 				}
@@ -369,8 +370,8 @@ void StyleSheetParser::keyframesParse( std::string& css, ReadState& rs, std::siz
 		const std::vector<std::shared_ptr<StyleSheetStyle>>& styles =
 			keyframeParser.getStyleSheet().getStyles();
 
-		std::string name(
-			String::trim( String::trim( buffer.substr( buffer.find_first_of( " " ) ) ), '"' ) );
+		std::string name( String::trim(
+			String::trim( buffer.substr( String::trim( buffer ).find_first_of( " " ) ) ), '"' ) );
 
 		mStyleSheet.addKeyframes( KeyframesDefinition::parseKeyframes( name, styles ) );
 	}

@@ -149,6 +149,11 @@ a:hover {
 	cursor: hand;
 }
 
+sub,
+sup {
+	font-size: smaller;
+}
+
 img {
 	scale-type: fit-inside;
 	layout-width: wrap_content;

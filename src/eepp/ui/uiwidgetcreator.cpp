@@ -146,6 +146,8 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["i"] = UITextSpan::NewItalics;
 		registeredWidget["cite"] = [] { return UITextSpan::NewWithTag( "cite" ); };
 		registeredWidget["kbd"] = [] { return UITextSpan::NewWithTag( "kbd" ); };
+		registeredWidget["sub"] = [] { return UITextSpan::NewWithTag( "sub" ); };
+		registeredWidget["sup"] = [] { return UITextSpan::NewWithTag( "sup" ); };
 		registeredWidget["u"] = UITextSpan::NewUnderline;
 		registeredWidget["ins"] = UITextSpan::NewUnderline;
 		registeredWidget["s"] = UITextSpan::NewStrikethrough;
