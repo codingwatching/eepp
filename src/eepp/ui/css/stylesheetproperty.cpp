@@ -44,7 +44,7 @@ StyleSheetProperty::StyleSheetProperty( const PropertyDefinition* definition,
 }
 
 StyleSheetProperty::StyleSheetProperty( bool isVolatile, const PropertyDefinition* definition,
-										const std::string& value, const Uint32& /*specificity*/,
+										const std::string& value, const Uint64& /*specificity*/,
 										const Uint32& index ) :
 	mName( definition->getName() ),
 	mNameHash( definition->getId() ),
@@ -68,7 +68,7 @@ StyleSheetProperty::StyleSheetProperty( bool isVolatile, const PropertyDefinitio
 }
 
 StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::string& value,
-										bool trimValue, const Uint32& specificity,
+										bool trimValue, const Uint64& specificity,
 										const Uint32& index ) :
 	mName( String::toLower( String::trim( name ) ) ),
 	mNameHash( String::hash( mName ) ),
@@ -95,7 +95,7 @@ StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::stri
 }
 
 StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::string& value,
-										const Uint32& specificity, bool isVolatile,
+										const Uint64& specificity, bool isVolatile,
 										const Uint32& index ) :
 	mName( String::toLower( String::trim( name ) ) ),
 	mNameHash( String::hash( mName ) ),
@@ -138,16 +138,14 @@ const std::string& StyleSheetProperty::value() const {
 	return mValue;
 }
 
-const Uint32& StyleSheetProperty::getSpecificity() const {
+const Uint64& StyleSheetProperty::getSpecificity() const {
 	return mSpecificity;
 }
 
-void StyleSheetProperty::setSpecificity( const Uint32& specificity ) {
-	// Don't allow set specificity if is an important property,
-	// force the specificity in this case.
-	if ( !mImportant ) {
-		mSpecificity = specificity;
-	}
+void StyleSheetProperty::setSpecificity( const Uint64& specificity ) {
+	mSpecificity = specificity;
+	if ( mImportant )
+		mSpecificity += StyleSheetSelectorRule::SpecificityImportant;
 }
 
 bool StyleSheetProperty::isEmpty() const {
@@ -190,7 +188,7 @@ const String::HashType& StyleSheetProperty::getNameHash() const {
 void StyleSheetProperty::checkImportant() {
 	if ( String::endsWith( mValue, "!important" ) ) {
 		mImportant = true;
-		mSpecificity = StyleSheetSelectorRule::SpecificityImportant;
+		mSpecificity += StyleSheetSelectorRule::SpecificityImportant;
 		mValue = String::trim( mValue.substr( 0, mValue.size() - 10 /*!important*/ ) );
 		mValueHash = String::hash( mValue );
 	}
@@ -689,8 +687,14 @@ bool StyleSheetProperty::isCachedProperty() const {
 }
 
 void StyleSheetProperty::setImportant( bool important ) {
+	if ( mImportant == important )
+		return;
 	mImportant = important;
-	mSpecificity = StyleSheetSelectorRule::SpecificityImportant;
+	if ( important ) {
+		mSpecificity += StyleSheetSelectorRule::SpecificityImportant;
+	} else {
+		mSpecificity -= StyleSheetSelectorRule::SpecificityImportant;
+	}
 }
 
 }}} // namespace EE::UI::CSS

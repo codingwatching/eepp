@@ -17,6 +17,38 @@
 
 namespace EE { namespace UI {
 
+static void applyDefaultBlockMargins( UIWidget* widget, const std::string& tag ) {
+	static const UnorderedMap<std::string, std::pair<Float, Float>> defaultsTopBottom = {
+		{ "h1", { 0.67f, 0.67f } },			{ "h2", { 0.83f, 0.83f } },
+		{ "h3", { 1.00f, 1.00f } },			{ "h4", { 1.33f, 1.33f } },
+		{ "h5", { 1.67f, 1.67f } },			{ "h6", { 2.33f, 2.33f } },
+		{ "p", { 1.00f, 1.00f } },			{ "pre", { 1.00f, 1.00f } },
+		{ "blockquote", { 1.00f, 1.00f } }, { "hr", { 0.50f, 0.50f } },
+		{ "ul", { 1.00f, 1.00f } },			{ "ol", { 1.00f, 1.00f } },
+		{ "dl", { 1.00f, 1.00f } },			{ "body", { 0.67f, 0.67f } },
+	};
+
+	static const UnorderedMap<std::string, std::pair<Float, Float>> defaultsLeftRight = {
+		{ "body", { 0.67f, 0.67f } },
+	};
+
+	auto ittb = defaultsTopBottom.find( tag );
+	if ( ittb != defaultsTopBottom.end() ) {
+		widget->applyProperty(
+			StyleSheetProperty( "margin-top", String::format( "%gem", ittb->second.first ) ) );
+		widget->applyProperty(
+			StyleSheetProperty( "margin-bottom", String::format( "%gem", ittb->second.second ) ) );
+	}
+
+	auto itlr = defaultsLeftRight.find( tag );
+	if ( itlr != defaultsLeftRight.end() ) {
+		widget->applyProperty(
+			StyleSheetProperty( "margin-left", String::format( "%gem", itlr->second.first ) ) );
+		widget->applyProperty(
+			StyleSheetProperty( "margin-right", String::format( "%gem", itlr->second.second ) ) );
+	}
+}
+
 UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string val ) {
 	String::toLowerInPlace( val );
 	if ( "preserve" == val )
@@ -179,31 +211,13 @@ UIRichText* UIRichText::NewHtml() {
 UIRichText* UIRichText::NewBody() {
 	auto* body = UIHTMLBody::New( "body" );
 	body->setClipType( ClipType::None );
+	applyDefaultBlockMargins( body, body->getElementTag() );
 	return body;
 }
 
 UIRichText* UIRichText::NewBr() {
 	return UILineBreak::New( "br" );
 };
-
-static void applyDefaultBlockMargins( UIWidget* widget, const std::string& tag ) {
-	static const UnorderedMap<std::string, std::pair<Float, Float>> defaults = {
-		{ "h1", { 0.67f, 0.67f } },			{ "h2", { 0.83f, 0.83f } },
-		{ "h3", { 1.00f, 1.00f } },			{ "h4", { 1.33f, 1.33f } },
-		{ "h5", { 1.67f, 1.67f } },			{ "h6", { 2.33f, 2.33f } },
-		{ "p", { 1.00f, 1.00f } },			{ "pre", { 1.00f, 1.00f } },
-		{ "blockquote", { 1.00f, 1.00f } }, { "hr", { 0.50f, 0.50f } },
-		{ "ul", { 1.00f, 1.00f } },			{ "ol", { 1.00f, 1.00f } },
-		{ "dl", { 1.00f, 1.00f } },			{ "body", { 0.67f, 0.67f } },
-	};
-	auto it = defaults.find( tag );
-	if ( it != defaults.end() ) {
-		widget->applyProperty(
-			StyleSheetProperty( "margin-top", String::format( "%gem", it->second.first ) ) );
-		widget->applyProperty(
-			StyleSheetProperty( "margin-bottom", String::format( "%gem", it->second.second ) ) );
-	}
-}
 
 UIRichText* UIRichText::NewHr() {
 	auto* w = UILineBreak::New( "hr" );
@@ -411,13 +425,14 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 
 std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 	auto props = UIHTMLWidget::getPropertiesImplemented();
-	auto local = {
-		PropertyId::FontFamily,		 PropertyId::FontSize,			 PropertyId::FontStyle,
-		PropertyId::Color,			 PropertyId::TextShadowColor,	 PropertyId::TextShadowOffset,
-		PropertyId::TextStrokeWidth, PropertyId::TextStrokeColor,	 PropertyId::TextAlign,
-		PropertyId::SelectionColor,	 PropertyId::SelectionBackColor, PropertyId::TextSelection,
-		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent,
-		PropertyId::WhiteSpaceCollapse };
+	auto local = { PropertyId::FontFamily,		   PropertyId::FontSize,
+				   PropertyId::FontStyle,		   PropertyId::Color,
+				   PropertyId::TextShadowColor,	   PropertyId::TextShadowOffset,
+				   PropertyId::TextStrokeWidth,	   PropertyId::TextStrokeColor,
+				   PropertyId::TextAlign,		   PropertyId::SelectionColor,
+				   PropertyId::SelectionBackColor, PropertyId::TextSelection,
+				   PropertyId::TextDecoration,	   PropertyId::LineHeight,
+				   PropertyId::TextIndent,		   PropertyId::WhiteSpaceCollapse };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -781,11 +796,10 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		richText.setLineHeight( uiRt->getLineHeightPx() );
 		richText.setTextIndent( uiRt->getTextIndentPx() );
 	}
-	bool shouldCollapse =
-		container->isType( UI_TYPE_RICHTEXT )
-			? static_cast<UIRichText*>( container )->getWhiteSpaceCollapse() ==
-				  WhiteSpaceCollapse::Collapse
-			: true;
+	bool shouldCollapse = container->isType( UI_TYPE_RICHTEXT )
+							  ? static_cast<UIRichText*>( container )->getWhiteSpaceCollapse() ==
+									WhiteSpaceCollapse::Collapse
+							  : true;
 	bool lastSpanEndsWithSpace = false;
 	Float maxWidth = 0;
 	if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {

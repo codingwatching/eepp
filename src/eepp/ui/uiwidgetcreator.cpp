@@ -143,6 +143,8 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["strong"] = UITextSpan::NewStrong;
 		registeredWidget["small"] = UITextSpan::NewSmall;
 		registeredWidget["i"] = UITextSpan::NewItalics;
+		registeredWidget["cite"] = [] { return UITextSpan::NewWithTag( "cite" ); };
+		registeredWidget["kbd"] = [] { return UITextSpan::NewWithTag( "kbd" ); };
 		registeredWidget["u"] = UITextSpan::NewUnderline;
 		registeredWidget["ins"] = UITextSpan::NewUnderline;
 		registeredWidget["s"] = UITextSpan::NewStrikethrough;
@@ -203,6 +205,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["section"] = [] { return UIRichText::NewWithTag( "section" ); };
 		registeredWidget["nav"] = [] { return UIRichText::NewWithTag( "nav" ); };
 		registeredWidget["center"] = [] { return UIRichText::NewWithTag( "center" ); };
+		registeredWidget["aside"] = [] { return UIRichText::NewWithTag( "aside" ); };
 		registeredWidget["html"] = UIRichText::NewHtml;
 		registeredWidget["head"] = [] { return UIWidget::NewWithTag( "head" ); };
 		registeredWidget["body"] = UIRichText::NewBody;

@@ -260,7 +260,7 @@ std::shared_ptr<ElementDefinition> StyleSheet::getElementStyles( UIWidget* eleme
 		}
 	}
 
-	std::sort( applicableNodes.begin(), applicableNodes.end(), StyleSheetNodeSort );
+	std::stable_sort( applicableNodes.begin(), applicableNodes.end(), StyleSheetNodeSort );
 
 	if ( applicableNodes.empty() )
 		return nullptr;
@@ -304,17 +304,17 @@ StyleSheet::getStyleFromSelector( const std::string& selector, bool searchBySpec
 			if ( node->isMediaValid() && node->getSelector().getName() == selector )
 				found.push_back( node );
 		if ( !found.empty() ) {
-			std::sort( found.begin(), found.end(),
-					   []( const std::shared_ptr<StyleSheetStyle>& lhs,
-						   const std::shared_ptr<StyleSheetStyle>& rhs ) {
-						   if ( ( lhs->getMediaQueryList() == nullptr ) !=
-								( rhs->getMediaQueryList() == nullptr ) ) {
-							   return ( lhs->getMediaQueryList() == nullptr ) >
-									  ( rhs->getMediaQueryList() == nullptr );
-						   }
-						   return lhs->getSelector().getSpecificity() <
-								  rhs->getSelector().getSpecificity();
-					   } );
+			std::stable_sort( found.begin(), found.end(),
+							  []( const std::shared_ptr<StyleSheetStyle>& lhs,
+								  const std::shared_ptr<StyleSheetStyle>& rhs ) {
+								  if ( ( lhs->getMediaQueryList() == nullptr ) !=
+									   ( rhs->getMediaQueryList() == nullptr ) ) {
+									  return ( lhs->getMediaQueryList() == nullptr ) >
+											 ( rhs->getMediaQueryList() == nullptr );
+								  }
+								  return lhs->getSelector().getSpecificity() <
+										 rhs->getSelector().getSpecificity();
+							  } );
 			return found.back();
 		}
 	}

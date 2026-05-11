@@ -916,6 +916,17 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		if ( value.empty() )
 			return {};
 
+		bool isImportant = false;
+		if ( String::icontains( value, "!important" ) ) {
+			std::string lowerVal = String::toLower( value );
+			size_t impPos = lowerVal.rfind( "!important" );
+			if ( impPos != std::string::npos ) {
+				isImportant = true;
+				value.erase( impPos );
+				value = String::trim( value );
+			}
+		}
+
 		const std::vector<std::string>& propNames = shorthand->getProperties();
 		std::vector<std::string> values = String::split( value, ',' );
 
@@ -1007,10 +1018,12 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		}
 
 		std::vector<StyleSheetProperty> properties;
+		std::string impStr = isImportant ? " !important" : "";
+
 		if ( !propNames.empty() )
-			properties.emplace_back( propNames[0], String::join( xValues, ',' ) );
+			properties.emplace_back( propNames[0], String::join( xValues, ',' ) + impStr );
 		if ( propNames.size() > 1 )
-			properties.emplace_back( propNames[1], String::join( yValues, ',' ) );
+			properties.emplace_back( propNames[1], String::join( yValues, ',' ) + impStr );
 
 		return properties;
 	};
@@ -1022,7 +1035,7 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		if ( value.empty() || "none" == value )
 			return {};
 
-		// 1. Extract !important early so it doesn't get captured as a color token
+		// Extract !important early so it doesn't get captured as a color token
 		bool isImportant = false;
 		if ( String::icontains( value, "!important" ) ) {
 			isImportant = true;
@@ -1030,7 +1043,7 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			String::replaceAll( value, "! important", "" );
 		}
 
-		// 2. Ensure functional notations (like url) are separated by a space
+		// Ensure functional notations (like url) are separated by a space
 		// so that standard token splitting works correctly for minified CSS.
 		String::replaceAll( value, ")", ") " );
 		String::removeExtraSpaces( value );
@@ -1055,7 +1068,7 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			return s == "left" || s == "right" || s == "top" || s == "bottom" || s == "center";
 		};
 
-		// 3. Split by comma for multi-layer support, while strictly ignoring
+		// Split by comma for multi-layer support, while strictly ignoring
 		// commas inside parentheses (required for data: URIs and functions)
 		std::vector<std::string> layers = String::split( value, ",", "", "(" );
 
@@ -1128,7 +1141,7 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			}
 		}
 
-		// 4. Re-apply the !important flag to the mapped individual longhands
+		// Re-apply the !important flag to the mapped individual longhands
 		std::string impStr = isImportant ? " !important" : "";
 
 		for ( auto& propName : propNames ) {

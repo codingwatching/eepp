@@ -63,54 +63,6 @@ StyleSheetSelectorRule::toPseudoClass( std::string_view cls ) {
 	return StyleSheetSelectorRule::PseudoClasses::None;
 }
 
-static void splitSelectorPseudoClass( const std::string& selector, std::string& realSelector,
-									  std::string& realPseudoClass ) {
-	if ( !selector.empty() ) {
-		bool lastWasColon = false;
-		bool inFunction = false;
-
-		for ( int i = (Int32)selector.size() - 1; i >= 0; i-- ) {
-			char curChar = selector[i];
-
-			if ( inFunction && curChar == '(' )
-				inFunction = false;
-
-			if ( inFunction )
-				continue;
-
-			if ( lastWasColon ) {
-				if ( StyleSheetSelectorRule::PSEUDO_CLASS == curChar ) {
-					// no pseudo class
-					realSelector = selector;
-				} else {
-					if ( i + 2 <= (int)selector.size() ) {
-						realSelector = selector.substr( 0, i + 1 );
-						realPseudoClass = selector.substr( i + 2 );
-					} else {
-						realSelector = selector;
-					}
-				}
-
-				return;
-			} else if ( StyleSheetSelectorRule::PSEUDO_CLASS == curChar ) {
-				lastWasColon = true;
-			}
-
-			if ( curChar == ')' ) {
-				inFunction = true;
-				lastWasColon = false;
-			}
-		}
-
-		if ( lastWasColon ) {
-			if ( selector.size() > 1 )
-				realPseudoClass = selector.substr( 1 );
-		} else {
-			realSelector = selector;
-		}
-	}
-}
-
 std::vector<const char*> StyleSheetSelectorRule::fromPseudoClass( Uint32 cls ) {
 	std::vector<const char*> ret;
 	ret.reserve( numberOfSetBits( cls ) );
@@ -151,77 +103,111 @@ void StyleSheetSelectorRule::pushSelectorTypeIdentifier( TypeIdentifier selector
 }
 
 void StyleSheetSelectorRule::parseFragment( const std::string& selectorFragment ) {
-	std::string selector = selectorFragment;
-	std::string realSelector = "";
-	std::string pseudoClass = "";
-
-	do {
-		pseudoClass.clear();
-		realSelector.clear();
-
-		if ( !selectorFragment.empty() && selectorFragment[0] != ':' ) {
-			splitSelectorPseudoClass( selector, realSelector, pseudoClass );
-
-			if ( !pseudoClass.empty() ) {
-				if ( isPseudoClassState( pseudoClass ) ) {
-					mPseudoClasses |= toPseudoClass( pseudoClass );
-				} else if ( isStructuralPseudoClass( pseudoClass ) ) {
-					mStructuralPseudoClasses.push_back( pseudoClass );
-
-					StructuralSelector structuralSelector =
-						StyleSheetSpecification::instance()->getStructuralSelector( pseudoClass );
-
-					if ( structuralSelector.selector ) {
-						mStructuralSelectors.push_back( structuralSelector );
-					}
-				}
-
-				selector = realSelector;
-			}
-		}
-	} while ( !pseudoClass.empty() );
-
 	TypeIdentifier curSelectorType = TAG;
 	std::string buffer;
+	int functionDepth = 0;
+	bool inAttribute = false;
 
-	for ( auto charIt = selector.begin(); charIt != selector.end(); ++charIt ) {
-		char curChar = *charIt;
+	auto processBuffer = [&]() {
+		if ( buffer.empty() )
+			return;
 
-		switch ( curChar ) {
-			case CLASS: {
-				if ( !buffer.empty() ) {
-					pushSelectorTypeIdentifier( curSelectorType, buffer );
-					buffer.clear();
+		if ( inAttribute ) {
+			AttributeSelector attr;
+
+			size_t opPos = buffer.find_first_of( "=~|^$*" );
+			if ( opPos != std::string::npos ) {
+				size_t eqPos = buffer.find( '=', opPos );
+				attr.name = String::trim( buffer.substr( 0, opPos ) );
+
+				// Extract the string operator and convert to Enum
+				std::string opStr = buffer.substr( opPos, ( eqPos - opPos ) + 1 );
+				attr.op = attributeOperatorFromString( opStr );
+
+				std::string val = String::trim( buffer.substr( eqPos + 1 ) );
+				String::trimInPlace( val, '"' );
+				String::trimInPlace( val, '\'' );
+				attr.value = val;
+			} else {
+				attr.name = String::trim( buffer );
+				attr.op = AttributeOperator::None;
+			}
+
+			mAttributeSelectors.push_back( attr );
+			mSpecificity += SpecificityClass;
+		}
+
+		if ( curSelectorType == TAG || curSelectorType == CLASS || curSelectorType == ID ) {
+			if ( buffer.size() == 1 && buffer[0] == GLOBAL )
+				curSelectorType = GLOBAL;
+
+			pushSelectorTypeIdentifier( curSelectorType, buffer );
+		} else if ( curSelectorType == PSEUDO_CLASS ||
+					curSelectorType == STRUCTURAL_PSEUDO_CLASS ) {
+			if ( isPseudoClassState( buffer ) ) {
+				mPseudoClasses |= toPseudoClass( buffer );
+			} else if ( isStructuralPseudoClass( buffer ) ) {
+				mStructuralPseudoClasses.push_back( buffer );
+
+				StructuralSelector structuralSelector =
+					StyleSheetSpecification::instance()->getStructuralSelector( buffer );
+
+				if ( structuralSelector.selector ) {
+					mStructuralSelectors.push_back( structuralSelector );
 				}
-
-				curSelectorType = CLASS;
-
-				break;
+			} else if ( buffer == "root" ) {
+				// :root defines global variables. Map it to the GLOBAL wildcard
+				// so variables are correctly attached to the root node hierarchy.
+				pushSelectorTypeIdentifier( GLOBAL, "*" );
+			} else {
+				// Poison the rule for genuinely unsupported pseudo-classes
+				pushSelectorTypeIdentifier( TAG, ":" + buffer );
 			}
-			case ID: {
-				if ( !buffer.empty() ) {
-					pushSelectorTypeIdentifier( curSelectorType, buffer );
-					buffer.clear();
-				}
+		}
+		buffer.clear();
+	};
 
-				curSelectorType = ID;
+	// Single forward pass
+	for ( size_t i = 0; i < selectorFragment.size(); i++ ) {
+		char curChar = selectorFragment[i];
 
-				break;
-			}
-			default: {
-				buffer += curChar;
-				break;
-			}
+		if ( curChar == '(' )
+			functionDepth++;
+		else if ( curChar == ')' )
+			functionDepth--;
+
+		// Catch attribute brackets
+		if ( curChar == '[' && functionDepth == 0 ) {
+			processBuffer(); // Flush previous tag/class
+			inAttribute = true;
+			continue;
+		} else if ( curChar == ']' && inAttribute ) {
+			processBuffer(); // Parse the attribute we just accumulated
+			inAttribute = false;
+			continue;
+		}
+
+		// Protect `eepp` sub-widgets. If we see `::`, it is part of the
+		// tag name (e.g., tableview::cell). Append it and skip the split.
+		if ( curChar == ':' && i + 1 < selectorFragment.size() && selectorFragment[i + 1] == ':' ) {
+			buffer += "::";
+			i++; // Skip the second colon
+			continue;
+		}
+
+		// Only trigger a split if we aren't inside a function like :not()
+		if ( functionDepth == 0 &&
+			 ( curChar == CLASS || curChar == ID || curChar == PSEUDO_CLASS ) ) {
+			processBuffer();
+			curSelectorType = (TypeIdentifier)curChar;
+		} else {
+			buffer += curChar;
 		}
 	}
 
-	if ( !buffer.empty() ) {
-		if ( buffer.size() == 1 && buffer[0] == GLOBAL )
-			curSelectorType = GLOBAL;
+	processBuffer();
 
-		pushSelectorTypeIdentifier( curSelectorType, buffer );
-	}
-
+	// Calculate Requirement Flags and Specificity
 	if ( !mTagName.empty() )
 		mRequirementFlags |= TagName;
 
@@ -320,6 +306,51 @@ bool StyleSheetSelectorRule::matches( UIWidget* element, const bool& applyPseudo
 		if ( hasClasses ) {
 			flags |= Class;
 		}
+	}
+
+	if ( !mAttributeSelectors.empty() ) {
+		for ( const auto& attr : mAttributeSelectors ) {
+			if ( attr.op != AttributeOperator::None ) {
+				std::string elVal = element->getPropertyString( attr.name );
+
+				switch ( attr.op ) {
+					case AttributeOperator::Exact: // =
+						if ( elVal != attr.value )
+							return false;
+						break;
+					case AttributeOperator::StartsWith: // ^=
+						if ( !String::startsWith( elVal, attr.value ) )
+							return false;
+						break;
+					case AttributeOperator::EndsWith: // $=
+						if ( !String::endsWith( elVal, attr.value ) )
+							return false;
+						break;
+					case AttributeOperator::Contains: // *=
+						if ( elVal.find( attr.value ) == std::string::npos )
+							return false;
+						break;
+					case AttributeOperator::ContainsWord: { // ~= (Space-separated word check)
+						auto words = String::split( elVal, ' ', true );
+						if ( std::find( words.begin(), words.end(), attr.value ) == words.end() ) {
+							return false;
+						}
+						break;
+					}
+					case AttributeOperator::StartsWithDash: // |= (Exact match or starts with value
+															// + "-")
+						if ( elVal != attr.value &&
+							 !String::startsWith( elVal, attr.value + "-" ) ) {
+							return false;
+						}
+						break;
+					default:
+						break;
+				}
+			}
+		}
+
+		flags |= Attribute;
 	}
 
 	if ( applyPseudo ) {

@@ -77,12 +77,14 @@ del {
 }
 
 i,
-em {
+em,
+cite {
 	font-style: italic;
 }
 
 CodeEditor,
-code {
+code,
+kbd {
 	font-family: monospace;
 }
 
