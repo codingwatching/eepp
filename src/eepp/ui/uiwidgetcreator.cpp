@@ -137,6 +137,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 
 		// HTML elements
 		registeredWidget["a"] = UIAnchorSpan::New;
+		registeredWidget["label"] = UILabelSpan::New;
 		registeredWidget["span"] = UITextSpan::New;
 		registeredWidget["em"] = UITextSpan::NewEmphasis;
 		registeredWidget["b"] = UITextSpan::NewBold;

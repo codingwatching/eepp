@@ -180,6 +180,33 @@ class EE_API UIAnchorSpan : public UITextSpan {
 	virtual Uint32 onMessage( const NodeMessage* Msg );
 };
 
+class EE_API UILabelSpan : public UITextSpan {
+  public:
+	static UILabelSpan* New();
+
+	virtual bool applyProperty( const StyleSheetProperty& attribute );
+
+	virtual std::string getPropertyString( const PropertyDefinition* propertyDef,
+										   const Uint32& propertyIndex = 0 ) const;
+
+	virtual std::vector<PropertyId> getPropertiesImplemented() const;
+
+	void setFor( const std::string& forAttr );
+
+	const std::string& getFor() const;
+
+  protected:
+	UILabelSpan( const std::string& tag = "label" );
+
+	std::string mFor;
+
+	virtual Uint32 onKeyDown( const KeyEvent& event );
+
+	virtual Uint32 onMessage( const NodeMessage* Msg );
+
+	void activateTarget();
+};
+
 }} // namespace EE::UI
 
 #endif

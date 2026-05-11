@@ -3,6 +3,9 @@
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/uiborderdrawable.hpp>
+#include <eepp/ui/uicheckbox.hpp>
+#include <eepp/ui/uihtmlinput.hpp>
+#include <eepp/ui/uiradiobutton.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
@@ -675,6 +678,116 @@ std::vector<PropertyId> UIAnchorSpan::getPropertiesImplemented() const {
 	auto local = { PropertyId::Href, PropertyId::Target };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
+}
+
+UILabelSpan* UILabelSpan::New() {
+	return eeNew( UILabelSpan, () );
+}
+
+UILabelSpan::UILabelSpan( const std::string& tag ) : UITextSpan( tag ) {
+	mPseudoClasses |= StyleSheetSelectorRule::PseudoClasses::Link;
+	mState |= UIState::StateFlagLink;
+}
+
+Uint32 UILabelSpan::onMessage( const NodeMessage* Msg ) {
+	switch ( Msg->getMsg() ) {
+		case NodeMessage::MouseClick: {
+			if ( !mFor.empty() && ( Msg->getFlags() & EE_BUTTON_LMASK ) )
+				activateTarget();
+			return 1;
+		}
+	}
+	return UITextSpan::onMessage( Msg );
+}
+
+Uint32 UILabelSpan::onKeyDown( const KeyEvent& event ) {
+	if ( event.getKeyCode() == KEY_KP_ENTER || event.getKeyCode() == KEY_RETURN ||
+		 event.getKeyCode() == KEY_SPACE ) {
+		if ( !mFor.empty() ) {
+			activateTarget();
+			return 1;
+		}
+	}
+
+	return UITextSpan::onKeyDown( event );
+}
+
+bool UILabelSpan::applyProperty( const StyleSheetProperty& attribute ) {
+	if ( !checkPropertyDefinition( attribute ) )
+		return false;
+
+	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
+		case PropertyId::For:
+			setFor( attribute.value() );
+			break;
+		default:
+			UITextSpan::applyProperty( attribute );
+			break;
+	}
+
+	return true;
+}
+
+void UILabelSpan::setFor( const std::string& forAttr ) {
+	if ( forAttr != mFor ) {
+		mFor = forAttr;
+	}
+}
+
+const std::string& UILabelSpan::getFor() const {
+	return mFor;
+}
+
+std::string UILabelSpan::getPropertyString( const PropertyDefinition* propertyDef,
+											const Uint32& propertyIndex ) const {
+	if ( NULL == propertyDef )
+		return "";
+
+	switch ( propertyDef->getPropertyId() ) {
+		case PropertyId::For:
+			return mFor;
+		default:
+			return UITextSpan::getPropertyString( propertyDef, propertyIndex );
+	}
+}
+
+std::vector<PropertyId> UILabelSpan::getPropertiesImplemented() const {
+	auto props = UITextSpan::getPropertiesImplemented();
+	auto local = { PropertyId::For };
+	props.insert( props.end(), local.begin(), local.end() );
+	return props;
+}
+
+void UILabelSpan::activateTarget() {
+	UISceneNode* sceneNode = getUISceneNode();
+	if ( !sceneNode )
+		return;
+
+	Node* target = sceneNode->find( mFor );
+	if ( !target )
+		return;
+
+	if ( !target->isWidget() )
+		return;
+
+	UIWidget* widget = static_cast<UIWidget*>( target );
+
+	if ( widget->isType( UI_TYPE_RADIOBUTTON ) ) {
+		static_cast<UIRadioButton*>( widget )->setActive( true );
+	} else if ( widget->isType( UI_TYPE_CHECKBOX ) ) {
+		UICheckBox* cb = static_cast<UICheckBox*>( widget );
+		cb->setChecked( !cb->isChecked() );
+	} else if ( widget->isType( UI_TYPE_HTML_INPUT ) ) {
+		UIWidget* child = static_cast<UIHTMLInput*>( widget )->getChildWidget();
+		if ( child ) {
+			if ( child->isType( UI_TYPE_RADIOBUTTON ) ) {
+				static_cast<UIRadioButton*>( child )->setActive( true );
+			} else if ( child->isType( UI_TYPE_CHECKBOX ) ) {
+				UICheckBox* cb = static_cast<UICheckBox*>( child );
+				cb->setChecked( !cb->isChecked() );
+			}
+		}
+	}
 }
 
 }} // namespace EE::UI
