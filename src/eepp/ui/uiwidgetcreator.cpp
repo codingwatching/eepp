@@ -149,6 +149,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["del"] = UITextSpan::NewStrikethrough;
 		registeredWidget["font"] = UITextSpan::NewFont;
 		registeredWidget["code"] = UITextSpan::NewCode;
+		registeredWidget["abbr"] = [] { return UITextSpan::NewWithTag( "abbr" ); };
 		registeredWidget["tt"] = [] { return UITextSpan::NewWithTag( "tt" ); };
 		registeredWidget["mark"] = UITextSpan::NewMark;
 		registeredWidget["div"] = UIRichText::NewDiv;

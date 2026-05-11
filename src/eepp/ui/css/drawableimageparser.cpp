@@ -338,6 +338,15 @@ void DrawableImageParser::registerBaseParsers() {
 			return DrawableSearcher::searchByName(
 				node->getUISceneNode()->solveRelativePath( param ).toString(), false,
 				node->getUISceneNode()->getReferer() );
+		} else if ( functionType.getParameters().size() > 1 &&
+					String::startsWith( param, "data:image/" ) ) {
+			auto cparam = functionType.getParameters().at( 0 );
+			for ( size_t i = 1; i < functionType.getParameters().size(); i++ ) {
+				cparam += ',';
+				cparam += functionType.getParameters().at( i );
+			}
+			return DrawableSearcher::searchByName( cparam, false,
+												   node->getUISceneNode()->getReferer() );
 		}
 		return DrawableSearcher::searchByName( param, false, node->getUISceneNode()->getReferer() );
 	};

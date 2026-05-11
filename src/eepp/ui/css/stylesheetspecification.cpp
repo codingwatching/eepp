@@ -1021,6 +1021,21 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		value = String::trim( value );
 		if ( value.empty() || "none" == value )
 			return {};
+
+		// 1. Extract !important early so it doesn't get captured as a color token
+		bool isImportant = false;
+		if ( String::icontains( value, "!important" ) ) {
+			isImportant = true;
+			String::replaceAll( value, "!important", "" );
+			String::replaceAll( value, "! important", "" );
+		}
+
+		// 2. Ensure functional notations (like url) are separated by a space
+		// so that standard token splitting works correctly for minified CSS.
+		String::replaceAll( value, ")", ") " );
+		String::removeExtraSpaces( value );
+		value = String::trim( value );
+
 		std::vector<StyleSheetProperty> properties;
 		const std::vector<std::string>& propNames = shorthand->getProperties();
 
@@ -1040,8 +1055,9 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			return s == "left" || s == "right" || s == "top" || s == "bottom" || s == "center";
 		};
 
-		// Split by comma for multi-layer support
-		std::vector<std::string> layers = String::split( value, ',' );
+		// 3. Split by comma for multi-layer support, while strictly ignoring
+		// commas inside parentheses (required for data: URIs and functions)
+		std::vector<std::string> layers = String::split( value, ",", "", "(" );
 
 		std::vector<std::string> imageValues;
 		std::vector<std::string> repeatValues;
@@ -1064,6 +1080,9 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 
 			for ( size_t ti = 0; ti < tokens.size(); ++ti ) {
 				auto& tok = tokens[ti];
+				if ( tok.empty() )
+					continue; // Safeguard empty tokens
+
 				auto open = tok.find_first_of( '(' );
 
 				if ( open != std::string::npos &&
@@ -1109,36 +1128,39 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			}
 		}
 
+		// 4. Re-apply the !important flag to the mapped individual longhands
+		std::string impStr = isImportant ? " !important" : "";
+
 		for ( auto& propName : propNames ) {
 			if ( String::endsWith( propName, "-color" ) && !colorValue.empty() ) {
-				properties.emplace_back( StyleSheetProperty( propName, colorValue ) );
+				properties.emplace_back( StyleSheetProperty( propName, colorValue + impStr ) );
 			} else if ( String::endsWith( propName, "-image" ) && !imageValues.empty() ) {
 				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( imageValues, ',' ) ) );
+					StyleSheetProperty( propName, String::join( imageValues, ',' ) + impStr ) );
 			} else if ( String::endsWith( propName, "-repeat" ) && !repeatValues.empty() ) {
 				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( repeatValues, ',' ) ) );
+					StyleSheetProperty( propName, String::join( repeatValues, ',' ) + impStr ) );
 			} else if ( String::endsWith( propName, "-attachment" ) && !attachmentValues.empty() ) {
-				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( attachmentValues, ',' ) ) );
+				properties.emplace_back( StyleSheetProperty(
+					propName, String::join( attachmentValues, ',' ) + impStr ) );
 			} else if ( String::endsWith( propName, "-origin" ) ) {
 				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( originValues, ',' ) ) );
+					StyleSheetProperty( propName, String::join( originValues, ',' ) + impStr ) );
 			} else if ( String::endsWith( propName, "-clip" ) ) {
 				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( clipValues, ',' ) ) );
+					StyleSheetProperty( propName, String::join( clipValues, ',' ) + impStr ) );
 			} else if ( String::endsWith( propName, "-position" ) ) {
 				// Let background-position sub-parser handle this
 				const ShorthandDefinition* posShorthand = getShorthand( propName );
 				if ( NULL != posShorthand ) {
 					auto bpVec = mShorthandParsers["background-position"](
-						posShorthand, String::join( positionValues, ',' ) );
+						posShorthand, String::join( positionValues, ',' ) + impStr );
 					for ( auto& bp : bpVec )
 						properties.emplace_back( bp );
 				}
 			} else if ( String::endsWith( propName, "-size" ) ) {
 				properties.emplace_back(
-					StyleSheetProperty( propName, String::join( sizeValues, ',' ) ) );
+					StyleSheetProperty( propName, String::join( sizeValues, ',' ) + impStr ) );
 			}
 		}
 

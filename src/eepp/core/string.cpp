@@ -683,18 +683,23 @@ bool String::isCharacter( const int& value ) {
 	return ( value >= 32 && value <= 126 ) || ( value >= 161 && value <= 255 ) || ( value == 9 );
 }
 
-bool String::isNumber( const int& value, bool AllowDot ) {
+bool String::isNumber( const int& value, bool AllowDot, bool AllowScientific ) {
+	if ( AllowScientific )
+		return ( value >= 48 && value <= 57 ) || value == 46 || value == 101 || value == 69 ||
+			   value == 45 || value == 43;
 	if ( AllowDot )
 		return ( value >= 48 && value <= 57 ) || value == 46;
-
 	return value >= 48 && value <= 57;
 }
 
-bool String::isNumber( const std::string& value, bool AllowDot ) {
+bool String::isNumber( const std::string& value, bool AllowDot, bool AllowScientific ) {
+	if ( AllowScientific ) {
+		Float t;
+		return fromString( t, value );
+	}
 	for ( auto& val : value ) {
-		if ( !isNumber( val, AllowDot ) ) {
+		if ( !isNumber( val, AllowDot ) )
 			return false;
-		}
 	}
 	return true;
 }

@@ -173,12 +173,12 @@ std::string StyleSheetLength::unitToString( const StyleSheetLength::Unit& unit )
 }
 
 bool StyleSheetLength::isLength( const std::string& unitStr ) {
-	LuaPattern ptrn( "(-?%d+[%d%.eE]*)(%w*)" );
+	LuaPattern ptrn( "(-?%d+[%d%.]*)([eE][-+]?%d+)?(%w*)" );
 	PatternMatcher::Range matches[4];
 	if ( ptrn.matches( unitStr, matches ) ) {
-		if ( matches[2].isValid() ) {
+		if ( matches[3].isValid() ) {
 			std::string unit =
-				unitStr.substr( matches[2].start, matches[2].end - matches[2].start );
+				unitStr.substr( matches[3].start, matches[3].end - matches[3].start );
 			auto unitType = unitFromString( unit );
 			if ( unitType != StyleSheetLength::Unit::Px || unit == "px" )
 				return true;
@@ -348,9 +348,10 @@ StyleSheetLength StyleSheetLength::fromString( const std::string& str, const Flo
 	std::string unit;
 
 	for ( std::size_t i = 0; i < str.size(); i++ ) {
-		if ( String::isNumber( str[i], true ) || ( '-' == str[i] && i == 0 ) ||
-			 ( '+' == str[i] && i == 0 ) ) {
-			num += str[i];
+		char c = str[i];
+		if ( String::isNumber( c, true, true ) || ( '-' == c && i == 0 ) ||
+			 ( '+' == c && i == 0 ) ) {
+			num += c;
 		} else {
 			unit = str.substr( i );
 			break;
@@ -359,7 +360,11 @@ StyleSheetLength StyleSheetLength::fromString( const std::string& str, const Flo
 
 	if ( !num.empty() ) {
 		Float val = 0;
-		if ( String::fromString( val, num ) )
+		while ( !num.empty() && !String::fromString( val, num ) ) {
+			unit = num.back() + unit;
+			num.pop_back();
+		}
+		if ( !num.empty() )
 			length.setValue( val, unitFromString( unit ) );
 	}
 

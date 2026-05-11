@@ -1189,9 +1189,11 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 
 					if ( !response.getBody().empty() ) {
 						font->loadFromMemory( &response.getBody()[0], response.getBody().size() );
-						trySetFontFamily( fontFamily, fontStyle, font );
-						mFontFaces.push_back( font );
-						runOnMainThread( [this] { mRoot->reloadFontFamily(); } );
+						runOnMainThread( [this, font, fontFamily, fontStyle, trySetFontFamily] {
+							trySetFontFamily( fontFamily, fontStyle, font );
+							mFontFaces.push_back( font );
+							mRoot->reloadFontFamily();
+						} );
 					}
 				},
 				URI( path ), Seconds( 5 ) );

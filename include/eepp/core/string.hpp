@@ -129,10 +129,11 @@ class EE_API String {
 	static bool isCharacter( const int& value );
 
 	/** @return If the value passed is a number */
-	static bool isNumber( const int& value, bool AllowDot = false );
+	static bool isNumber( const int& value, bool AllowDot = false, bool AllowScientific = false );
 
 	/** @return If the string represents a number. */
-	static bool isNumber( const std::string& value, bool AllowDot = false );
+	static bool isNumber( const std::string& value, bool AllowDot = false,
+						  bool AllowScientific = false );
 
 	/** @return If the value passed is a letter */
 	static bool isLetter( const int& value );
