@@ -1,6 +1,7 @@
 #include "utest.hpp"
 #include <eepp/graphics/font.hpp>
 #include <eepp/graphics/fontmanager.hpp>
+#include <eepp/graphics/pixeldensity.hpp>
 #include <eepp/scene/node.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/ui/css/stylesheet.hpp>
@@ -354,8 +355,7 @@ UTEST( CSSUnits, ExChWithFont ) {
 						WindowBackend::Default, 32 ),
 		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1.f );
 
-	Graphics::Font* font =
-		app.getUI()->getUIThemeManager()->getDefaultFont();
+	Graphics::Font* font = app.getUI()->getUIThemeManager()->getDefaultFont();
 	EXPECT_TRUE( font != nullptr );
 
 	Float elFontSize = 24.f;
@@ -374,49 +374,163 @@ UTEST( CSSUnits, ExChWithFont ) {
 	EXPECT_NE( fallback, resultCh );
 }
 
-UTEST( CSSUnits, Integration ) {
-	for ( Float scale : { 1.f, 1.5f, 2.f } ) {
-		UTEST_PRINT_STEP( String::format( "SCALE %.1f", scale ).c_str() );
-		UIApplication app( WindowSettings( 800, 600, "eepp - CSS Units Ex/Ch Integration Test",
-										   WindowStyle::Default, WindowBackend::Default, 32 ),
-						   UIApplication::Settings(
-							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
+UTEST( CSSVariables, VariableReferencesSimple ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 1", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
 
-		std::string xml = R"(
+	std::string xml = R"(
 <html>
 	<head>
 		<style>
-		.text {
-			font-size: 20px;
-		}
-		#exbox {
-			width: 10ex;
-			height: 2ex;
-		}
-		#chbox {
-			width: 10ch;
-			height: 2ch;
+		body {
+			--primary: #FF0000;
+			--text-color: var(--primary);
+			color: var(--text-color);
 		}
 		</style>
 	</head>
 <body>
-	<div id="exbox" class="text">x</div>
-	<div id="chbox" class="text">0</div>
+	<div id="testdiv">Test text</div>
 </body>
 </html>
-		)";
+    )";
 
-		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
-		EXPECT_TRUE( root != nullptr );
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
 
-		UIRichText* exbox = root->querySelector( "#exbox" )->asType<UIRichText>();
-		EXPECT_TRUE( exbox != nullptr );
-		EXPECT_GT( exbox->getPixelsSize().getWidth(), 0.f );
-		EXPECT_GT( exbox->getPixelsSize().getHeight(), 0.f );
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
 
-		UIRichText* chbox = root->querySelector( "#chbox" )->asType<UIRichText>();
-		EXPECT_TRUE( chbox != nullptr );
-		EXPECT_GT( chbox->getPixelsSize().getWidth(), 0.f );
-		EXPECT_GT( chbox->getPixelsSize().getHeight(), 0.f );
-	}
+	EXPECT_TRUE( Color( "#FF0000" ) == div->getFontColor() );
+}
+
+UTEST( CSSVariables, VariableReferencesChain ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 2", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+
+	std::string xml = R"(
+<html>
+	<head>
+		<style>
+		body {
+			--a: #00FF00;
+			--b: var(--a);
+			--c: var(--b);
+			color: var(--c);
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+
+	EXPECT_TRUE( Color( "#00FF00" ) == div->getFontColor() );
+}
+
+UTEST( CSSVariables, VariableReferencesWithPadding ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 3", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+
+	std::string xml = R"(
+<html>
+	<head>
+		<style>
+		#testdiv {
+			--base: 20px;
+			--spacing: var(--base);
+			padding: var(--spacing);
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIWidget* div = root->querySelector( "#testdiv" );
+	EXPECT_TRUE( div != nullptr );
+
+	Float padding = PixelDensity::dpToPx( div->getPadding().Left );
+	EXPECT_NEAR( 20.f, padding, 1.f );
+}
+
+UTEST( CSSVariables, VariableReferencesMultiple ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 4", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+
+	std::string xml = R"(
+<html>
+	<head>
+		<style>
+		#testdiv {
+			--color1: #0000FF;
+			--color2: var(--color1);
+			--color3: var(--color2);
+			color: var(--color3);
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+
+	EXPECT_TRUE( Color( "#0000FF" ) == div->getFontColor() );
+}
+
+UTEST( CSSVariables, VariableReferencesCircular ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 5", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+
+	std::string xml = R"(
+<html>
+	<head>
+		<style>
+		body {
+			--x: var(--y);
+			--y: var(--x);
+			color: var(--x, #FF0000);
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
 }

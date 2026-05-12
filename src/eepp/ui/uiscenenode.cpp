@@ -422,6 +422,14 @@ void UISceneNode::updateStyleSheet( bool forceReloadStyle ) {
 	if ( mRoot && mRoot->getUIStyle() )
 		mRoot->getUIStyle()->resetGlobalDefinition();
 
+	auto bodies = mRoot->findAllByType( UI_TYPE_HTML_BODY );
+	for ( auto body : bodies )
+		body->asType<UIWidget>()->getUIStyle()->resetGlobalDefinition();
+
+	auto htmls = mRoot->findAllByType( UI_TYPE_HTML_HTML );
+	for ( auto html : htmls )
+		html->asType<UIWidget>()->getUIStyle()->resetGlobalDefinition();
+
 	if ( mRoot && mediaChanged )
 		mRoot->reportStyleStateChangeRecursive( false, false );
 
