@@ -122,11 +122,6 @@ table, td {
 	text-align: left;
 }
 
-hr {
-	min-height: 1dp;
-	background-color: gray;
-}
-
 center {
 	text-align: center;
 }
@@ -152,16 +147,6 @@ a:hover {
 sub,
 sup {
 	font-size: smaller;
-}
-
-img {
-	scale-type: fit-inside;
-	layout-width: wrap_content;
-	layout-height: wrap_content;
-}
-
-body img {
-	scale-type: expand;
 }
 
 blockquote {

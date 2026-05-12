@@ -462,6 +462,7 @@ std::string UITooltip::getPropertyString( const PropertyDefinition* propertyDef,
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getOutlineThickness() ), "px" );
@@ -576,7 +577,8 @@ bool UITooltip::applyProperty( const StyleSheetProperty& attribute ) {
 				mFlags &= ~UI_WORD_WRAP;
 			autoWrap();
 			break;
-		case PropertyId::FontStyle: {
+		case PropertyId::FontStyle:
+		case PropertyId::FontWeight: {
 			if ( !mUsingCustomStyling ) {
 				Uint32 flags = attribute.asFontStyle();
 

@@ -199,7 +199,8 @@ bool UIConsole::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextDecoration:
 			setTextDecoration( attribute.asTextDecoration() );
 			break;
-		case PropertyId::FontStyle: {
+		case PropertyId::FontStyle:
+		case PropertyId::FontWeight: {
 			setFontStyle( attribute.asFontStyle() );
 			break;
 		}
@@ -240,6 +241,7 @@ std::string UIConsole::getPropertyString( const PropertyDefinition* propertyDef,
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyleConfig().getFontStyle() );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getFontOutlineThickness() ), "px" );

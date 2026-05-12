@@ -22,9 +22,9 @@ UILinearLayout* UILinearLayout::NewHorizontal() {
 }
 
 UILinearLayout* UILinearLayout::NewVerticalWidthMatchParent( const std::string& tag ) {
-	return ( eeNew( UILinearLayout, ( tag, UIOrientation::Vertical ) ) )
-		->setLayoutWidthPolicy( SizePolicy::MatchParent )
-		->asType<UILinearLayout>();
+	UILinearLayout* ll = eeNew( UILinearLayout, ( tag, UIOrientation::Vertical ) );
+	ll->mWidthPolicy = SizePolicy::MatchParent;
+	return ll;
 }
 
 UILinearLayout::UILinearLayout() :

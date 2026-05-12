@@ -79,6 +79,7 @@ enum class PropertyId : Uint32 {
 	FontFamily = String::hash( "font-family" ),
 	FontSize = String::hash( "font-size" ),
 	FontStyle = String::hash( "font-style" ),
+	FontWeight = String::hash( "font-weight" ),
 	TextDecoration = String::hash( "text-decoration" ),
 	Wordwrap = String::hash( "word-wrap" ),
 	WhiteSpaceCollapse = String::hash( "white-space-collapse" ),

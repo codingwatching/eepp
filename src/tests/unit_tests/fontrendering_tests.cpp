@@ -14,6 +14,7 @@
 #include <eepp/graphics/richtext.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
+#include <eepp/system/base64.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/scopedop.hpp>
 #include <eepp/system/sys.hpp>
@@ -154,6 +155,50 @@ UTEST( FontRendering, fontsTest ) {
 			runTest();
 		}
 	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( FontRendering, loadFontFaceDataURI ) {
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 640, 480, "eepp - Font Data URI", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ) );
+
+	ASSERT_TRUE_MSG( win->isOpen(), "Failed to create Window" );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+
+	FontTrueType* baseFont = FontTrueType::New( "NotoSans-Regular" );
+	baseFont->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	themeManager->setDefaultFont( baseFont );
+
+	std::string fontData;
+	bool readOk = FileSystem::fileGet( "../assets/fonts/DejaVuSansMono.ttf", fontData );
+	ASSERT_TRUE_MSG( readOk, "Failed to read font file" );
+	ASSERT_TRUE_MSG( !fontData.empty(), "Font data is empty" );
+
+	std::string base64Font;
+	Base64::encode( std::string_view( fontData ), base64Font );
+	ASSERT_TRUE_MSG( !base64Font.empty(), "Base64 encoding failed" );
+
+	std::string css = "@font-face {\n"
+					  "	font-family: 'DataURIFont';\n"
+					  "	src: url('data:font/ttf;charset=utf-8;base64," +
+					  base64Font +
+					  "') format('truetype');\n"
+					  "	font-weight: normal;\n"
+					  "	font-style: normal;\n"
+					  "}";
+
+	sceneNode->combineStyleSheet( css, false, String::hash( css ), URI() );
+
+	Font* loadedFont = FontManager::instance()->getByName( "DataURIFont" );
+	ASSERT_NE( loadedFont, nullptr );
+	ASSERT_TRUE_MSG( loadedFont->loaded(), "Font loaded via data URI is not loaded" );
 
 	Engine::destroySingleton();
 }

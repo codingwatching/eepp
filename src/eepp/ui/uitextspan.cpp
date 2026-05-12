@@ -111,6 +111,7 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 			setFontSize( lengthFromValue( attribute ) );
 			break;
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			setFontStyle( attribute.asFontStyle() );
 			break;
 		case PropertyId::TextStrokeWidth:
@@ -142,6 +143,7 @@ std::string UITextSpan::getPropertyString( const PropertyDefinition* propertyDef
 		case PropertyId::FontSize:
 			return String::fromFloat( PixelDensity::pxToDp( getFontSize() ), "dp" );
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
 		case PropertyId::Color:
 			return getFontColor().toHexString();

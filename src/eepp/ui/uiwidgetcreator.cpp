@@ -170,29 +170,31 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["hr"] = UIRichText::NewHr;
 		registeredWidget["ul"] = [] {
 			auto* w = UIRichText::NewWithTag( "ul" );
+			w->setFlags( UI_CREATING_NODE );
 			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
+			w->unsetFlags( UI_CREATING_NODE );
 			return w;
 		};
 		registeredWidget["ol"] = [] {
 			auto* w = UIRichText::NewWithTag( "ol" );
+			w->setFlags( UI_CREATING_NODE );
 			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
+			w->unsetFlags( UI_CREATING_NODE );
 			return w;
 		};
 		registeredWidget["dl"] = [] { return UIRichText::NewWithTag( "dl" ); };
 		registeredWidget["dt"] = [] { return UIRichText::NewWithTag( "dt" ); };
 		registeredWidget["dd"] = [] {
 			auto* w = UIRichText::NewWithTag( "dd" );
+			w->setFlags( UI_CREATING_NODE );
 			w->applyProperty( StyleSheetProperty( "margin-left", "40dp" ) );
+			w->unsetFlags( UI_CREATING_NODE );
 			return w;
 		};
 		registeredWidget["li"] = UIHTMLListItem::New;
 		registeredWidget["pre"] = UIRichText::NewPre;
 		registeredWidget["picture"] = [] { return UITextSpan::NewWithTag( "picture" ); };
-		registeredWidget["img"] = [] {
-			auto img = UIHTMLImage::New();
-			img->setFlags( UI_HTML_ELEMENT );
-			return img;
-		};
+		registeredWidget["img"] = UIHTMLImage::New;
 		registeredWidget["svg"] = [] {
 			auto svg = UISvg::New();
 			svg->setFlags( UI_HTML_ELEMENT );
@@ -224,8 +226,10 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["textarea"] = UIHTMLTextArea::New;
 		registeredWidget["button"] = [] {
 			auto but = UIPushButton::NewWithTag( "button" );
+			but->setFlags( UI_CREATING_NODE );
 			but->setFlags( UI_HTML_ELEMENT );
 			but->setLayoutSizePolicy( SizePolicy::WrapContent, SizePolicy::WrapContent );
+			but->unsetFlags( UI_CREATING_NODE );
 			return but;
 		};
 		registeredWidget["webview"] = UIWebView::New;

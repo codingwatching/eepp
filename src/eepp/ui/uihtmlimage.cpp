@@ -16,7 +16,12 @@ UIHTMLImage* UIHTMLImage::New() {
 	return eeNew( UIHTMLImage, () );
 }
 
-UIHTMLImage::UIHTMLImage() : UIImage( "img" ) {}
+UIHTMLImage::UIHTMLImage() : UIImage( "img" ) {
+	mFlags |= UI_HTML_ELEMENT;
+	mWidthPolicy = SizePolicy::WrapContent;
+	mHeightPolicy = SizePolicy::WrapContent;
+	mScaleType = UIScaleType::Expand;
+}
 
 UIHTMLImage::~UIHTMLImage() {}
 

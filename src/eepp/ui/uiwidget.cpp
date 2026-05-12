@@ -511,7 +511,7 @@ void UIWidget::tooltipRemove() {
 	mTooltip = NULL;
 }
 
-UINode* UIWidget::setFlags( const Uint32& flags ) {
+UINode* UIWidget::setFlags( const Uint64& flags ) {
 	if ( flags & ( UI_ANCHOR_LEFT | UI_ANCHOR_TOP | UI_ANCHOR_RIGHT | UI_ANCHOR_BOTTOM ) ) {
 		updateAnchorsDistances();
 	}
@@ -523,7 +523,7 @@ UINode* UIWidget::setFlags( const Uint32& flags ) {
 	return UINode::setFlags( flags );
 }
 
-UINode* UIWidget::unsetFlags( const Uint32& flags ) {
+UINode* UIWidget::unsetFlags( const Uint64& flags ) {
 	if ( flags & ( UI_ANCHOR_LEFT | UI_ANCHOR_TOP | UI_ANCHOR_RIGHT | UI_ANCHOR_BOTTOM ) ) {
 		updateAnchorsDistances();
 	}

@@ -761,9 +761,9 @@ class EE_API UINode : public Node {
 	 *
 	 * Returns the bitmask of flags that control various node behaviors and states.
 	 *
-	 * @return The flags as a Uint32 bitmask.
+	 * @return The flags as a Uint64 bitmask.
 	 */
-	const Uint32& getFlags() const;
+	const Uint64& getFlags() const;
 
 	/**
 	 * @brief Sets multiple flags on the node.
@@ -774,7 +774,7 @@ class EE_API UINode : public Node {
 	 * @param flags Bitwise combination of flags to set.
 	 * @return Pointer to this node for method chaining.
 	 */
-	virtual UINode* setFlags( const Uint32& flags );
+	virtual UINode* setFlags( const Uint64& flags );
 
 	/**
 	 * @brief Unsets multiple flags on the node.
@@ -784,7 +784,7 @@ class EE_API UINode : public Node {
 	 * @param flags Bitwise combination of flags to unset.
 	 * @return Pointer to this node for method chaining.
 	 */
-	virtual UINode* unsetFlags( const Uint32& flags );
+	virtual UINode* unsetFlags( const Uint64& flags );
 
 	/**
 	 * @brief Resets all flags to a specific value.
@@ -794,7 +794,7 @@ class EE_API UINode : public Node {
 	 * @param newFlags The new flags bitmask (default is 0 to clear all).
 	 * @return Pointer to this node for method chaining.
 	 */
-	virtual UINode* resetFlags( Uint32 newFlags = 0 );
+	virtual UINode* resetFlags( Uint64 newFlags = 0 );
 
 	/**
 	 * @brief Gets the background drawable.
@@ -1499,18 +1499,20 @@ class EE_API UINode : public Node {
 	/** @brief Get a widget's computed absolute font size in pixels. */
 	Float getAbsoluteFontSize( const UIWidget* widget ) const;
 
+	bool isCreatingNode() const;
+
   protected:
 	Vector2f mDpPos;
 	Sizef mDpSize;
 	Sizef mMinSize;
-	Uint32 mFlags;
+	Uint64 mFlags;
 	Uint32 mState;
+	Uint32 mDragButton;
 	UISkinState* mSkinState;
 	mutable UINodeDrawable* mBackground;
 	mutable UINodeDrawable* mForeground;
 	mutable UIBorderDrawable* mBorder;
 	Vector2f mDragPoint;
-	Uint32 mDragButton;
 	Color mSkinColor;
 	UISceneNode* mUISceneNode;
 	Rectf mPadding;

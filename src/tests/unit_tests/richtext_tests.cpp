@@ -955,9 +955,6 @@ UTEST( UIRichText, MinMaxWidthChildren ) {
 	ASSERT_TRUE( childWidget != nullptr );
 
 	sceneNode->update( Time::Zero );
-	sceneNode->update( Time::Zero ); // Run a second pass to allow MatchParent to resolve against
-									 // the new clamped parent size
-	sceneNode->update( Time::Zero );
 
 	EXPECT_LE( rtParent->getSize().getWidth(), PixelDensity::dpToPx( 100 ) );
 	EXPECT_GT( rtParent->getSize().getWidth(), 0 ); // Assert it's not 0
@@ -1016,8 +1013,6 @@ UTEST( UILayout, MinMaxWidthChildren ) {
 	ASSERT_TRUE( llParent != nullptr );
 	ASSERT_TRUE( childWidget2 != nullptr );
 
-	sceneNode->update( Time::Zero );
-	sceneNode->update( Time::Zero );
 	sceneNode->update( Time::Zero );
 
 	EXPECT_LE( llParent->getSize().getWidth(), PixelDensity::dpToPx( 150 ) );

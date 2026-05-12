@@ -34,11 +34,11 @@ UINode::UINode() :
 	Node(),
 	mFlags( UI_NODE_DEFAULT_FLAGS ),
 	mState( UIState::StateFlagNormal ),
+	mDragButton( EE_BUTTON_LMASK ),
 	mSkinState( NULL ),
 	mBackground( NULL ),
 	mForeground( NULL ),
 	mBorder( NULL ),
-	mDragButton( EE_BUTTON_LMASK ),
 	mSkinColor( Color::White ),
 	mUISceneNode( SceneManager::instance()->getUISceneNode() ) {
 	mNodeFlags |= NODE_FLAG_UINODE | NODE_FLAG_OVER_FIND_ALLOWED;
@@ -980,11 +980,11 @@ Float UINode::getBorderWidth() const {
 	return NULL != mBorder ? mBorder->getLineWidth() : 1.f;
 }
 
-const Uint32& UINode::getFlags() const {
+const Uint64& UINode::getFlags() const {
 	return mFlags;
 }
 
-UINode* UINode::setFlags( const Uint32& flags ) {
+UINode* UINode::setFlags( const Uint64& flags ) {
 	if ( NULL == mBackground && ( flags & UI_FILL_BACKGROUND ) )
 		setBackgroundFillEnabled( true );
 
@@ -1003,7 +1003,7 @@ UINode* UINode::setFlags( const Uint32& flags ) {
 	return this;
 }
 
-UINode* UINode::unsetFlags( const Uint32& flags ) {
+UINode* UINode::unsetFlags( const Uint64& flags ) {
 	if ( mFlags & flags )
 		mFlags &= ~flags;
 
@@ -1014,7 +1014,7 @@ UINode* UINode::unsetFlags( const Uint32& flags ) {
 	return this;
 }
 
-UINode* UINode::resetFlags( Uint32 newFlags ) {
+UINode* UINode::resetFlags( Uint64 newFlags ) {
 	mFlags = newFlags;
 	return this;
 }
@@ -1867,6 +1867,10 @@ Float UINode::getAbsoluteFontSize( const UIWidget* widget ) const {
 		return ( len.getValue() / 100.f ) * parentFontSize;
 	}
 	return widget->convertLength( len, 0 );
+}
+
+bool UINode::isCreatingNode() const {
+	return mFlags & UI_CREATING_NODE;
 }
 
 }} // namespace EE::UI

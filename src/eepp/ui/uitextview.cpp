@@ -756,7 +756,8 @@ bool UITextView::applyProperty( const StyleSheetProperty& attribute ) {
 			if ( !mUsingCustomStyling )
 				setTextDecoration( attribute.asTextDecoration() );
 			break;
-		case PropertyId::FontStyle: {
+		case PropertyId::FontStyle:
+		case PropertyId::FontWeight: {
 			if ( !mUsingCustomStyling ) {
 				Uint32 flags = attribute.asFontStyle();
 
@@ -838,6 +839,7 @@ std::string UITextView::getPropertyString( const PropertyDefinition* propertyDef
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getOutlineThickness() ), "px" );

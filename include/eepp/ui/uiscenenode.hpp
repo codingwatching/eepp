@@ -734,7 +734,7 @@ class EE_API UISceneNode : public SceneNode {
 
 	Network::CookieManager& getCookieManager() { return mCookieManager; }
 
-	Font* getFontFromNamesList( std::string_view names ) const;
+	Font* getFontFromNamesList( std::string_view names, Uint32 fontStyle = 0 ) const;
 
   protected:
 	friend class EE::UI::UIWindow;

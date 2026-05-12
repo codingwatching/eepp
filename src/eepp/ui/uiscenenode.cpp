@@ -6,6 +6,7 @@
 #include <eepp/network/http.hpp>
 #include <eepp/network/uri.hpp>
 #include <eepp/scene/scenemanager.hpp>
+#include <eepp/system/base64.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/functionstring.hpp>
 #include <eepp/system/packmanager.hpp>
@@ -1176,6 +1177,28 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 				String::trimInPlace( path, '"' );
 		}
 
+		if ( String::startsWith( path, "data:" ) ) {
+			size_t commaPos = path.find( ',' );
+			if ( commaPos != std::string::npos ) {
+				std::string header = path.substr( 5, commaPos - 5 );
+				std::string data = path.substr( commaPos + 1 );
+				bool isBase64 = header.find( ";base64" ) != std::string::npos;
+
+				if ( isBase64 && !data.empty() ) {
+					std::string decoded;
+					Base64::decode( data, decoded );
+					FontTrueType* font = FontTrueType::New( familyName );
+					if ( font->loadFromMemory( &decoded[0], decoded.size() ) ) {
+						trySetFontFamily( fontFamily, fontStyle, font );
+						mFontFaces.push_back( font );
+						runOnMainThread( [this] { mRoot->reloadFontFamily(); } );
+					} else
+						eeSAFE_DELETE( font );
+				}
+			}
+			return;
+		}
+
 		path = solveRelativePath( path, baseURI ).toString();
 
 		if ( String::startsWith( path, "file://" ) ) {
@@ -1191,17 +1214,23 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 		} else if ( String::startsWith( path, "http://" ) ||
 					String::startsWith( path, "https://" ) ) {
 			Http::getAsync(
-				[this, fontStyle, familyName, fontFamily,
-				 trySetFontFamily]( const Http&, Http::Request&, Http::Response& response ) {
+				[this, fontStyle, familyName, fontFamily, trySetFontFamily,
+				 path]( const Http&, Http::Request&, Http::Response& response ) {
 					FontTrueType* font = FontTrueType::New( familyName );
-
-					if ( !response.getBody().empty() ) {
-						font->loadFromMemory( &response.getBody()[0], response.getBody().size() );
+					if ( response.isOK() && !response.getBody().empty() &&
+						 font->loadFromMemory( &response.getBody()[0],
+											   response.getBody().size() ) ) {
 						runOnMainThread( [this, font, fontFamily, fontStyle, trySetFontFamily] {
 							trySetFontFamily( fontFamily, fontStyle, font );
 							mFontFaces.push_back( font );
 							mRoot->reloadFontFamily();
 						} );
+					} else {
+						eeSAFE_DELETE( font );
+						Log::error( "UISceneNode::loadFontFaces: Failed to load font \"%s\", from: "
+									"%s. Request response status code: %d (%s)",
+									familyName, path, response.getStatus(),
+									response.getStatusDescription() );
 					}
 				},
 				URI( path ), Seconds( 5 ) );
@@ -1209,11 +1238,14 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 			FontTrueType* font = FontTrueType::New( familyName );
 
 			IOStream* stream = VFS::instance()->getFileFromPath( path );
-			font->loadFromStream( *stream );
-			trySetFontFamily( fontFamily, fontStyle, font );
-
-			mFontFaces.push_back( font );
-			runOnMainThread( [this] { mRoot->reloadFontFamily(); } );
+			if ( font->loadFromStream( *stream ) ) {
+				runOnMainThread( [this, fontFamily, fontStyle, font, trySetFontFamily] {
+					trySetFontFamily( fontFamily, fontStyle, font );
+					mFontFaces.push_back( font );
+					mRoot->reloadFontFamily();
+				} );
+			} else
+				eeSAFE_DELETE( font );
 		}
 	};
 
@@ -1224,6 +1256,8 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 			return;
 		auto fontStyleProp = style->getPropertyById( PropertyId::FontStyle );
 		Uint32 fontStyle = fontStyleProp ? fontStyleProp->asFontStyle() : 0;
+		auto fontWeightProp = style->getPropertyById( PropertyId::FontWeight );
+		fontStyle |= fontWeightProp ? fontWeightProp->asFontStyle() : 0;
 
 		CSS::StyleSheetProperty familyProp( *family );
 		CSS::StyleSheetProperty srcProp( *src );
@@ -1474,15 +1508,18 @@ void UISceneNode::navigate( const NavigationRequest& request ) {
 	Engine::instance()->openURI( request.uri.toString() );
 }
 
-Font* UISceneNode::getFontFromNamesList( std::string_view names ) const {
+Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyle ) const {
 	Font* font = nullptr;
 	String::readBySeparatorStoppable(
 		names,
-		[&font]( std::string_view name ) {
+		[&]( std::string_view name ) {
 			name = String::trim( name, ' ' );
 			name = String::trim( name, '\'' );
-			font = FontManager::instance()->getByName( std::string{ name } );
-			return font == nullptr;
+			std::string fontFamily{ name };
+			if ( fontStyle )
+				fontFamily += "#" + Text::styleFlagToString( fontStyle );
+			font = FontManager::instance()->getByName( fontFamily );
+			return font != nullptr;
 		},
 		',' );
 	return font;

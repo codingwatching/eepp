@@ -100,7 +100,7 @@ class EE_API UIWidget : public UINode {
 	 * @param flags Bitwise combination of flags to set.
 	 * @return Pointer to this widget for method chaining.
 	 */
-	virtual UINode* setFlags( const Uint32& flags );
+	virtual UINode* setFlags( const Uint64& flags );
 
 	/**
 	 * @brief Unsets multiple flags on the widget.
@@ -111,7 +111,7 @@ class EE_API UIWidget : public UINode {
 	 * @param flags Bitwise combination of flags to unset.
 	 * @return Pointer to this widget for method chaining.
 	 */
-	virtual UINode* unsetFlags( const Uint32& flags );
+	virtual UINode* unsetFlags( const Uint64& flags );
 
 	/**
 	 * @brief Sets anchor flags for relative positioning.

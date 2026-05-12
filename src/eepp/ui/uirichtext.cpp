@@ -32,6 +32,8 @@ static void applyDefaultBlockMargins( UIWidget* widget, const std::string& tag )
 		{ "body", { 0.67f, 0.67f } },
 	};
 
+	widget->setFlags( UI_CREATING_NODE );
+
 	auto ittb = defaultsTopBottom.find( tag );
 	if ( ittb != defaultsTopBottom.end() ) {
 		widget->applyProperty(
@@ -47,6 +49,8 @@ static void applyDefaultBlockMargins( UIWidget* widget, const std::string& tag )
 		widget->applyProperty(
 			StyleSheetProperty( "margin-right", String::format( "%gem", itlr->second.second ) ) );
 	}
+
+	widget->unsetFlags( UI_CREATING_NODE );
 }
 
 UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string val ) {
@@ -221,7 +225,11 @@ UIRichText* UIRichText::NewBr() {
 
 UIRichText* UIRichText::NewHr() {
 	auto* w = UILineBreak::New( "hr" );
+	w->setFlags( UI_CREATING_NODE );
 	applyDefaultBlockMargins( w, "hr" );
+	w->setBackgroundColor( Color::Gray );
+	w->mMinHeightEq = "1dp";
+	w->unsetFlags( UI_CREATING_NODE );
 	return w;
 };
 
@@ -299,7 +307,8 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 
 	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
 		case PropertyId::FontFamily: {
-			Font* font = getUISceneNode()->getFontFromNamesList( attribute.value() );
+			Font* font =
+				getUISceneNode()->getFontFromNamesList( attribute.value(), getFontStyle() );
 			if ( NULL != font && font->loaded() ) {
 				setFont( font );
 			}
@@ -312,6 +321,7 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 			setTextDecoration( attribute.asTextDecoration() );
 			break;
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			setFontStyle( attribute.asFontStyle() );
 			break;
 		case PropertyId::Color:
@@ -386,6 +396,7 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 		case PropertyId::FontSize:
 			return String::fromFloat( PixelDensity::pxToDp( getFontSize() ), "dp" );
 		case PropertyId::FontStyle:
+		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );

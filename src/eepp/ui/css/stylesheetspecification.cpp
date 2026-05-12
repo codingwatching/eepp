@@ -227,7 +227,8 @@ void StyleSheetSpecification::registerDefaultProperties() {
 		.setType( PropertyType::NumberLength )
 		.addAlias( "text-size" )
 		.addAlias( "textsize" );
-	registerProperty( "font-style", "", true ).addAlias( "font-weight" );
+	registerProperty( "font-style", "", true );
+	registerProperty( "font-weight", "", true );
 	registerProperty( "text-decoration", "", true );
 	registerProperty( "line-spacing", "", true ).setType( PropertyType::NumberLength );
 	registerProperty( "line-height", "", true ).setType( PropertyType::NumberLength );

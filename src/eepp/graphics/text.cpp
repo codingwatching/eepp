@@ -77,7 +77,7 @@ Uint32 Text::stringToStyleFlag( const std::string& str ) {
 
 			if ( "underlined" == cur || "underline" == cur )
 				flags |= Text::Underlined;
-			else if ( "bold" == cur )
+			else if ( "bold" == cur || "900" == cur )
 				flags |= Text::Bold;
 			else if ( "italic" == cur )
 				flags |= Text::Italic;
