@@ -170,6 +170,14 @@ UTEST( UIRichText, anchorMargins ) {
 	SceneManager::instance()->draw();
 	win->display();
 
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+
+	for ( auto anchor : anchors ) {
+		auto a = anchor->asType<UIAnchorSpan>();
+		EXPECT_EQ( anchor->getPixelsSize().getHeight(),
+				   a->getFont()->getLineSpacing( a->getFontSize() ) );
+	}
+
 	compareImages( utest_state, utest_result, win, "eepp-ui-anchor-margins", "html" );
 
 	Engine::destroySingleton();

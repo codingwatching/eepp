@@ -551,9 +551,8 @@ void RichText::updateLayout() {
 
 						Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
 						Float height =
-							pText->lineHeight > 0 ? pText->lineHeight
-							: mLineHeight > 0
-								? mLineHeight
+							pText->lineHeight > 0
+								? pText->lineHeight
 								: fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 						Float spanWidth = renderSpanText->getTextWidth();
 
@@ -844,9 +843,8 @@ void RichText::updateLayout() {
 					renderSpanText->setStyleConfig( fontStyle );
 
 					Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-					Float height = pText->lineHeight > 0 ? pText->lineHeight
-								   : mLineHeight > 0
-									   ? mLineHeight
+					Float height = pText->lineHeight > 0
+									   ? pText->lineHeight
 									   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 					Float spanWidth = renderSpanText->getTextWidth();
 
