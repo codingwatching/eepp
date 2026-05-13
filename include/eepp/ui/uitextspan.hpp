@@ -43,6 +43,8 @@ class EE_API UITextSpan : public UIRichText {
 
 	virtual bool isMergeable() const;
 
+	virtual bool isInlineBlock() const;
+
 	virtual void draw();
 
 	virtual bool applyProperty( const StyleSheetProperty& attribute );

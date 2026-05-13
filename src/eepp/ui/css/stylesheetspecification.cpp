@@ -563,7 +563,8 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerShorthand( "list-style",
 					   { "list-style-type", "list-style-position", "list-style-image" },
 					   "list-style" );
-	registerShorthand( "font", { "font-style", "font-size", "line-spacing", "font-family" },
+	registerShorthand( "font",
+					   { "font-style", "font-weight", "font-size", "line-height", "font-family" },
 					   "font" );
 }
 
@@ -1356,8 +1357,9 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 
 		int stylePos = getIndexEndingWith( propNames, "-style" );
 		int sizePos = getIndexEndingWith( propNames, "-size" );
-		int linePos = getIndexEndingWith( propNames, "-spacing" );
+		int linePos = getIndexEndingWith( propNames, "-height" );
 		int familyPos = getIndexEndingWith( propNames, "-family" );
+		int weightPos = getIndexEndingWith( propNames, "-weight" );
 
 		static const std::string sizeKeywords[] = {
 			"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large" };
@@ -1394,6 +1396,7 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		std::string sizeStr;
 		std::string lineStr;
 		std::string familyStr;
+		std::string weightStr;
 		bool inLineHeight = false;
 
 		for ( size_t i = 0; i < tokens.size(); i++ ) {
@@ -1446,11 +1449,8 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 
 			if ( isWeightWord( tok ) ) {
 				std::string lt = String::toLower( tok );
-				if ( lt != "normal" ) {
-					if ( !styleStr.empty() )
-						styleStr += "|";
-					styleStr += "bold";
-				}
+				if ( lt != "normal" )
+					weightStr = "bold";
 				continue;
 			}
 
@@ -1465,10 +1465,13 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		if ( !sizeStr.empty() ) {
 			if ( stylePos != -1 && !styleStr.empty() )
 				properties.emplace_back( StyleSheetProperty( propNames[stylePos], styleStr ) );
+			if ( weightPos != -1 && !weightStr.empty() )
+				properties.emplace_back( StyleSheetProperty( propNames[weightPos], weightStr ) );
 			if ( sizePos != -1 )
 				properties.emplace_back( StyleSheetProperty( propNames[sizePos], sizeStr ) );
-			if ( linePos != -1 && !lineStr.empty() )
-				properties.emplace_back( StyleSheetProperty( propNames[linePos], lineStr ) );
+			if ( linePos != -1 )
+				properties.emplace_back( StyleSheetProperty(
+					propNames[linePos], lineStr.empty() ? "normal" : lineStr ) );
 			if ( familyPos != -1 && !familyStr.empty() ) {
 				String::trimInPlace( familyStr );
 				if ( familyStr.size() >= 2 &&

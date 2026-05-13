@@ -941,12 +941,22 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 		UIWidget* widget = node->asType<UIWidget>();
 
+		bool handled = false;
+
 		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
 			 widget->asType<UIHTMLWidget>()->isMergeable() ) {
 			UITextSpan* span = widget->asType<UITextSpan>();
 			Rectf margin = span->getLayoutPixelsMargin();
 			Rectf padding = span->getPixelsPadding();
 			bool hasOwnText = !span->getText().empty() && NULL != span->getFontStyleConfig().Font;
+
+			Float spanLineHeight = 0;
+			if ( span->isInlineBlock() ) {
+				auto& fontStyle = span->getFontStyleConfig();
+				if ( fontStyle.Font )
+					spanLineHeight =
+						(Float)fontStyle.Font->getFontHeight( fontStyle.CharacterSize );
+			}
 
 			if ( hasOwnText ) {
 				String::View spanText = span->getText().view();
@@ -969,7 +979,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					spanText = spanText.substr( 1 );
 
 				if ( !spanText.empty() ) {
-					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding );
+					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding,
+									  spanLineHeight, span->isInlineBlock() );
 					if ( shouldCollapse )
 						lastSpanEndsWithSpace = spanText.back() == ' ';
 				}
@@ -994,68 +1005,80 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				Rectf padRightOnly( 0, 0, padding.Right, padding.Bottom );
 				richText.addSpan( "", span->getFontStyleConfig(), rightOnly, padRightOnly );
 			}
-		} else if ( widget->isType( UI_TYPE_BR ) ) {
-			richText.addSpan( "\n",
-							  widget->asType<UILineBreak>()->getRichText().getFontStyleConfig() );
-			lastSpanEndsWithSpace = false;
-		} else {
-			Rectf margin = widget->getLayoutPixelsMargin();
-			bool isBlock = widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
-			if ( widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-				CSSDisplay display = widget->asType<UIHTMLWidget>()->getDisplay();
-				if ( display == CSSDisplay::Inline || display == CSSDisplay::InlineBlock )
-					isBlock = false;
-				else if ( display == CSSDisplay::ListItem )
-					isBlock = true;
-			}
 
-			if ( mode == IntrinsicMode::None ) {
-				if ( isBlock ) {
-					if ( container->getPixelsSize().getWidth() != 0 ) {
-						Float maxSize = eemax( 0.f, container->getPixelsSize().getWidth() -
-														container->getPixelsContentOffset().Left -
-														container->getPixelsContentOffset().Right -
-														margin.Left - margin.Right );
-						widget->setPixelsSize( eemax( 0.f, maxSize ),
-											   widget->getPixelsSize().getHeight() );
-					} else {
+			handled = true;
+		}
+
+		if ( !handled ) {
+			if ( widget->isType( UI_TYPE_BR ) ) {
+				richText.addSpan(
+					"\n", widget->asType<UILineBreak>()->getRichText().getFontStyleConfig() );
+				lastSpanEndsWithSpace = false;
+			} else {
+				Rectf margin = widget->getLayoutPixelsMargin();
+				bool isBlock = widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
+				if ( widget->isType( UI_TYPE_HTML_WIDGET ) ) {
+					CSSDisplay display = widget->asType<UIHTMLWidget>()->getDisplay();
+					if ( display == CSSDisplay::Inline || display == CSSDisplay::InlineBlock )
+						isBlock = false;
+					else if ( display == CSSDisplay::ListItem )
+						isBlock = true;
+				}
+
+				if ( mode == IntrinsicMode::None ) {
+					if ( isBlock ) {
+						if ( container->getPixelsSize().getWidth() != 0 ) {
+							Float maxSize =
+								eemax( 0.f, container->getPixelsSize().getWidth() -
+												container->getPixelsContentOffset().Left -
+												container->getPixelsContentOffset().Right -
+												margin.Left - margin.Right );
+							widget->setPixelsSize( eemax( 0.f, maxSize ),
+												   widget->getPixelsSize().getHeight() );
+						} else {
+							container->onAutoSizeChild( widget );
+						}
+					} else if ( widget->getLayoutWidthPolicy() == SizePolicy::WrapContent ||
+								widget->getLayoutHeightPolicy() == SizePolicy::WrapContent ) {
 						container->onAutoSizeChild( widget );
 					}
-				} else if ( widget->getLayoutWidthPolicy() == SizePolicy::WrapContent ||
-							widget->getLayoutHeightPolicy() == SizePolicy::WrapContent ) {
-					container->onAutoSizeChild( widget );
+
+					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
+						 widget->asType<UITextSpan>()->isInlineBlock() &&
+						 widget->getPixelsSize().getWidth() == 0 )
+						widget->asType<UIRichText>()->updateLayout();
 				}
-			}
 
-			Sizef size;
-			if ( mode == IntrinsicMode::Min ) {
-				size = Sizef( widget->getMinIntrinsicWidth(), 0 );
-			} else if ( mode == IntrinsicMode::Max ) {
-				size = Sizef( widget->getMaxIntrinsicWidth(), 0 );
-			} else {
-				size = widget->getPixelsSize();
-			}
+				Sizef size;
+				if ( mode == IntrinsicMode::Min ) {
+					size = Sizef( widget->getMinIntrinsicWidth(), 0 );
+				} else if ( mode == IntrinsicMode::Max ) {
+					size = Sizef( widget->getMaxIntrinsicWidth(), 0 );
+				} else {
+					size = widget->getPixelsSize();
+				}
 
-			Float w = size.getWidth();
-			if ( isBlock && mode == IntrinsicMode::None &&
-				 container->getPixelsSize().getWidth() != 0 ) {
-				w = eemax( 0.f, container->getPixelsSize().getWidth() -
-									container->getPixelsContentOffset().Left -
-									container->getPixelsContentOffset().Right - margin.Left -
-									margin.Right );
-			}
+				Float w = size.getWidth();
+				if ( isBlock && mode == IntrinsicMode::None &&
+					 container->getPixelsSize().getWidth() != 0 ) {
+					w = eemax( 0.f, container->getPixelsSize().getWidth() -
+										container->getPixelsContentOffset().Left -
+										container->getPixelsContentOffset().Right - margin.Left -
+										margin.Right );
+				}
 
-			CSSFloat floatType = CSSFloat::None;
-			CSSClear clearType = CSSClear::None;
-			if ( widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-				floatType = widget->asType<UIHTMLWidget>()->getCSSFloat();
-				clearType = widget->asType<UIHTMLWidget>()->getCSSClear();
-			}
+				CSSFloat floatType = CSSFloat::None;
+				CSSClear clearType = CSSClear::None;
+				if ( widget->isType( UI_TYPE_HTML_WIDGET ) ) {
+					floatType = widget->asType<UIHTMLWidget>()->getCSSFloat();
+					clearType = widget->asType<UIHTMLWidget>()->getCSSClear();
+				}
 
-			richText.addCustomSize( Sizef( w + margin.Left + margin.Right,
-										   size.getHeight() + margin.Top + margin.Bottom ),
-									isBlock, floatType, clearType );
-			lastSpanEndsWithSpace = false;
+				richText.addCustomSize( Sizef( w + margin.Left + margin.Right,
+											   size.getHeight() + margin.Top + margin.Bottom ),
+										isBlock, floatType, clearType );
+				lastSpanEndsWithSpace = false;
+			}
 		}
 	};
 
@@ -1289,5 +1312,4 @@ void UIRichText::selCurEnd( const Int64& end ) {
 		invalidateDraw();
 	}
 }
-
 }} // namespace EE::UI

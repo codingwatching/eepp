@@ -209,6 +209,86 @@ UTEST( UIRichText, spanPadding ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIRichText, anchorPadding ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 800, 600, "Anchor Span Padding Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	themeManager->setDefaultFont( font );
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+	std::string html;
+	FileSystem::fileGet( "assets/html/anchor_padding.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	compareImages( utest_state, utest_result, win, "eepp-ui-anchor-padding", "html" );
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+	ASSERT_GE( anchors.size(), (size_t)1 );
+	auto downloadLink = anchors[0]->asType<UIWidget>();
+	EXPECT_NEAR( downloadLink->getPixelsSize().getWidth(), 81.f, 3.f );
+	EXPECT_NEAR( downloadLink->getPixelsSize().getHeight(), 28.f, 3.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIRichText, anchorPaddingLineHeight ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 800, 600, "Anchor Padding LineHeight Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	themeManager->setDefaultFont( font );
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+	std::string html;
+	FileSystem::fileGet( "assets/html/anchor_padding_lineheight.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	compareImages( utest_state, utest_result, win, "eepp-ui-anchor-padding-lineheight", "html" );
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+	ASSERT_GE( anchors.size(), (size_t)1 );
+	auto downloadLink = anchors[0]->asType<UIWidget>();
+	EXPECT_NEAR( downloadLink->getPixelsSize().getWidth(), 81.f, 3.f );
+	EXPECT_NEAR( downloadLink->getPixelsSize().getHeight(), 28.f, 3.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLTable, complexLayout3 ) {
 	auto win = Engine::instance()->createWindow(
 		WindowSettings( 1024, 650, "HTML Tables Test 3", WindowStyle::Default,
@@ -1390,4 +1470,48 @@ UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
 
 	Engine::destroySingleton();
 	EE::Graphics::PixelDensity::setPixelDensity( 1.0f );
+}
+
+UTEST( UIBackground, InlineBlockImageSpans ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, "inline-block image spans", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/inline_block.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+	auto spans = sceneNode->getRoot()->querySelectorAll( "a > span" );
+
+	EXPECT_GT( anchors.size(), (size_t)0 );
+	EXPECT_GT( spans.size(), (size_t)0 );
+
+	for ( auto anchor : anchors ) {
+		EXPECT_GT( anchor->getPixelsSize().getWidth(), 0 );
+		EXPECT_GT( anchor->getPixelsSize().getHeight(), 0 );
+	}
+
+	for ( auto span : spans ) {
+		EXPECT_GT( span->getPixelsSize().getWidth(), 0 );
+		EXPECT_GT( span->getPixelsSize().getHeight(), 0 );
+	}
+
+	compareImages( utest_state, utest_result, win, "eepp-ui-inline-block-image-spans", "html", 4 );
+
+	Engine::destroySingleton();
 }

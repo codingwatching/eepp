@@ -54,6 +54,10 @@ void BlockLayouter::updateLayout() {
 	auto* rt = widget->getRichTextPtr();
 	if ( rt == nullptr || mPacking )
 		return;
+
+	if ( widget->isMergeable() )
+		return;
+
 	mResizedCount = 0;
 	mPacking = true;
 
@@ -235,11 +239,14 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			p = p->getParent();
 		}
 
+		bool handled = false;
+
 		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
 			 widget->asType<UIHTMLWidget>()->isMergeable() ) {
 			UITextSpan* textSpan = widget->asType<UITextSpan>();
 			Int64 startChar = curCharIdx;
 			Int64 endChar = curCharIdx;
+
 			if ( !textSpan->getText().empty() ) {
 				endChar += textSpan->getText().length();
 				curCharIdx = endChar;
@@ -280,6 +287,20 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 				spanChild = spanChild->getNextNode();
 			}
 
+			if ( textSpan->isInlineBlock() ) {
+				Rectf pad = textSpan->getPixelsPadding();
+				bounds.Left -= pad.Left;
+				bounds.Top -= pad.Top;
+				bounds.Right += pad.Right;
+				bounds.Bottom += pad.Bottom;
+				for ( auto& hb : hitBoxes ) {
+					hb.Left -= pad.Left;
+					hb.Top -= pad.Top;
+					hb.Right += pad.Right;
+					hb.Bottom += pad.Bottom;
+				}
+			}
+
 			if ( bounds.Left <= bounds.Right && bounds.Top <= bounds.Bottom ) {
 				Vector2f boundsPos = bounds.getPosition();
 
@@ -296,34 +317,55 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 				hitBoxes.clear();
 			}
 
-		} else if ( widget->isType( UI_TYPE_BR ) ) {
-			curCharIdx += 1;
-			Vector2f pos;
-			if ( widget->getPrevNode() && widget->getPrevNode()->isWidget() ) {
-				pos = widget->getPrevNode()->asType<UIWidget>()->getPixelsPosition();
-				pos.y += widget->getPrevNode()->getPixelsSize().getHeight();
-			}
-			widget->setPixelsPosition( pos );
-			widget->setPixelsSize( { eemax( 0.f, mContainer->getPixelsSize().getWidth() -
-													 mContainer->getPixelsContentOffset().Left -
-													 mContainer->getPixelsContentOffset().Right ),
-									 0 } );
-		} else {
-			curCharIdx += 1;
-			const auto* span = getNextCustomSpan();
-			if ( span ) {
-				size_t lineIdx = currentSpan > 0 ? currentLine : currentLine - 1;
-				Float lineY = lines[lineIdx].y;
-				Rectf margin = widget->getLayoutPixelsMargin();
+			handled = true;
+		}
 
-				Vector2f targetPos( mContainer->getPixelsContentOffset().Left + span->position.x +
-										margin.Left,
-									mContainer->getPixelsContentOffset().Top + lineY +
-										span->position.y + margin.Top );
+		if ( !handled ) {
+			if ( widget->isType( UI_TYPE_BR ) ) {
+				curCharIdx += 1;
+				Vector2f pos;
+				if ( widget->getPrevNode() && widget->getPrevNode()->isWidget() ) {
+					pos = widget->getPrevNode()->asType<UIWidget>()->getPixelsPosition();
+					pos.y += widget->getPrevNode()->getPixelsSize().getHeight();
+				}
+				widget->setPixelsPosition( pos );
+				widget->setPixelsSize(
+					{ eemax( 0.f, mContainer->getPixelsSize().getWidth() -
+									  mContainer->getPixelsContentOffset().Left -
+									  mContainer->getPixelsContentOffset().Right ),
+					  0 } );
+			} else {
+				curCharIdx += 1;
+				const auto* span = getNextCustomSpan();
+				if ( span ) {
+					size_t lineIdx = currentSpan > 0 ? currentLine : currentLine - 1;
+					Float lineY = lines[lineIdx].y;
+					Rectf margin = widget->getLayoutPixelsMargin();
 
-				widget->setPixelsPosition( targetPos - offset );
+					Vector2f targetPos( mContainer->getPixelsContentOffset().Left +
+											span->position.x + margin.Left,
+										mContainer->getPixelsContentOffset().Top + lineY +
+											span->position.y + margin.Top );
 
-				bounds = Rectf( targetPos, span->size );
+					widget->setPixelsPosition( targetPos - offset );
+
+					bounds = Rectf( targetPos, span->size );
+
+					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
+						 widget->asType<UITextSpan>()->isInlineBlock() ) {
+						Rectf pad = widget->getPixelsPadding();
+						bounds.Left -= pad.Left;
+						bounds.Top -= pad.Top;
+						bounds.Right += pad.Right;
+						bounds.Bottom += pad.Bottom;
+						Vector2f boundsPos = bounds.getPosition();
+						widget->setPixelsPosition( boundsPos - offset );
+						if ( bounds.getSize() != widget->getPixelsSize() ) {
+							widget->setPixelsSize( bounds.getSize() );
+							mResizedCount++;
+						}
+					}
+				}
 			}
 		}
 		return bounds;

@@ -35,7 +35,7 @@ class EE_API RichText : public Drawable {
 	void addSpan( const String& text, const FontStyleConfig& style );
 
 	void addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-				  const Rectf& padding );
+				  const Rectf& padding, Float lineHeight = 0, bool isAtomic = false );
 
 	/**
 	 * @brief Adds a text span with individual style parameters.
@@ -92,6 +92,8 @@ class EE_API RichText : public Drawable {
 		std::shared_ptr<Text> text;
 		Rectf margin;
 		Rectf padding;
+		Float lineHeight{ 0 };
+		bool isAtomic{ false };
 	};
 
 	using Block = std::variant<SpanBlock, std::shared_ptr<Drawable>, CustomBlock>;

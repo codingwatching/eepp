@@ -302,14 +302,14 @@ Sizef RichText::getPixelsSize() {
 }
 
 void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-						const Rectf& padding ) {
-	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero )
+						const Rectf& padding, Float lineHeight, bool isAtomic ) {
+	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
 	auto span = std::make_shared<Text>();
 	span->setString( text );
 	span->setStyleConfig( style );
-	mBlocks.push_back( SpanBlock{ span, margin, padding } );
+	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight, isAtomic } );
 	invalidateLayout();
 }
 
@@ -512,6 +512,18 @@ void RichText::updateLayout() {
 				if ( !mLines.empty() )
 					mLines.back().width += extraLeft;
 
+				if ( pText->isAtomic && curX > extraLeft && mMaxWidth > 0 ) {
+					Float extraRight = pText->margin.Right + pText->padding.Right;
+					Float fullTextWidth = span->getTextWidth();
+					if ( curX + fullTextWidth + extraRight > mMaxWidth ) {
+						maxWidth = std::max( maxWidth, curX - extraLeft );
+						mLines.push_back( RenderParagraph() );
+						curX = extraLeft;
+						if ( !mLines.empty() )
+							mLines.back().width += extraLeft;
+					}
+				}
+
 				Uint32 textHints = span->getTextHints();
 
 				// Compute where lines break within this text span.
@@ -538,18 +550,20 @@ void RichText::updateLayout() {
 						renderSpanText->setStyleConfig( fontStyle );
 
 						Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-						Float height = mLineHeight > 0
-										   ? mLineHeight
-										   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+						Float height =
+							pText->lineHeight > 0 ? pText->lineHeight
+							: mLineHeight > 0
+								? mLineHeight
+								: fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 						Float spanWidth = renderSpanText->getTextWidth();
 
-						RenderSpan renderSpan;
-						renderSpan.block =
-							SpanBlock{ renderSpanText, pText->margin, pText->padding };
-						renderSpan.position = { curX, 0 };
-						renderSpan.size = Sizef( spanWidth, height );
-						renderSpan.startCharIndex = curCharIdx;
-						renderSpan.endCharIndex = curCharIdx + ( endIdx - startIdx );
+						RenderSpan renderSpan{
+							SpanBlock{ renderSpanText, pText->margin, pText->padding,
+									   pText->lineHeight, pText->isAtomic },
+							{ curX, 0 },
+							Sizef( spanWidth, height ),
+							curCharIdx,
+							static_cast<Int64>( curCharIdx + ( endIdx - startIdx ) ) };
 						curCharIdx = renderSpan.endCharIndex;
 
 						RenderParagraph& currentLine = mLines.back();
@@ -619,12 +633,7 @@ void RichText::updateLayout() {
 					curX = 0;
 				}
 
-				RenderSpan renderSpan;
-				renderSpan.block = block;
-				renderSpan.position = { curX, 0 };
-				renderSpan.size = blockSize;
-				renderSpan.startCharIndex = curCharIdx;
-				renderSpan.endCharIndex = curCharIdx + 1;
+				RenderSpan renderSpan{ block, { curX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
 				curCharIdx = renderSpan.endCharIndex;
 
 				RenderParagraph& currentLine = mLines.back();
@@ -688,6 +697,8 @@ void RichText::updateLayout() {
 			}
 
 			line.height = std::max( line.height, maxLineHeight );
+			if ( mLineHeight > 0 )
+				line.height = std::max( line.height, mLineHeight );
 			curY += line.height;
 		}
 
@@ -788,6 +799,18 @@ void RichText::updateLayout() {
 			if ( !mLines.empty() )
 				mLines.back().width += extraLeft;
 
+			if ( pText->isAtomic && curX > extraLeft && mMaxWidth > 0 ) {
+				Float extraRight = pText->margin.Right + pText->padding.Right;
+				Float fullTextWidth = span->getTextWidth();
+				if ( curX + fullTextWidth + extraRight > mMaxWidth ) {
+					maxWidth = std::max( maxWidth, curX - extraLeft );
+					mLines.push_back( RenderParagraph() );
+					curX = extraLeft;
+					if ( !mLines.empty() )
+						mLines.back().width += extraLeft;
+				}
+			}
+
 			// Shift curX inside to the left edge — text starts
 			// to the right of any left floats.
 			Float le = floatLeftEdge( curY );
@@ -821,17 +844,20 @@ void RichText::updateLayout() {
 					renderSpanText->setStyleConfig( fontStyle );
 
 					Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-					Float height = mLineHeight > 0
+					Float height = pText->lineHeight > 0 ? pText->lineHeight
+								   : mLineHeight > 0
 									   ? mLineHeight
 									   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 					Float spanWidth = renderSpanText->getTextWidth();
 
-					RenderSpan renderSpan;
-					renderSpan.block = SpanBlock{ renderSpanText, pText->margin, pText->padding };
-					renderSpan.position = { curX, 0 };
-					renderSpan.size = Sizef( spanWidth, height );
-					renderSpan.startCharIndex = curCharIdx;
-					renderSpan.endCharIndex = curCharIdx + ( endIdx - startIdx );
+					RenderSpan renderSpan{
+						SpanBlock{ renderSpanText, pText->margin, pText->padding, pText->lineHeight,
+								   pText->isAtomic },
+						{ curX, 0 },
+						Sizef( spanWidth, height ),
+						curCharIdx,
+						static_cast<Int64>( curCharIdx + ( endIdx - startIdx ) ) };
+
 					curCharIdx = renderSpan.endCharIndex;
 
 					RenderParagraph& currentLine = mLines.back();
@@ -844,7 +870,8 @@ void RichText::updateLayout() {
 					currentLine.width += spanWidth;
 				}
 
-				// Trailing margin may force a wrap.
+				// After the last segment, add trailing margin and check if the
+				// margin itself forces a wrap.
 				if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
 					Float extraRight = pText->margin.Right + pText->padding.Right;
 					curX += extraRight;
@@ -916,20 +943,14 @@ void RichText::updateLayout() {
 						posX = le;
 				}
 
-				RenderSpan renderSpan;
-				renderSpan.block = block;
-				renderSpan.position = { posX, 0 };
-				renderSpan.size = blockSize;
-				renderSpan.startCharIndex = curCharIdx;
-				renderSpan.endCharIndex = curCharIdx + 1;
+				RenderSpan renderSpan{ block, { posX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
 				curCharIdx = renderSpan.endCharIndex;
 
 				mLines.back().spans.push_back( renderSpan );
 
 				// Record the float's bounding box so subsequent
 				// content can wrap around it.
-				Rectf fr( posX, curY, posX + blockSize.getWidth(),
-					curY + blockSize.getHeight() );
+				Rectf fr( posX, curY, posX + blockSize.getWidth(), curY + blockSize.getHeight() );
 				if ( floatType == UI::CSSFloat::Left )
 					leftFloats.push_back( fr );
 				else
@@ -956,12 +977,7 @@ void RichText::updateLayout() {
 					curX = 0;
 				}
 
-				RenderSpan renderSpan;
-				renderSpan.block = block;
-				renderSpan.position = { curX, 0 };
-				renderSpan.size = blockSize;
-				renderSpan.startCharIndex = curCharIdx;
-				renderSpan.endCharIndex = curCharIdx + 1;
+				RenderSpan renderSpan{ block, { curX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
 				curCharIdx = renderSpan.endCharIndex;
 
 				RenderParagraph& currentLine = mLines.back();
@@ -1032,6 +1048,8 @@ void RichText::updateLayout() {
 		}
 
 		line.height = std::max( line.height, maxLineHeight );
+		if ( mLineHeight > 0 )
+			line.height = std::max( line.height, mLineHeight );
 		accumY += line.height;
 	}
 
