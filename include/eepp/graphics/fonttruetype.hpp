@@ -19,15 +19,19 @@ class EE_API FontTrueType : public Font {
 
 	static FontTrueType* New( const std::string& FontName, const std::string& filename );
 
+	static FontTrueType* New( const std::string& FontName, const std::string& filename,
+							  Uint32 faceIndex );
+
 	~FontTrueType();
 
-	bool loadFromFile( const std::string& filename );
+	bool loadFromFile( const std::string& filename, Uint32 faceIndex = 0 );
 
-	bool loadFromMemory( const void* data, std::size_t sizeInBytes, bool copyData = true );
+	bool loadFromMemory( const void* data, std::size_t sizeInBytes, bool copyData = true,
+						 Uint32 faceIndex = 0 );
 
-	bool loadFromStream( IOStream& stream );
+	bool loadFromStream( IOStream& stream, Uint32 faceIndex = 0 );
 
-	bool loadFromPack( Pack* pack, std::string filePackPath );
+	bool loadFromPack( Pack* pack, std::string filePackPath, Uint32 faceIndex = 0 );
 
 	const Font::Info& getInfo() const;
 
@@ -110,6 +114,10 @@ class EE_API FontTrueType : public Font {
 	bool isFallbackFontEnabled() const;
 
 	void setEnableFallbackFont( bool enableFallbackFont );
+
+	bool isSystemFallbackEnabled() const;
+
+	void setEnableSystemFallback( bool enableSystemFallback );
 
 	bool getEnableDynamicMonospace() const;
 
@@ -239,6 +247,7 @@ class EE_API FontTrueType : public Font {
 	mutable bool mUsingFallback{ false };
 	bool mEnableEmojiFallback{ true };
 	bool mEnableFallbackFont{ true };
+	bool mEnableSystemFallback{ true };
 	bool mEnableDynamicMonospace{ false };
 	bool mIsBold{ false };
 	bool mIsItalic{ false };
@@ -246,10 +255,11 @@ class EE_API FontTrueType : public Font {
 	mutable UnorderedMap<unsigned int, unsigned int> mClosestCharacterSize;
 	mutable UnorderedMap<Uint32, Uint32> mCodePointIndexCache;
 	mutable UnorderedMap<Uint32, std::tuple<Uint32, Uint32, bool>> mKeyCache;
-    mutable UnorderedMap<Uint64, Float> mKerningCache;       // For codepoints (getKerning)
-    mutable UnorderedMap<Uint64, Float> mKerningGlyphCache;  // For glyph indices
+	mutable UnorderedMap<Uint64, Float> mKerningCache;		// For codepoints (getKerning)
+	mutable UnorderedMap<Uint64, Float> mKerningGlyphCache; // For glyph indices
 	FontHinting mHinting{ FontHinting::Full };
 	FontAntialiasing mAntialiasing{ FontAntialiasing::Grayscale };
+	Uint32 mFaceIndex{ 0 };
 	FontTrueType* mFontBold{ nullptr };
 	FontTrueType* mFontItalic{ nullptr };
 	FontTrueType* mFontBoldItalic{ nullptr };

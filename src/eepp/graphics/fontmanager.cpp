@@ -1,5 +1,7 @@
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
+#include <eepp/graphics/systemfontresolver.hpp>
+#include <eepp/system/filesystem.hpp>
 
 namespace EE { namespace Graphics {
 
@@ -11,6 +13,7 @@ FontManager::~FontManager() {
 	mEmojiFont = nullptr;
 	mColorEmojiFont = nullptr;
 	mFallbackFonts.clear();
+	mSystemFallbackFonts.clear();
 }
 
 Graphics::Font* FontManager::add( Graphics::Font* font ) {
@@ -99,6 +102,37 @@ Font* FontManager::getByInternalId( Uint32 internalId ) const {
 			return font;
 	}
 	return nullptr;
+}
+
+FontTrueType* FontManager::getOrLoadSystemFallbackFont( const FontDesc& desc ) {
+	static constexpr Uint32 MAX_SYSTEM_FALLBACK_FONTS = 32;
+
+	if ( desc.path.empty() )
+		return nullptr;
+
+	for ( auto* font : mSystemFallbackFonts ) {
+		if ( font->getType() == FontType::TTF ) {
+			auto* ttf = static_cast<FontTrueType*>( font );
+			if ( ttf->getInfo().fontpath + ttf->getInfo().filename == desc.path )
+				return ttf;
+		}
+	}
+
+	FontTrueType* ttf = FontTrueType::New( desc.family, desc.path, desc.faceIndex );
+	if ( !ttf || !ttf->loaded() ) {
+		eeSAFE_DELETE( ttf );
+		return nullptr;
+	}
+
+	mSystemFallbackFonts.push_back( ttf );
+
+	if ( mSystemFallbackFonts.size() > MAX_SYSTEM_FALLBACK_FONTS ) {
+		Font* oldest = mSystemFallbackFonts.front();
+		mSystemFallbackFonts.erase( mSystemFallbackFonts.begin() );
+		eeSAFE_DELETE( oldest );
+	}
+
+	return ttf;
 }
 
 }} // namespace EE::Graphics

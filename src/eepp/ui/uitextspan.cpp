@@ -15,8 +15,7 @@
 #define PUGIXML_HEADER_ONLY
 #include <pugixml/pugixml.hpp>
 
-namespace EE {
-namespace UI {
+namespace EE { namespace UI {
 
 UITextSpan* UITextSpan::New() {
 	return eeNew( UITextSpan, () );
@@ -128,7 +127,8 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 			setFontShadowOffset( attribute.asVector2f() );
 			break;
 		case PropertyId::FontFamily: {
-			Font* font = getUISceneNode()->getFontFromNamesList( attribute.value() );
+			Font* font =
+				getUISceneNode()->getFontFromNamesList( attribute.value(), getFontStyle() );
 			if ( NULL != font && font->loaded() ) {
 				setFont( font );
 			}
@@ -276,6 +276,10 @@ UITextSpan* UITextSpan::setFontStyle( const Uint32& fontStyle ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mRichText.getFontStyleConfig().getFont(), fontStyle ) )
+			setFont( newFont );
 	}
 	return this;
 }
@@ -819,5 +823,4 @@ void UILabelSpan::activateTarget() {
 	}
 }
 
-}
-} // namespace EE::UI
+}} // namespace EE::UI

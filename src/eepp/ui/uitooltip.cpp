@@ -371,6 +371,9 @@ UITooltip* UITooltip::setFontStyle( const Uint32& fontStyle ) {
 		onAutoSize();
 		autoAlign();
 		invalidateDraw();
+
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle( mStyleConfig.Font, fontStyle ) )
+			setFont( newFont );
 	}
 
 	return this;
@@ -560,7 +563,8 @@ bool UITooltip::applyProperty( const StyleSheetProperty& attribute ) {
 				setFontShadowOffset( attribute.asVector2f() );
 			break;
 		case PropertyId::FontFamily: {
-			Font* font = getUISceneNode()->getFontFromNamesList( attribute.value() );
+			Font* font =
+				getUISceneNode()->getFontFromNamesList( attribute.value(), getFontStyle() );
 
 			if ( !mUsingCustomStyling && NULL != font && font->loaded() )
 				setFont( font );

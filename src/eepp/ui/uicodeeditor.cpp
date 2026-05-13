@@ -2923,6 +2923,10 @@ UICodeEditor* UICodeEditor::setFontStyle( const Uint32& fontStyle ) {
 		mFontStyleConfig.Style = fontStyle;
 		invalidateDraw();
 		onFontStyleChanged();
+
+		if ( auto* newFont =
+				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, fontStyle ) )
+			setFont( newFont );
 	}
 
 	return this;
@@ -3013,7 +3017,8 @@ bool UICodeEditor::applyProperty( const StyleSheetProperty& attribute ) {
 			setFontSelectionBackColor( attribute.asColor() );
 			break;
 		case PropertyId::FontFamily: {
-			Font* font = getUISceneNode()->getFontFromNamesList( attribute.value() );
+			Font* font =
+				getUISceneNode()->getFontFromNamesList( attribute.value(), getFontStyle() );
 			if ( NULL != font && font->loaded() ) {
 				setFont( font );
 			}

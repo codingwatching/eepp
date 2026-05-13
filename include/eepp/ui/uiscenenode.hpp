@@ -736,6 +736,10 @@ class EE_API UISceneNode : public SceneNode {
 
 	Font* getFontFromNamesList( std::string_view names, Uint32 fontStyle = 0 ) const;
 
+	Font* reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) const;
+
+	void loadFontStyleVariants( Font* font, const std::string& family ) const;
+
   protected:
 	friend class EE::UI::UIWindow;
 	friend class EE::UI::UIWidget;

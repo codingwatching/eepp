@@ -172,7 +172,7 @@
   "eepp-linux": {
     "build": [
       {
-        "args": "--disable-static-build --with-mold-linker --with-debug-symbols --address-sanitizer --with-backend=SDL3 gmake",
+        "args": "--disable-static-build --with-mold-linker --with-debug-symbols --address-sanitizer gmake",
         "command": "premake4",
         "working_dir": "${project_root}"
       },

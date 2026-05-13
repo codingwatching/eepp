@@ -2,6 +2,7 @@
 #include <eepp/core/string.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
+#include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/network/http.hpp>
 #include <eepp/network/uri.hpp>
@@ -1515,6 +1516,7 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 		[&]( std::string_view name ) {
 			name = String::trim( name, ' ' );
 			name = String::trim( name, '\'' );
+			name = String::trim( name, '"' );
 			std::string fontFamily{ name };
 			if ( fontStyle )
 				fontFamily += "#" + Text::styleFlagToString( fontStyle );
@@ -1522,7 +1524,113 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 			return font != nullptr;
 		},
 		',' );
+
+	if ( !font && Graphics::SystemFontResolver::isEnabled() ) {
+		Graphics::FontWeight weight =
+			( fontStyle & Text::Bold ) ? Graphics::FontWeight::Bold : Graphics::FontWeight::Normal;
+		Graphics::FontDesc desc = Graphics::SystemFontResolver::instance()->resolveFromNamesList(
+			std::string{ names }, weight, fontStyle & Text::Italic );
+		if ( !desc.path.empty() ) {
+			std::string family = desc.family;
+			if ( fontStyle )
+				family += "#" + Text::styleFlagToString( fontStyle );
+			FontTrueType* ttf = FontTrueType::New( family, desc.path, desc.faceIndex );
+			if ( ttf && ttf->loaded() ) {
+				font = ttf;
+
+				Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
+				if ( weightStyle ) {
+					Font* regular =
+						FontManager::instance()->getByName( desc.family );
+					if ( regular && regular != font &&
+						 regular->getType() == FontType::TTF ) {
+						auto* regularFT = static_cast<FontTrueType*>( regular );
+						if ( weightStyle == Text::Bold )
+							regularFT->setBoldFont( ttf );
+						else if ( weightStyle == Text::Italic )
+							regularFT->setItalicFont( ttf );
+						else
+							regularFT->setBoldItalicFont( ttf );
+					}
+				}
+			}
+		}
+	}
+
 	return font;
+}
+
+Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) const {
+	if ( !currentFont || !Graphics::SystemFontResolver::isEnabled() )
+		return nullptr;
+
+	if ( currentFont->getType() != FontType::TTF )
+		return nullptr;
+
+	std::string name = currentFont->getName();
+	size_t pos = name.find( '#' );
+	if ( pos != std::string::npos )
+		name = name.substr( 0, pos );
+
+	Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
+	Font* newFont = getFontFromNamesList( name, weightStyle );
+	if ( newFont && newFont != currentFont )
+		return newFont;
+
+	return nullptr;
+}
+
+void UISceneNode::loadFontStyleVariants( Font* font, const std::string& family ) const {
+	if ( !font || !Graphics::SystemFontResolver::isEnabled() )
+		return;
+	if ( font->getType() != FontType::TTF )
+		return;
+	auto* ft = static_cast<FontTrueType*>( font );
+
+	auto loadVariant = [this, family]( FontWeight weight, bool italic ) -> FontTrueType* {
+		Uint32 style = 0;
+		if ( italic )
+			style |= Text::Italic;
+		if ( weight == FontWeight::Bold )
+			style |= Text::Bold;
+		std::string queryFamily = family;
+		if ( style )
+			queryFamily += "#" + Text::styleFlagToString( style );
+		Font* existing = FontManager::instance()->getByName( queryFamily );
+		if ( existing && existing->getType() == FontType::TTF )
+			return static_cast<FontTrueType*>( existing );
+
+		FontDesc desc = SystemFontResolver::instance()->resolveGeneric(
+			SystemFontResolver::genericFamilyFromName( family ), weight, italic );
+		if ( desc.path.empty() ) {
+			FontQuery query;
+			query.family = family;
+			query.weight = weight;
+			query.italic = italic;
+			desc = SystemFontResolver::instance()->resolve( query );
+		}
+		if ( desc.path.empty() )
+			return nullptr;
+
+		auto* ttf = FontTrueType::New( queryFamily, desc.path, desc.faceIndex );
+		if ( !ttf || !ttf->loaded() ) {
+			eeSAFE_DELETE( ttf );
+			return nullptr;
+		}
+		return ttf;
+	};
+
+	FontTrueType* boldFont = loadVariant( FontWeight::Bold, false );
+	if ( boldFont )
+		ft->setBoldFont( boldFont );
+
+	FontTrueType* italicFont = loadVariant( FontWeight::Normal, true );
+	if ( italicFont )
+		ft->setItalicFont( italicFont );
+
+	FontTrueType* boldItalicFont = loadVariant( FontWeight::Bold, true );
+	if ( boldItalicFont )
+		ft->setBoldItalicFont( boldItalicFont );
 }
 
 }} // namespace EE::UI

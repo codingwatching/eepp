@@ -1,6 +1,7 @@
 #include <eepp/core/retainsymbol.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
+#include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/graphics/texturefactory.hpp>
 #include <eepp/system/filesystem.hpp>
@@ -261,6 +262,13 @@ FontTrueType* FontTrueType::New( const std::string& FontName, const std::string&
 	return fontTrueType;
 }
 
+FontTrueType* FontTrueType::New( const std::string& FontName, const std::string& filename,
+								 Uint32 faceIndex ) {
+	FontTrueType* fontTrueType = New( FontName );
+	fontTrueType->loadFromFile( filename, faceIndex );
+	return fontTrueType;
+}
+
 FontTrueType::FontTrueType( const std::string& FontName ) :
 	Font( FontType::TTF, FontName ),
 	mLibrary( NULL ),
@@ -280,12 +288,14 @@ FontTrueType::FontTrueType( const std::string& FontName ) :
 	mUsingFallback( false ),
 	mEnableEmojiFallback( true ),
 	mEnableFallbackFont( true ),
+	mEnableSystemFallback( true ),
 	mEnableDynamicMonospace( false ),
 	mIsBold( false ),
 	mIsItalic( false ),
 	mIsMonospaceCompletePending( false ),
 	mHinting( FontManager::instance()->getHinting() ),
 	mAntialiasing( FontManager::instance()->getAntialiasing() ),
+	mFaceIndex( 0 ),
 	mFontBold( nullptr ),
 	mFontItalic( nullptr ),
 	mFontBoldItalic( nullptr ),
@@ -318,7 +328,7 @@ static bool checkHasColrTable( const FT_Face& face ) {
 	return length > 0;
 }
 
-bool FontTrueType::loadFromFile( const std::string& filename ) {
+bool FontTrueType::loadFromFile( const std::string& filename, Uint32 faceIndex ) {
 	if ( !FileSystem::fileExists( filename ) &&
 		 PackManager::instance()->isFallbackToPacksActive() ) {
 		std::string path( filename );
@@ -327,7 +337,7 @@ bool FontTrueType::loadFromFile( const std::string& filename ) {
 		if ( NULL != pack ) {
 			Log::info( "Loading font from pack: %s", path.c_str() );
 
-			return loadFromPack( pack, path );
+			return loadFromPack( pack, path, faceIndex );
 		}
 
 		return false;
@@ -335,6 +345,8 @@ bool FontTrueType::loadFromFile( const std::string& filename ) {
 
 	// Cleanup the previous resources
 	cleanup();
+
+	mFaceIndex = faceIndex;
 
 	// Initialize FreeType
 	FT_Library library;
@@ -347,7 +359,8 @@ bool FontTrueType::loadFromFile( const std::string& filename ) {
 
 	// Load the new font face from the specified file
 	FT_Face face;
-	if ( FT_New_Face( static_cast<FT_Library>( mLibrary ), filename.c_str(), 0, &face ) != 0 ) {
+	if ( FT_New_Face( static_cast<FT_Library>( mLibrary ), filename.c_str(),
+					  static_cast<FT_Long>( mFaceIndex ), &face ) != 0 ) {
 		Log::error( "Failed to load font \"%s\" (%s) (failed to create the font face)",
 					filename.c_str(), mFontName.c_str() );
 		return false;
@@ -359,7 +372,8 @@ bool FontTrueType::loadFromFile( const std::string& filename ) {
 	return setFontFace( face );
 }
 
-bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bool copyData ) {
+bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bool copyData,
+								   Uint32 faceIndex ) {
 	const void* ptr = data;
 
 	if ( copyData ) {
@@ -370,6 +384,8 @@ bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bo
 
 	// Cleanup the previous resources
 	cleanup();
+
+	mFaceIndex = faceIndex;
 
 	// Initialize FreeType
 	FT_Library library;
@@ -383,7 +399,8 @@ bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bo
 	FT_Face face;
 	if ( FT_New_Memory_Face( static_cast<FT_Library>( mLibrary ),
 							 reinterpret_cast<const FT_Byte*>( ptr ),
-							 static_cast<FT_Long>( sizeInBytes ), 0, &face ) != 0 ) {
+							 static_cast<FT_Long>( sizeInBytes ),
+							 static_cast<FT_Long>( mFaceIndex ), &face ) != 0 ) {
 		Log::error( "Failed to load font from memory (failed to create the font face)" );
 		return false;
 	}
@@ -391,9 +408,11 @@ bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bo
 	return setFontFace( face );
 }
 
-bool FontTrueType::loadFromStream( IOStream& stream ) {
+bool FontTrueType::loadFromStream( IOStream& stream, Uint32 faceIndex ) {
 	// Cleanup the previous resources
 	cleanup();
+
+	mFaceIndex = faceIndex;
 
 	// Initialize FreeType
 	FT_Library library;
@@ -424,7 +443,8 @@ bool FontTrueType::loadFromStream( IOStream& stream ) {
 
 	// Load the new font face from the specified stream
 	FT_Face face;
-	if ( FT_Open_Face( static_cast<FT_Library>( mLibrary ), &args, 0, &face ) != 0 ) {
+	if ( FT_Open_Face( static_cast<FT_Library>( mLibrary ), &args,
+					   static_cast<FT_Long>( mFaceIndex ), &face ) != 0 ) {
 		Log::error( "Failed to load font from stream (failed to create the font face)" );
 		delete rec;
 		return false;
@@ -437,7 +457,7 @@ bool FontTrueType::loadFromStream( IOStream& stream ) {
 	return res;
 }
 
-bool FontTrueType::loadFromPack( Pack* pack, std::string filePackPath ) {
+bool FontTrueType::loadFromPack( Pack* pack, std::string filePackPath, Uint32 faceIndex ) {
 	if ( NULL == pack )
 		return false;
 
@@ -446,7 +466,7 @@ bool FontTrueType::loadFromPack( Pack* pack, std::string filePackPath ) {
 	mMemCopy.clear();
 
 	if ( pack->isOpen() && pack->extractFileToMemory( filePackPath, mMemCopy ) )
-		ret = loadFromMemory( mMemCopy.get(), mMemCopy.length(), false );
+		ret = loadFromMemory( mMemCopy.get(), mMemCopy.length(), false, faceIndex );
 
 	mInfo.fontpath = FileSystem::fileRemoveFileName( filePackPath );
 	mInfo.filename = FileSystem::fileNameFromPath( filePackPath );
@@ -615,6 +635,23 @@ Glyph FontTrueType::getGlyph( Uint32 codePoint, unsigned int characterSize, bool
 		}
 	}
 
+	if ( 0 == idx && mEnableSystemFallback && SystemFontResolver::existsSingleton() ) {
+		FontDesc fallbackDesc = SystemFontResolver::instance()->getFallbackForCodepoint(
+			codePoint, FontWeight::Normal, false );
+		if ( !fallbackDesc.path.empty() ) {
+			FontTrueType* systemFallback =
+				FontManager::instance()->getOrLoadSystemFallbackFont( fallbackDesc );
+			if ( systemFallback && ( idx = systemFallback->getGlyphIndex( codePoint ) ) ) {
+				if ( mIsMonospace && mEnableDynamicMonospace ) {
+					mIsMonospaceComplete = false;
+					mUsingFallback = true;
+				}
+				return systemFallback->getGlyphByIndex(
+					idx, characterSize, bold, italic, outlineThickness, getPage( characterSize ) );
+			}
+		}
+	}
+
 	return getGlyphByIndex( idx, characterSize, bold, italic, outlineThickness );
 }
 
@@ -740,6 +777,26 @@ GlyphDrawable* FontTrueType::getGlyphDrawable( Uint32 codePoint, unsigned int ch
 						mUsingFallback = true;
 					}
 					break;
+				}
+			}
+			if ( 0 == glyphIndex )
+				glyphIndex = getGlyphIndex( codePoint );
+		}
+
+		if ( 0 == glyphIndex && mEnableSystemFallback && SystemFontResolver::existsSingleton() ) {
+			FontDesc fallbackDesc = SystemFontResolver::instance()->getFallbackForCodepoint(
+				codePoint, FontWeight::Normal, false );
+			if ( !fallbackDesc.path.empty() ) {
+				FontTrueType* systemFallback =
+					FontManager::instance()->getOrLoadSystemFallbackFont( fallbackDesc );
+				if ( systemFallback &&
+					 ( tGlyphIndex = systemFallback->getGlyphIndex( codePoint ) ) ) {
+					glyphIndex = tGlyphIndex;
+					fontInternalId = systemFallback->getFontInternalId();
+					if ( mIsMonospace && mEnableDynamicMonospace ) {
+						mIsMonospaceComplete = false;
+						mUsingFallback = true;
+					}
 				}
 			}
 			if ( 0 == glyphIndex )
@@ -1059,6 +1116,7 @@ void FontTrueType::cleanup() {
 	mStroker = NULL;
 	mHBFont = NULL;
 	mStreamRec = NULL;
+	mFaceIndex = 0;
 	mInfo = Info();
 	mFontInternalId = 0;
 	mBoldAdvanceSameAsRegular = false;
@@ -1072,6 +1130,7 @@ void FontTrueType::cleanup() {
 	mUsingFallback = false;
 	mEnableEmojiFallback = true;
 	mEnableFallbackFont = true;
+	mEnableSystemFallback = true;
 	mEnableDynamicMonospace = false;
 	mIsBold = false;
 	mIsItalic = false;
@@ -1622,6 +1681,14 @@ bool FontTrueType::isFallbackFontEnabled() const {
 
 void FontTrueType::setEnableFallbackFont( bool enableFallbackFont ) {
 	mEnableFallbackFont = enableFallbackFont;
+}
+
+bool FontTrueType::isSystemFallbackEnabled() const {
+	return mEnableSystemFallback;
+}
+
+void FontTrueType::setEnableSystemFallback( bool enableSystemFallback ) {
+	mEnableSystemFallback = enableSystemFallback;
 }
 
 bool FontTrueType::isEmojiFallbackEnabled() const {
