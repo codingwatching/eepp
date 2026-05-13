@@ -108,9 +108,16 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::Text:
 			setText( getTranslatorString( attribute.value() ) );
 			break;
-		case PropertyId::Color:
-			setFontColor( attribute.asColor() );
+		case PropertyId::Color: {
+			Color color = attribute.asColor();
+			if ( color == Color::Transparent &&
+				 attribute.getValue().find( "var(" ) != std::string::npos ) {
+				// Do not set unresolved colors
+				break;
+			}
+			setFontColor( color );
 			break;
+		}
 		case PropertyId::BackgroundColor:
 			setFontBackgroundColor( attribute.asColor() );
 			break;

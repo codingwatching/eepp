@@ -148,6 +148,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["kbd"] = [] { return UITextSpan::NewWithTag( "kbd" ); };
 		registeredWidget["sub"] = [] { return UITextSpan::NewWithTag( "sub" ); };
 		registeredWidget["sup"] = [] { return UITextSpan::NewWithTag( "sup" ); };
+		registeredWidget["time"] = [] { return UITextSpan::NewWithTag( "time" ); };
 		registeredWidget["u"] = UITextSpan::NewUnderline;
 		registeredWidget["ins"] = UITextSpan::NewUnderline;
 		registeredWidget["s"] = UITextSpan::NewStrikethrough;

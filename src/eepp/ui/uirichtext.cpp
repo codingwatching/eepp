@@ -324,9 +324,16 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::FontWeight:
 			setFontStyle( attribute.asFontStyle() );
 			break;
-		case PropertyId::Color:
+		case PropertyId::Color: {
+			Color color = attribute.asColor();
+			if ( color == Color::Transparent &&
+				 attribute.getValue().find( "var(" ) != std::string::npos ) {
+				// Do not set unresolved colors
+				break;
+			}
 			setFontColor( attribute.asColor() );
 			break;
+		}
 		case PropertyId::BackgroundColor:
 			setBackgroundColor( attribute.asColor() );
 			setFontBackgroundColor( attribute.asColor() );
