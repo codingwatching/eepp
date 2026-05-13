@@ -247,8 +247,9 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			Int64 startChar = curCharIdx;
 			Int64 endChar = curCharIdx;
 
-			if ( !textSpan->getText().empty() ) {
-				endChar += textSpan->getText().length();
+			Int64 layoutCount = textSpan->getLayoutCharCount();
+			if ( layoutCount > 0 ) {
+				endChar += layoutCount;
 				curCharIdx = endChar;
 			}
 

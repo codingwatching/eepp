@@ -136,12 +136,17 @@ class EE_API UITextSpan : public UIRichText {
 
 	void setHitBoxes( SpanHitBoxes&& hitBoxes );
 
+	Int64 getLayoutCharCount() const { return mLayoutCharCount; }
+
+	void setLayoutCharCount( Int64 count ) { mLayoutCharCount = count; }
+
 	virtual Node* overFind( const Vector2f& point );
 
   protected:
 	Uint32 mStyleState{ StyleStateNone };
 	String mText;
 	SpanHitBoxes mHitBoxes;
+	Int64 mLayoutCharCount{ 0 };
 
 	explicit UITextSpan( const std::string& tag = "span" );
 

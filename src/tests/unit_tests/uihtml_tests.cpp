@@ -1550,3 +1550,47 @@ UTEST( UIBackground, InlineBlockImageFixedSize ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, AnchorsSizing ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, "anchors sizing", WindowStyle::Default, WindowBackend::Default,
+						32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/lobsters_simple.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+
+	EXPECT_GT( anchors.size(), (size_t)0 );
+
+	for ( auto anchor : anchors ) {
+		auto a = anchor->asType<UIAnchorSpan>();
+		if ( a->getDisplay() == CSSDisplay::None )
+			continue;
+		EXPECT_GT( a->getPixelsSize().getHeight(), 0 );
+		if ( !a->getText().empty() && a->getFontStyleConfig().Font ) {
+			String text = a->getText();
+			text.trim();
+			if ( !text.empty() )
+				EXPECT_GE( a->getPixelsSize().getWidth(),
+						   Text::getTextWidth( text, a->getFontStyleConfig() ) );
+		}
+	}
+
+	Engine::destroySingleton();
+}

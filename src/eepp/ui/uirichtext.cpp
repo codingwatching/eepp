@@ -953,6 +953,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
 			 widget->asType<UIHTMLWidget>()->isMergeable() ) {
 			UITextSpan* span = widget->asType<UITextSpan>();
+			span->setLayoutCharCount( 0 );
 			Rectf margin = span->getLayoutPixelsMargin();
 			Rectf padding = span->getPixelsPadding();
 			bool hasOwnText = !span->getText().empty() && NULL != span->getFontStyleConfig().Font;
@@ -988,8 +989,11 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				if ( !spanText.empty() ) {
 					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding,
 									  spanLineHeight, span->isInlineBlock() );
+					span->setLayoutCharCount( spanText.length() );
 					if ( shouldCollapse )
 						lastSpanEndsWithSpace = spanText.back() == ' ';
+				} else {
+					span->setLayoutCharCount( 0 );
 				}
 			} else if ( margin.Left > 0 || margin.Top > 0 || padding.Left > 0 || padding.Top > 0 ) {
 				Rectf leftOnly( margin.Left, margin.Top, 0, 0 );
