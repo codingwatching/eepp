@@ -15,7 +15,8 @@
 #define PUGIXML_HEADER_ONLY
 #include <pugixml/pugixml.hpp>
 
-namespace EE { namespace UI {
+namespace EE {
+namespace UI {
 
 UITextSpan* UITextSpan::New() {
 	return eeNew( UITextSpan, () );
@@ -64,8 +65,14 @@ bool UITextSpan::isType( const Uint32& type ) const {
 bool UITextSpan::isMergeable() const {
 	if ( mDisplay == CSSDisplay::Inline )
 		return true;
-	if ( mDisplay == CSSDisplay::InlineBlock )
-		return !getText().empty() && NULL != getFontStyleConfig().Font;
+	if ( mDisplay == CSSDisplay::InlineBlock ) {
+		if ( getText().empty() || NULL == getFontStyleConfig().Font )
+			return false;
+		if ( getLayoutWidthPolicy() == SizePolicy::Fixed ||
+			 getLayoutHeightPolicy() == SizePolicy::Fixed )
+			return false;
+		return true;
+	}
 	return false;
 }
 
@@ -805,4 +812,5 @@ void UILabelSpan::activateTarget() {
 	}
 }
 
-}} // namespace EE::UI
+}
+} // namespace EE::UI

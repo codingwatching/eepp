@@ -1515,3 +1515,38 @@ UTEST( UIBackground, InlineBlockImageSpans ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIBackground, InlineBlockImageFixedSize ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, "inline-block image fixed size", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/reddit_header_icons.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+
+	EXPECT_GT( anchors.size(), (size_t)0 );
+
+	for ( auto anchor : anchors ) {
+		EXPECT_EQ( anchor->getPixelsSize().getWidth(), 15 );
+		EXPECT_EQ( anchor->getPixelsSize().getHeight(), 12 );
+	}
+
+	Engine::destroySingleton();
+}
