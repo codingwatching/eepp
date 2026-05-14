@@ -1017,6 +1017,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				richText.addSpan( "", span->getFontStyleConfig(), rightOnly, padRightOnly );
 			}
 
+			if ( shouldCollapse && span->isInlineBlock() )
+				lastSpanEndsWithSpace = true;
+
 			handled = true;
 		}
 
