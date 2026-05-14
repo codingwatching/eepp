@@ -1319,6 +1319,11 @@ solution "eepp"
 				buildoptions{ "/bigobj" }
 			end
 
+			if os.is("windows") and not is_vs() then
+				buildoptions{ "-Wa,-mbig-obj" }
+				linkoptions { "-Wl,--export-all-symbols" }
+			end
+
 		project "SheenBidi-static"
 			kind "StaticLib"
 			language "C"

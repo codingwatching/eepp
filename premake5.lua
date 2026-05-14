@@ -1221,6 +1221,9 @@ workspace "eepp"
 			target_dir_thirdparty()
 			filter "action:vs*"
 				buildoptions{ "/bigobj" }
+			filter { "system:windows", "action:not vs*" }
+				buildoptions{ "-Wa,-mbig-obj" }
+				linkoptions { "-Wl,--export-all-symbols" }
 
 		project "SheenBidi-static"
 			kind "StaticLib"

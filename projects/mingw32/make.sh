@@ -67,8 +67,13 @@ fi
 if [[ "$CONFIG" == *"arm64"* ]]; then
 bash ./build_sdl2.sh --arch=arm64 || exit 1
 else
-export CC=x86_64-w64-mingw32-gcc-posix
-export CXX=x86_64-w64-mingw32-g++-posix
+if command -v x86_64-w64-mingw32-gcc-posix &> /dev/null; then
+  export CC=x86_64-w64-mingw32-gcc-posix
+  export CXX=x86_64-w64-mingw32-g++-posix
+else
+  export CC=x86_64-w64-mingw32-gcc
+  export CXX=x86_64-w64-mingw32-g++
+fi
 fi
 
 cd ../../make/windows/ || exit
