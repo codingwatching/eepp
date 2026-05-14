@@ -382,7 +382,7 @@ UTEST( SystemFontResolver, resolveGenericWeightPreference ) {
 	UTEST_PRINT_STEP( "Normal weight should prefer Normal or close weight" );
 	FontDesc normal = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, false );
 	if ( !normal.path.empty() ) {
-		int diff = eeabs( (int)normal.weight - (int)FontWeight::Normal );
+		int diff = std::abs( (int)normal.weight - (int)FontWeight::Normal );
 		EXPECT_TRUE_MSG( diff <= 300,
 						 ( "Normal weight diff too large: " + normal.family + " weight=" +
 						   String::toString( (int)normal.weight ) )
@@ -392,14 +392,14 @@ UTEST( SystemFontResolver, resolveGenericWeightPreference ) {
 	UTEST_PRINT_STEP( "Bold weight should prefer Bold or close weight" );
 	FontDesc bold = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Bold, false );
 	if ( !bold.path.empty() ) {
-		int diff = eeabs( (int)bold.weight - (int)FontWeight::Bold );
+		int diff = std::abs( (int)bold.weight - (int)FontWeight::Bold );
 		UTEST_PRINTF( "Bold: %s (weight=%d diff=%d)\n", bold.family.c_str(), (int)bold.weight, diff );
 	}
 
 	UTEST_PRINT_STEP( "Light weight should prefer Light or close weight" );
 	FontDesc light = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Light, false );
 	if ( !light.path.empty() ) {
-		int diff = eeabs( (int)light.weight - (int)FontWeight::Light );
+		int diff = std::abs( (int)light.weight - (int)FontWeight::Light );
 		UTEST_PRINTF( "Light: %s (weight=%d diff=%d)\n", light.family.c_str(), (int)light.weight, diff );
 	}
 
