@@ -21,6 +21,7 @@
 #include <dwrite.h>
 #include <dwrite_1.h>
 #include <windows.h>
+#include <wrl/client.h>
 #pragma comment( lib, "dwrite.lib" )
 #endif
 
@@ -209,7 +210,7 @@ FontDesc SystemFontResolver::resolveFromNamesList( const std::string& namesList,
 	ensureFontListPopulated();
 
 	FontDesc result;
-		String::readBySeparatorStoppable(
+	String::readBySeparatorStoppable(
 		namesList,
 		[&result, weight, italic]( std::string_view name ) {
 			name = String::trim( name, ' ' );
@@ -246,12 +247,11 @@ FontDesc SystemFontResolver::resolveGeneric( GenericFamily generic, FontWeight w
 			int queryWeight = static_cast<int>( weight );
 			int weightDiff = eeabs( entryWeight - queryWeight );
 			bool styleMatch = entry.desc.italic == italic;
-			int bestWeightDiff = result.path.empty()
-									 ? 100000
-									 : eeabs( static_cast<int>( result.weight ) -
-											  static_cast<int>( weight ) );
-			bool bestStyleMatch =
-				result.path.empty() ? false : ( result.italic == italic );
+			int bestWeightDiff =
+				result.path.empty()
+					? 100000
+					: eeabs( static_cast<int>( result.weight ) - static_cast<int>( weight ) );
+			bool bestStyleMatch = result.path.empty() ? false : ( result.italic == italic );
 
 			if ( styleMatch && !bestStyleMatch ) {
 				result = entry.desc;
@@ -425,11 +425,13 @@ static IDWriteFactory* getDWriteFactory() {
 }
 
 void SystemFontResolver::populateFontList() const {
+	using Microsoft::WRL::ComPtr;
+
 	IDWriteFactory* factory = getDWriteFactory();
 	if ( !factory )
 		return;
 
-	IDWriteFontCollection* collection = nullptr;
+	ComPtr<IDWriteFontCollection> collection;
 	HRESULT hr = factory->GetSystemFontCollection( &collection, FALSE );
 	if ( FAILED( hr ) || !collection )
 		return;
@@ -437,113 +439,86 @@ void SystemFontResolver::populateFontList() const {
 	UINT32 familyCount = collection->GetFontFamilyCount();
 
 	for ( UINT32 i = 0; i < familyCount; ++i ) {
-		IDWriteFontFamily* fontFamily = nullptr;
+		ComPtr<IDWriteFontFamily> fontFamily;
 		hr = collection->GetFontFamily( i, &fontFamily );
 		if ( FAILED( hr ) || !fontFamily )
 			continue;
 
-		IDWriteLocalizedStrings* familyNames = nullptr;
+		ComPtr<IDWriteLocalizedStrings> familyNames;
 		hr = fontFamily->GetFamilyNames( &familyNames );
-		if ( FAILED( hr ) || !familyNames ) {
-			fontFamily->Release();
+		if ( FAILED( hr ) || !familyNames )
 			continue;
-		}
 
 		UINT32 nameLen = 0;
 		hr = familyNames->GetStringLength( 0, &nameLen );
-		if ( FAILED( hr ) ) {
-			familyNames->Release();
-			fontFamily->Release();
+		if ( FAILED( hr ) )
 			continue;
-		}
 
 		std::wstring familyNameW( nameLen + 1, L'\0' );
 		familyNames->GetString( 0, &familyNameW[0], nameLen + 1 );
-		familyNames->Release();
 
 		std::string familyName = wideToUtf8( familyNameW.c_str() );
-		if ( familyName.empty() ) {
-			fontFamily->Release();
+		if ( familyName.empty() )
 			continue;
-		}
 
 		UINT32 fontCount = fontFamily->GetFontCount();
 		for ( UINT32 j = 0; j < fontCount; ++j ) {
-			IDWriteFont* dwriteFont = nullptr;
+			ComPtr<IDWriteFont> dwriteFont;
 			hr = fontFamily->GetFont( j, &dwriteFont );
 			if ( FAILED( hr ) || !dwriteFont )
 				continue;
 
-			BOOL isSymbol = dwriteFont->IsSymbolFont();
+			if ( dwriteFont->IsSymbolFont() )
+				continue;
+
 			DWRITE_FONT_WEIGHT dwWeight = dwriteFont->GetWeight();
 			DWRITE_FONT_STRETCH dwStretch = dwriteFont->GetStretch();
 			DWRITE_FONT_STYLE dwStyle = dwriteFont->GetStyle();
 
-			IDWriteFontFace* fontFace = nullptr;
+			ComPtr<IDWriteFontFace> fontFace;
 			hr = dwriteFont->CreateFontFace( &fontFace );
-			if ( FAILED( hr ) || !fontFace ) {
-				dwriteFont->Release();
+			if ( FAILED( hr ) || !fontFace )
 				continue;
-			}
 
 			UINT32 fileCount = 0;
 			hr = fontFace->GetFiles( &fileCount, nullptr );
-			if ( FAILED( hr ) || fileCount == 0 ) {
-				fontFace->Release();
-				dwriteFont->Release();
+			if ( FAILED( hr ) || fileCount == 0 )
 				continue;
-			}
 
-			std::vector<IDWriteFontFile*> files( fileCount );
-			hr = fontFace->GetFiles( &fileCount, files.data() );
-			if ( FAILED( hr ) ) {
-				fontFace->Release();
-				dwriteFont->Release();
+			// Get raw pointers temporarily, then immediately take ownership
+			std::vector<IDWriteFontFile*> rawFiles( fileCount, nullptr );
+			hr = fontFace->GetFiles( &fileCount, rawFiles.data() );
+			if ( FAILED( hr ) )
 				continue;
-			}
 
 			for ( UINT32 k = 0; k < fileCount; ++k ) {
-				IDWriteFontFile* fontFile = files[k];
-				IDWriteFontFileLoader* loader = nullptr;
+				ComPtr<IDWriteFontFile> fontFile;
+				fontFile.Attach( rawFiles[k] ); // Attach takes ownership and guarantees Release()
+
+				ComPtr<IDWriteFontFileLoader> loader;
 				hr = fontFile->GetLoader( &loader );
-				if ( FAILED( hr ) || !loader ) {
-					fontFile->Release();
+				if ( FAILED( hr ) || !loader )
 					continue;
-				}
 
-				IDWriteLocalFontFileLoader* localLoader = nullptr;
-				hr = loader->QueryInterface( __uuidof( IDWriteLocalFontFileLoader ),
-											 reinterpret_cast<void**>( &localLoader ) );
-				loader->Release();
-
-				if ( FAILED( hr ) || !localLoader ) {
-					fontFile->Release();
+				ComPtr<IDWriteLocalFontFileLoader> localLoader;
+				hr = loader.As( &localLoader ); // .As() replaces QueryInterface boilerplate
+				if ( FAILED( hr ) || !localLoader )
 					continue;
-				}
 
 				const void* refKey = nullptr;
 				UINT32 refKeySize = 0;
 				hr = fontFile->GetReferenceKey( &refKey, &refKeySize );
-				if ( FAILED( hr ) ) {
-					localLoader->Release();
-					fontFile->Release();
+				if ( FAILED( hr ) )
 					continue;
-				}
 
 				UINT32 pathLen = 0;
 				hr = localLoader->GetFilePathLengthFromKey( refKey, refKeySize, &pathLen );
-				if ( FAILED( hr ) ) {
-					localLoader->Release();
-					fontFile->Release();
+				if ( FAILED( hr ) )
 					continue;
-				}
 
 				std::wstring filePathW( pathLen + 1, L'\0' );
 				hr = localLoader->GetFilePathFromKey( refKey, refKeySize, &filePathW[0],
 													  pathLen + 1 );
-				localLoader->Release();
-				fontFile->Release();
-
 				if ( FAILED( hr ) )
 					continue;
 
@@ -551,48 +526,34 @@ void SystemFontResolver::populateFontList() const {
 				if ( filePath.empty() )
 					continue;
 
-				if ( isSymbol )
-					continue;
-
 				FontDesc desc;
 				desc.family = familyName;
 				desc.path = filePath;
-				desc.faceIndex = j;
+				desc.faceIndex = fontFace->GetIndex();
 				desc.weight = static_cast<FontWeight>( static_cast<Uint16>( dwWeight ) );
 				desc.stretch = static_cast<FontStretch>( static_cast<Uint8>( dwStretch ) );
 				desc.italic =
 					( dwStyle == DWRITE_FONT_STYLE_ITALIC || dwStyle == DWRITE_FONT_STYLE_OBLIQUE );
+				desc.monospace = false;
 
 #ifdef _MSC_VER
 				__if_exists( IDWriteFont1 ) {
 #else
 				{
 #endif
-					IDWriteFont1* dwriteFont1 = nullptr;
-					HRESULT hr1 = dwriteFont->QueryInterface(
-						__uuidof( IDWriteFont1 ),
-						reinterpret_cast<void**>( &dwriteFont1 ) );
-					if ( SUCCEEDED( hr1 ) && dwriteFont1 ) {
+					ComPtr<IDWriteFont1> dwriteFont1;
+					if ( SUCCEEDED( dwriteFont.As( &dwriteFont1 ) ) && dwriteFont1 ) {
 						DWRITE_PANOSE panose;
 						dwriteFont1->GetPanose( &panose );
 						const BYTE* raw = reinterpret_cast<const BYTE*>( &panose );
-						desc.monospace =
-							( raw[0] == 2 && raw[3] == 9 );
-						dwriteFont1->Release();
+						desc.monospace = ( raw[0] == 2 && raw[3] == 9 );
 					}
 				}
 
 				mFontList.push_back( desc );
 			}
-
-			fontFace->Release();
-			dwriteFont->Release();
 		}
-
-		fontFamily->Release();
 	}
-
-	collection->Release();
 }
 
 // =====================================================================
@@ -680,10 +641,8 @@ void SystemFontResolver::populateFontList() const {
 		CFRelease( mandatoryAttrs );
 		CFRelease( familyDesc );
 
-		if ( !matchingDescs ) {
-			CFRelease( descriptors );
-			return;
-		}
+		if ( !matchingDescs )
+			continue;
 
 		CFIndex matchCount = CFArrayGetCount( matchingDescs );
 
@@ -710,6 +669,7 @@ void SystemFontResolver::populateFontList() const {
 			CGFloat widthVal = 0.0;
 			CGFloat slantVal = 0.0;
 			int isMono = 0;
+
 			if ( traits ) {
 				CFNumberRef weightNum =
 					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontWeightTrait );
@@ -726,10 +686,13 @@ void SystemFontResolver::populateFontList() const {
 				if ( slantNum )
 					CFNumberGetValue( slantNum, kCFNumberCGFloatType, &slantVal );
 
-				CFNumberRef monoNum =
-					(CFNumberRef)CFDictionaryGetValue( traits, (const void*)(uintptr_t)kCTFontMonoSpaceTrait );
-				if ( monoNum )
-					CFNumberGetValue( monoNum, kCFNumberIntType, &isMono );
+				CFNumberRef symbolicTraitsNum =
+					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontSymbolicTrait );
+				if ( symbolicTraitsNum ) {
+					int symbolicTraits = 0;
+					CFNumberGetValue( symbolicTraitsNum, kCFNumberIntType, &symbolicTraits );
+					isMono = ( symbolicTraits & kCTFontMonoSpaceTrait ) != 0;
+				}
 
 				CFRelease( traits );
 			}
@@ -819,29 +782,26 @@ struct FcLib {
 		if ( !handle )
 			return false;
 
-		Init = ( decltype( Init ) )Sys::loadFunction( handle, "FcInit" );
-		PatternCreate =
-			( decltype( PatternCreate ) )Sys::loadFunction( handle, "FcPatternCreate" );
+		Init = (decltype( Init ))Sys::loadFunction( handle, "FcInit" );
+		PatternCreate = (decltype( PatternCreate ))Sys::loadFunction( handle, "FcPatternCreate" );
 		ObjectSetCreate =
-			( decltype( ObjectSetCreate ) )Sys::loadFunction( handle, "FcObjectSetCreate" );
-		ObjectSetAdd =
-			( decltype( ObjectSetAdd ) )Sys::loadFunction( handle, "FcObjectSetAdd" );
-		FontList = ( decltype( FontList ) )Sys::loadFunction( handle, "FcFontList" );
+			(decltype( ObjectSetCreate ))Sys::loadFunction( handle, "FcObjectSetCreate" );
+		ObjectSetAdd = (decltype( ObjectSetAdd ))Sys::loadFunction( handle, "FcObjectSetAdd" );
+		FontList = (decltype( FontList ))Sys::loadFunction( handle, "FcFontList" );
 		PatternDestroy =
-			( decltype( PatternDestroy ) )Sys::loadFunction( handle, "FcPatternDestroy" );
+			(decltype( PatternDestroy ))Sys::loadFunction( handle, "FcPatternDestroy" );
 		ObjectSetDestroy =
-			( decltype( ObjectSetDestroy ) )Sys::loadFunction( handle, "FcObjectSetDestroy" );
+			(decltype( ObjectSetDestroy ))Sys::loadFunction( handle, "FcObjectSetDestroy" );
 		FontSetDestroy =
-			( decltype( FontSetDestroy ) )Sys::loadFunction( handle, "FcFontSetDestroy" );
+			(decltype( FontSetDestroy ))Sys::loadFunction( handle, "FcFontSetDestroy" );
 		PatternGetString =
-			( decltype( PatternGetString ) )Sys::loadFunction( handle, "FcPatternGetString" );
+			(decltype( PatternGetString ))Sys::loadFunction( handle, "FcPatternGetString" );
 		PatternGetInteger =
-			( decltype( PatternGetInteger ) )Sys::loadFunction( handle, "FcPatternGetInteger" );
+			(decltype( PatternGetInteger ))Sys::loadFunction( handle, "FcPatternGetInteger" );
 
 		return Init && PatternCreate && ObjectSetCreate && ObjectSetAdd && FontList &&
 			   PatternDestroy && ObjectSetDestroy && FontSetDestroy && PatternGetString &&
 			   PatternGetInteger;
-
 	}
 
 	void unload() {
@@ -896,8 +856,6 @@ static FontStretch fcWidthToFontStretch( int fcWidth ) {
 	return FontStretch::UltraExpanded;
 }
 
-
-
 void SystemFontResolver::populateFontList() const {
 	FcLib fc;
 	if ( !fc.load() ) {
@@ -935,8 +893,7 @@ void SystemFontResolver::populateFontList() const {
 		FcLib::FcPattern* font = fontSet->fonts[i];
 
 		FcLib::FcChar8* family = nullptr;
-		if ( fc.PatternGetString( font, "family", 0, &family ) != FcLib::FcResultMatch ||
-			 !family )
+		if ( fc.PatternGetString( font, "family", 0, &family ) != FcLib::FcResultMatch || !family )
 			continue;
 
 		FcLib::FcChar8* file = nullptr;
@@ -1134,11 +1091,7 @@ void SystemFontResolver::populateFontListXml() const {
 		}
 	}
 #else
-	static const char* fontDirs[] = {
-		"/usr/share/fonts",
-		"/usr/local/share/fonts",
-		nullptr
-	};
+	static const char* fontDirs[] = { "/usr/share/fonts", "/usr/local/share/fonts", nullptr };
 
 	for ( int d = 0; fontDirs[d]; ++d ) {
 		if ( !FileSystem::isDirectory( std::string( fontDirs[d] ) ) )
