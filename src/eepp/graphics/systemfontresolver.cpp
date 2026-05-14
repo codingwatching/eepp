@@ -1,3 +1,8 @@
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreText/CoreText.h>
+#endif
+
 #include <eepp/core/string.hpp>
 #include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/system/filesystem.hpp>
@@ -12,17 +17,9 @@
 #define NOMINMAX
 #endif
 #include <dwrite.h>
+#include <dwrite_1.h>
 #include <windows.h>
 #pragma comment( lib, "dwrite.lib" )
-#endif
-
-#if EE_PLATFORM == EE_PLATFORM_MACOS || EE_PLATFORM == EE_PLATFORM_IOS
-#include <CoreFoundation/CoreFoundation.h>
-#include <CoreText/CoreText.h>
-#endif
-
-#if EE_PLATFORM == EE_PLATFORM_LINUX || EE_PLATFORM == EE_PLATFORM_BSD
-#include <fontconfig/fontconfig.h>
 #endif
 
 #if EE_PLATFORM == EE_PLATFORM_ANDROID
@@ -564,9 +561,20 @@ void SystemFontResolver::populateFontList() const {
 				desc.italic =
 					( dwStyle == DWRITE_FONT_STYLE_ITALIC || dwStyle == DWRITE_FONT_STYLE_OBLIQUE );
 
-				DWRITE_PANOSE panose;
-				dwriteFont->GetPanose( &panose );
-				desc.monospace = ( panose.familyKind == 2 && panose.text.panoseProportion == 9 );
+				__if_exists( IDWriteFont1 ) {
+					IDWriteFont1* dwriteFont1 = nullptr;
+					HRESULT hr1 = dwriteFont->QueryInterface(
+						__uuidof( IDWriteFont1 ),
+						reinterpret_cast<void**>( &dwriteFont1 ) );
+					if ( SUCCEEDED( hr1 ) && dwriteFont1 ) {
+						DWRITE_PANOSE panose;
+						dwriteFont1->GetPanose( &panose );
+						desc.monospace =
+							( panose.familyKind == 2 &&
+							  panose.text.panoseProportion == 9 );
+						dwriteFont1->Release();
+					}
+				}
 
 				mFontList.push_back( desc );
 			}
@@ -690,36 +698,34 @@ void SystemFontResolver::populateFontList() const {
 			if ( fontPath.empty() )
 				continue;
 
-			CFNumberRef weightNum =
-				(CFNumberRef)CTFontDescriptorCopyAttribute( desc, kCTFontWeightTrait );
+			CFDictionaryRef traits =
+				(CFDictionaryRef)CTFontDescriptorCopyAttribute( desc, kCTFontTraitsAttribute );
 			CGFloat weightVal = 0.0;
-			if ( weightNum ) {
-				CFNumberGetValue( weightNum, kCFNumberCGFloatType, &weightVal );
-				CFRelease( weightNum );
-			}
-
-			CFNumberRef widthNum =
-				(CFNumberRef)CTFontDescriptorCopyAttribute( desc, kCTFontWidthTrait );
 			CGFloat widthVal = 0.0;
-			if ( widthNum ) {
-				CFNumberGetValue( widthNum, kCFNumberCGFloatType, &widthVal );
-				CFRelease( widthNum );
-			}
-
-			CFNumberRef slantNum =
-				(CFNumberRef)CTFontDescriptorCopyAttribute( desc, kCTFontSlantTrait );
 			CGFloat slantVal = 0.0;
-			if ( slantNum ) {
-				CFNumberGetValue( slantNum, kCFNumberCGFloatType, &slantVal );
-				CFRelease( slantNum );
-			}
-
-			CFNumberRef monoNum =
-				(CFNumberRef)CTFontDescriptorCopyAttribute( desc, kCTFontMonoSpaceTrait );
 			int isMono = 0;
-			if ( monoNum ) {
-				CFNumberGetValue( monoNum, kCFNumberIntType, &isMono );
-				CFRelease( monoNum );
+			if ( traits ) {
+				CFNumberRef weightNum =
+					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontWeightTrait );
+				if ( weightNum )
+					CFNumberGetValue( weightNum, kCFNumberCGFloatType, &weightVal );
+
+				CFNumberRef widthNum =
+					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontWidthTrait );
+				if ( widthNum )
+					CFNumberGetValue( widthNum, kCFNumberCGFloatType, &widthVal );
+
+				CFNumberRef slantNum =
+					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontSlantTrait );
+				if ( slantNum )
+					CFNumberGetValue( slantNum, kCFNumberCGFloatType, &slantVal );
+
+				CFNumberRef monoNum =
+					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontMonoSpaceTrait );
+				if ( monoNum )
+					CFNumberGetValue( monoNum, kCFNumberIntType, &isMono );
+
+				CFRelease( traits );
 			}
 
 			FontDesc fontDesc;
@@ -741,91 +747,210 @@ void SystemFontResolver::populateFontList() const {
 }
 
 // =====================================================================
-// Platform: Linux / FreeBSD (Fontconfig)
+// Platform: Linux / FreeBSD (Fontconfig — dynamically loaded)
 // =====================================================================
 #elif EE_PLATFORM == EE_PLATFORM_LINUX || EE_PLATFORM == EE_PLATFORM_BSD
 
+#include <eepp/system/sys.hpp>
+
+struct FcLib {
+	void* handle{ nullptr };
+
+	using FcChar8 = unsigned char;
+	using FcBool = int;
+	using FcResult = int;
+
+	struct FcPattern;
+	struct FcObjectSet;
+	struct FcFontSet {
+		int nfont;
+		int sfont;
+		FcPattern** fonts;
+	};
+
+	static constexpr int FcResultMatch = 0;
+
+	static constexpr int FC_WEIGHT_THIN = 0;
+	static constexpr int FC_WEIGHT_EXTRALIGHT = 40;
+	static constexpr int FC_WEIGHT_LIGHT = 50;
+	static constexpr int FC_WEIGHT_REGULAR = 80;
+	static constexpr int FC_WEIGHT_MEDIUM = 100;
+	static constexpr int FC_WEIGHT_SEMIBOLD = 180;
+	static constexpr int FC_WEIGHT_BOLD = 200;
+	static constexpr int FC_WEIGHT_EXTRABOLD = 205;
+	static constexpr int FC_WEIGHT_BLACK = 210;
+
+	static constexpr int FC_WIDTH_ULTRACONDENSED = 50;
+	static constexpr int FC_WIDTH_EXTRACONDENSED = 63;
+	static constexpr int FC_WIDTH_CONDENSED = 75;
+	static constexpr int FC_WIDTH_SEMICONDENSED = 87;
+	static constexpr int FC_WIDTH_NORMAL = 100;
+	static constexpr int FC_WIDTH_SEMIEXPANDED = 113;
+	static constexpr int FC_WIDTH_EXPANDED = 125;
+	static constexpr int FC_WIDTH_EXTRAEXPANDED = 150;
+
+	static constexpr int FC_SLANT_ROMAN = 0;
+	static constexpr int FC_SLANT_ITALIC = 100;
+	static constexpr int FC_SLANT_OBLIQUE = 110;
+
+	static constexpr int FC_MONO = 100;
+
+	FcBool ( *Init )( void );
+	FcPattern* ( *PatternCreate )( void );
+	FcObjectSet* ( *ObjectSetCreate )( void );
+	FcBool ( *ObjectSetAdd )( FcObjectSet*, const char* );
+	FcFontSet* ( *FontList )( void*, FcPattern*, FcObjectSet* );
+	void ( *PatternDestroy )( FcPattern* );
+	void ( *ObjectSetDestroy )( FcObjectSet* );
+	void ( *FontSetDestroy )( FcFontSet* );
+	FcResult ( *PatternGetString )( const FcPattern*, const char*, int, FcChar8** );
+	FcResult ( *PatternGetInteger )( const FcPattern*, const char*, int, int* );
+
+	bool load() {
+		handle = Sys::loadObject( "libfontconfig.so.1" );
+		if ( !handle )
+			handle = Sys::loadObject( "libfontconfig.so" );
+		if ( !handle )
+			return false;
+
+		Init = ( decltype( Init ) )Sys::loadFunction( handle, "FcInit" );
+		PatternCreate =
+			( decltype( PatternCreate ) )Sys::loadFunction( handle, "FcPatternCreate" );
+		ObjectSetCreate =
+			( decltype( ObjectSetCreate ) )Sys::loadFunction( handle, "FcObjectSetCreate" );
+		ObjectSetAdd =
+			( decltype( ObjectSetAdd ) )Sys::loadFunction( handle, "FcObjectSetAdd" );
+		FontList = ( decltype( FontList ) )Sys::loadFunction( handle, "FcFontList" );
+		PatternDestroy =
+			( decltype( PatternDestroy ) )Sys::loadFunction( handle, "FcPatternDestroy" );
+		ObjectSetDestroy =
+			( decltype( ObjectSetDestroy ) )Sys::loadFunction( handle, "FcObjectSetDestroy" );
+		FontSetDestroy =
+			( decltype( FontSetDestroy ) )Sys::loadFunction( handle, "FcFontSetDestroy" );
+		PatternGetString =
+			( decltype( PatternGetString ) )Sys::loadFunction( handle, "FcPatternGetString" );
+		PatternGetInteger =
+			( decltype( PatternGetInteger ) )Sys::loadFunction( handle, "FcPatternGetInteger" );
+
+		return Init && PatternCreate && ObjectSetCreate && ObjectSetAdd && FontList &&
+			   PatternDestroy && ObjectSetDestroy && FontSetDestroy && PatternGetString &&
+			   PatternGetInteger;
+
+	}
+
+	void unload() {
+		if ( handle ) {
+			Sys::unloadObject( handle );
+			handle = nullptr;
+		}
+	}
+};
+
+#define FC_W( v ) FcLib::FC_WEIGHT_##v
+#define FC_S( v ) FcLib::FC_SLANT_##v
+#define FC_WI( v ) FcLib::FC_WIDTH_##v
+
 static FontWeight fcWeightToFontWeight( int fcWeight ) {
-	if ( fcWeight <= FC_WEIGHT_THIN )
+	if ( fcWeight <= FC_W( THIN ) )
 		return FontWeight::Thin;
-	if ( fcWeight <= FC_WEIGHT_EXTRALIGHT )
+	if ( fcWeight <= FC_W( EXTRALIGHT ) )
 		return FontWeight::ExtraLight;
-	if ( fcWeight <= FC_WEIGHT_LIGHT )
+	if ( fcWeight <= FC_W( LIGHT ) )
 		return FontWeight::Light;
-	if ( fcWeight <= FC_WEIGHT_REGULAR )
+	if ( fcWeight <= FC_W( REGULAR ) )
 		return FontWeight::Normal;
-	if ( fcWeight <= FC_WEIGHT_MEDIUM )
+	if ( fcWeight <= FC_W( MEDIUM ) )
 		return FontWeight::Medium;
-	if ( fcWeight <= FC_WEIGHT_SEMIBOLD )
+	if ( fcWeight <= FC_W( SEMIBOLD ) )
 		return FontWeight::SemiBold;
-	if ( fcWeight <= FC_WEIGHT_BOLD )
+	if ( fcWeight <= FC_W( BOLD ) )
 		return FontWeight::Bold;
-	if ( fcWeight <= FC_WEIGHT_EXTRABOLD )
+	if ( fcWeight <= FC_W( EXTRABOLD ) )
 		return FontWeight::ExtraBold;
 	return FontWeight::Black;
 }
 
 static FontStretch fcWidthToFontStretch( int fcWidth ) {
-	if ( fcWidth <= FC_WIDTH_ULTRACONDENSED )
+	if ( fcWidth <= FC_WI( ULTRACONDENSED ) )
 		return FontStretch::UltraCondensed;
-	if ( fcWidth <= FC_WIDTH_EXTRACONDENSED )
+	if ( fcWidth <= FC_WI( EXTRACONDENSED ) )
 		return FontStretch::ExtraCondensed;
-	if ( fcWidth <= FC_WIDTH_CONDENSED )
+	if ( fcWidth <= FC_WI( CONDENSED ) )
 		return FontStretch::Condensed;
-	if ( fcWidth <= FC_WIDTH_SEMICONDENSED )
+	if ( fcWidth <= FC_WI( SEMICONDENSED ) )
 		return FontStretch::SemiCondensed;
-	if ( fcWidth <= FC_WIDTH_NORMAL )
+	if ( fcWidth <= FC_WI( NORMAL ) )
 		return FontStretch::Normal;
-	if ( fcWidth <= FC_WIDTH_SEMIEXPANDED )
+	if ( fcWidth <= FC_WI( SEMIEXPANDED ) )
 		return FontStretch::SemiExpanded;
-	if ( fcWidth <= FC_WIDTH_EXPANDED )
+	if ( fcWidth <= FC_WI( EXPANDED ) )
 		return FontStretch::Expanded;
-	if ( fcWidth <= FC_WIDTH_EXTRAEXPANDED )
+	if ( fcWidth <= FC_WI( EXTRAEXPANDED ) )
 		return FontStretch::ExtraExpanded;
 	return FontStretch::UltraExpanded;
 }
 
+
+
 void SystemFontResolver::populateFontList() const {
-	if ( !FcInit() )
+	FcLib fc;
+	if ( !fc.load() ) {
+		populateFontListXml();
 		return;
-
-	FcPattern* pattern = FcPatternCreate();
-	FcObjectSet* os = FcObjectSetBuild( FC_FAMILY, FC_FILE, FC_INDEX, FC_WEIGHT, FC_WIDTH, FC_SLANT,
-										FC_SPACING, nullptr );
-
-	FcFontSet* fontSet = FcFontList( nullptr, pattern, os );
-
-	FcPatternDestroy( pattern );
-	FcObjectSetDestroy( os );
-
-	if ( !fontSet )
+	}
+	if ( !fc.Init() ) {
+		fc.unload();
+		populateFontListXml();
 		return;
+	}
+
+	FcLib::FcPattern* pattern = fc.PatternCreate();
+	FcLib::FcObjectSet* os = fc.ObjectSetCreate();
+	fc.ObjectSetAdd( os, "family" );
+	fc.ObjectSetAdd( os, "file" );
+	fc.ObjectSetAdd( os, "index" );
+	fc.ObjectSetAdd( os, "weight" );
+	fc.ObjectSetAdd( os, "width" );
+	fc.ObjectSetAdd( os, "slant" );
+	fc.ObjectSetAdd( os, "spacing" );
+
+	FcLib::FcFontSet* fontSet = fc.FontList( nullptr, pattern, os );
+
+	fc.PatternDestroy( pattern );
+	fc.ObjectSetDestroy( os );
+
+	if ( !fontSet ) {
+		fc.unload();
+		populateFontListXml();
+		return;
+	}
 
 	for ( int i = 0; i < fontSet->nfont; ++i ) {
-		FcPattern* font = fontSet->fonts[i];
+		FcLib::FcPattern* font = fontSet->fonts[i];
 
-		FcChar8* family = nullptr;
-		if ( FcPatternGetString( font, FC_FAMILY, 0, &family ) != FcResultMatch || !family )
+		FcLib::FcChar8* family = nullptr;
+		if ( fc.PatternGetString( font, "family", 0, &family ) != FcLib::FcResultMatch ||
+			 !family )
 			continue;
 
-		FcChar8* file = nullptr;
-		if ( FcPatternGetString( font, FC_FILE, 0, &file ) != FcResultMatch || !file )
+		FcLib::FcChar8* file = nullptr;
+		if ( fc.PatternGetString( font, "file", 0, &file ) != FcLib::FcResultMatch || !file )
 			continue;
 
 		int fcIndex = 0;
-		FcPatternGetInteger( font, FC_INDEX, 0, &fcIndex );
+		fc.PatternGetInteger( font, "index", 0, &fcIndex );
 
-		int fcWeight = FC_WEIGHT_REGULAR;
-		FcPatternGetInteger( font, FC_WEIGHT, 0, &fcWeight );
+		int fcWeight = FC_W( REGULAR );
+		fc.PatternGetInteger( font, "weight", 0, &fcWeight );
 
-		int fcWidth = FC_WIDTH_NORMAL;
-		FcPatternGetInteger( font, FC_WIDTH, 0, &fcWidth );
+		int fcWidth = FC_WI( NORMAL );
+		fc.PatternGetInteger( font, "width", 0, &fcWidth );
 
-		int fcSlant = FC_SLANT_ROMAN;
-		FcPatternGetInteger( font, FC_SLANT, 0, &fcSlant );
+		int fcSlant = FC_S( ROMAN );
+		fc.PatternGetInteger( font, "slant", 0, &fcSlant );
 
-		int fcSpacing = FC_MONO;
-		FcPatternGetInteger( font, FC_SPACING, 0, &fcSpacing );
+		int fcSpacing = FcLib::FC_MONO;
+		fc.PatternGetInteger( font, "spacing", 0, &fcSpacing );
 
 		FontDesc desc;
 		desc.family = reinterpret_cast<const char*>( family );
@@ -833,13 +958,14 @@ void SystemFontResolver::populateFontList() const {
 		desc.faceIndex = fcIndex >= 0 ? static_cast<Uint32>( fcIndex ) : 0;
 		desc.weight = fcWeightToFontWeight( fcWeight );
 		desc.stretch = fcWidthToFontStretch( fcWidth );
-		desc.italic = ( fcSlant == FC_SLANT_ITALIC || fcSlant == FC_SLANT_OBLIQUE );
-		desc.monospace = ( fcSpacing == FC_MONO );
+		desc.italic = ( fcSlant == FC_S( ITALIC ) || fcSlant == FC_S( OBLIQUE ) );
+		desc.monospace = ( fcSpacing == FcLib::FC_MONO );
 
 		mFontList.push_back( desc );
 	}
 
-	FcFontSetDestroy( fontSet );
+	fc.FontSetDestroy( fontSet );
+	fc.unload();
 }
 
 // =====================================================================
@@ -864,7 +990,6 @@ void SystemFontResolver::populateFontList() const {
 	goto xml_fallback;
 
 xml_fallback:
-	// XML fallback below
 	populateFontListXml();
 }
 
@@ -875,64 +1000,6 @@ void SystemFontResolver::populateFontList() const {
 }
 
 #endif
-
-void SystemFontResolver::populateFontListXml() const {
-	static const char* fontPaths[] = { "/system/etc/fonts.xml", "/system/fonts/fonts.xml",
-									   "/vendor/etc/fonts.xml", nullptr };
-
-	const char* xmlPath = nullptr;
-	for ( int i = 0; fontPaths[i]; ++i ) {
-		if ( FileSystem::fileExists( fontPaths[i] ) ) {
-			xmlPath = fontPaths[i];
-			break;
-		}
-	}
-
-	if ( !xmlPath )
-		return;
-
-	pugi::xml_document doc;
-	pugi::xml_parse_result result = doc.load_file( xmlPath );
-	if ( !result )
-		return;
-
-	pugi::xml_node families = doc.child( "familyset" );
-	if ( !families )
-		return;
-
-	for ( pugi::xml_node familyNode : families.children( "family" ) ) {
-		std::string familyName = familyNode.attribute( "name" ).as_string();
-		if ( familyName.empty() )
-			continue;
-
-		for ( pugi::xml_node fontNode : familyNode.children( "font" ) ) {
-			std::string fontFile = fontNode.text().as_string();
-			if ( fontFile.empty() )
-				continue;
-
-			std::string fontPath = "/system/fonts/" + fontFile;
-			if ( !FileSystem::fileExists( fontPath ) )
-				fontPath = fontFile;
-
-			std::string weightStr = fontNode.attribute( "weight" ).as_string();
-			FontWeight weight = FontWeight::Normal;
-			if ( !weightStr.empty() )
-				weight = static_cast<FontWeight>( std::atoi( weightStr.c_str() ) );
-
-			std::string styleStr = fontNode.attribute( "style" ).as_string();
-			bool italic = ( styleStr == "italic" );
-
-			FontDesc desc;
-			desc.family = familyName;
-			desc.path = fontPath;
-			desc.faceIndex = 0;
-			desc.weight = weight;
-			desc.italic = italic;
-
-			mFontList.push_back( desc );
-		}
-	}
-}
 
 // =====================================================================
 // Platform: Haiku (BFont)
@@ -1002,5 +1069,92 @@ void SystemFontResolver::populateFontList() const {
 void SystemFontResolver::populateFontList() const {}
 
 #endif
+
+void SystemFontResolver::populateFontListXml() const {
+#if EE_PLATFORM == EE_PLATFORM_ANDROID
+	static const char* fontPaths[] = { "/system/etc/fonts.xml", "/system/fonts/fonts.xml",
+									   "/vendor/etc/fonts.xml", nullptr };
+
+	const char* xmlPath = nullptr;
+	for ( int i = 0; fontPaths[i]; ++i ) {
+		if ( FileSystem::fileExists( fontPaths[i] ) ) {
+			xmlPath = fontPaths[i];
+			break;
+		}
+	}
+
+	if ( !xmlPath )
+		return;
+
+	pugi::xml_document doc;
+	pugi::xml_parse_result result = doc.load_file( xmlPath );
+	if ( !result )
+		return;
+
+	pugi::xml_node families = doc.child( "familyset" );
+	if ( !families )
+		return;
+
+	for ( pugi::xml_node familyNode : families.children( "family" ) ) {
+		std::string familyName = familyNode.attribute( "name" ).as_string();
+		if ( familyName.empty() )
+			continue;
+
+		for ( pugi::xml_node fontNode : familyNode.children( "font" ) ) {
+			std::string fontFile = fontNode.text().as_string();
+			if ( fontFile.empty() )
+				continue;
+
+			std::string fontPath = "/system/fonts/" + fontFile;
+			if ( !FileSystem::fileExists( fontPath ) )
+				fontPath = fontFile;
+
+			std::string weightStr = fontNode.attribute( "weight" ).as_string();
+			FontWeight weight = FontWeight::Normal;
+			if ( !weightStr.empty() )
+				weight = static_cast<FontWeight>( std::atoi( weightStr.c_str() ) );
+
+			std::string styleStr = fontNode.attribute( "style" ).as_string();
+			bool italic = ( styleStr == "italic" );
+
+			FontDesc desc;
+			desc.family = familyName;
+			desc.path = fontPath;
+			desc.faceIndex = 0;
+			desc.weight = weight;
+			desc.italic = italic;
+
+			mFontList.push_back( desc );
+		}
+	}
+#else
+	static const char* fontDirs[] = {
+		"/usr/share/fonts",
+		"/usr/local/share/fonts",
+		nullptr
+	};
+
+	for ( int d = 0; fontDirs[d]; ++d ) {
+		if ( !FileSystem::isDirectory( std::string( fontDirs[d] ) ) )
+			continue;
+
+		auto files = FileSystem::filesGetInPath( std::string( fontDirs[d] ), false, true );
+		for ( const auto& file : files ) {
+			std::string ext = FileSystem::fileExtension( file );
+			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" )
+				continue;
+
+			std::string path = std::string( fontDirs[d] ) + FileSystem::getOSSlash() + file;
+
+			FontDesc desc;
+			desc.family = FileSystem::fileRemoveExtension( file );
+			desc.path = path;
+			desc.faceIndex = 0;
+			desc.weight = FontWeight::Normal;
+			mFontList.push_back( desc );
+		}
+	}
+#endif
+}
 
 }} // namespace EE::Graphics

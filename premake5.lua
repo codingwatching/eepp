@@ -921,9 +921,6 @@ function build_eepp( build_name )
 	filter { "action:export-compile-commands", "system:macosx" }
 		buildoptions { "-std=c++20" }
 
-	filter "system:linux or system:bsd"
-		links { "fontconfig" }
-
 	filter {}
 end
 

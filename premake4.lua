@@ -1051,10 +1051,6 @@ function build_eepp( build_name )
 		links { "bcrypt" }
 	end
 
-	if os.is_real("linux") or os.is_real("bsd") then
-		links { "fontconfig" }
-	end
-
 	files { "src/eepp/core/*.cpp",
 			"src/eepp/math/*.cpp",
 			"src/eepp/system/*.cpp",

@@ -102,6 +102,8 @@ class EE_API SystemFontResolver {
   private:
 	void populateFontList() const;
 
+	void populateFontListXml() const;
+
 	void populateGenericFallbacks() const;
 
 	static int scoreMatch( const FontQuery& query, const FontDesc& candidate );
