@@ -15,8 +15,8 @@
 #include <eepp/ui/uilinearlayout.hpp>
 #include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
-#include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uitextnode.hpp>
+#include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
 
@@ -29,8 +29,8 @@ using namespace EE::UI::Tools;
 
 static UI::UISceneNode* createRichTextScene() {
 	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Test",
-									  WindowStyle::Default, WindowBackend::Default,
-									  32, {}, 1, false, true ) );
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
@@ -837,25 +837,19 @@ UTEST( UIRichText, MarginsTest ) {
 
 	// Check the layout position of the second div
 	Vector2f pos2 = d2->getPixelsPosition();
-	// The widgets flow inline (horizontally) since total width < 800.
+	// Block elements each occupy their own line; d2 sits below d1 at the same x.
 	// d1 footprint width: 40 (left) + 50 (width) + 20 (right) = 110.
-	// d2 left margin: 5.
-	// Therefore d2 x position = 110 + 5 = 115.
-	// Line height is determined by max footprint height.
 	// d1 footprint height: 10 + 50 + 30 = 90.
-	// d2 footprint height: 5 + 50 + 5 = 60.
-	// Max ascent = 90.
-	// RichText baseline aligns elements to the bottom by default.
-	// d2 offsetY = 90 - 60 = 30.
-	// d2 y position = offsetY (30) + d2 margin top (5) = 35.
-	EXPECT_EQ( 115.f, pos2.x );
-	EXPECT_EQ( 35.f, pos2.y );
+	// d2 x = d1 left margin = 5 (its own left margin).
+	EXPECT_EQ( 5.f, pos2.x );
+	// d2 y = d1 footprint height (90) + d2 margin top (5) = 95.
+	EXPECT_EQ( 95.f, pos2.y );
 
 	// Check UIRichText bounds
-	// Width = d1 footprint (110) + d2 footprint (60) = 170.
-	// Height = line height (90).
-	EXPECT_EQ( 170.f, rt->getPixelsSize().getWidth() );
-	EXPECT_EQ( 90.f, rt->getPixelsSize().getHeight() );
+	// Width = max(d1 footprint: 110, d2 footprint: 60) = 110.
+	// Height = sum of line heights: d1 line 90 + d2 line 60 = 150.
+	EXPECT_EQ( 110.f, rt->getPixelsSize().getWidth() );
+	EXPECT_EQ( 150.f, rt->getPixelsSize().getHeight() );
 
 	destroyRichTextScene( sceneNode );
 }
