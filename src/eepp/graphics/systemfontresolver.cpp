@@ -1,6 +1,8 @@
 #ifdef __APPLE__
+#define Rect AppleRect
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreText/CoreText.h>
+#undef Rect
 #endif
 
 #include <eepp/core/string.hpp>
@@ -561,7 +563,11 @@ void SystemFontResolver::populateFontList() const {
 				desc.italic =
 					( dwStyle == DWRITE_FONT_STYLE_ITALIC || dwStyle == DWRITE_FONT_STYLE_OBLIQUE );
 
+#ifdef _MSC_VER
 				__if_exists( IDWriteFont1 ) {
+#else
+				{
+#endif
 					IDWriteFont1* dwriteFont1 = nullptr;
 					HRESULT hr1 = dwriteFont->QueryInterface(
 						__uuidof( IDWriteFont1 ),
@@ -569,9 +575,9 @@ void SystemFontResolver::populateFontList() const {
 					if ( SUCCEEDED( hr1 ) && dwriteFont1 ) {
 						DWRITE_PANOSE panose;
 						dwriteFont1->GetPanose( &panose );
+						const BYTE* raw = reinterpret_cast<const BYTE*>( &panose );
 						desc.monospace =
-							( panose.familyKind == 2 &&
-							  panose.text.panoseProportion == 9 );
+							( raw[0] == 2 && raw[3] == 9 );
 						dwriteFont1->Release();
 					}
 				}
@@ -721,7 +727,7 @@ void SystemFontResolver::populateFontList() const {
 					CFNumberGetValue( slantNum, kCFNumberCGFloatType, &slantVal );
 
 				CFNumberRef monoNum =
-					(CFNumberRef)CFDictionaryGetValue( traits, kCTFontMonoSpaceTrait );
+					(CFNumberRef)CFDictionaryGetValue( traits, (const void*)(uintptr_t)kCTFontMonoSpaceTrait );
 				if ( monoNum )
 					CFNumberGetValue( monoNum, kCFNumberIntType, &isMono );
 
