@@ -971,9 +971,6 @@ static UISceneNode* init_test_inline_block() {
 	SceneManager::instance()->setCurrentUISceneNode( sceneNode );
 	UIThemeManager* themeManager = sceneNode->getUIThemeManager();
 	themeManager->setDefaultFont( font );
-	UITheme* theme = UITheme::New( "default", "default" );
-	theme->setDefaultFont( font );
-	themeManager->setDefaultTheme( theme );
 	themeManager->applyDefaultTheme( sceneNode->getRoot() );
 	return sceneNode;
 }
@@ -986,7 +983,7 @@ UTEST( UIHTML, InlineBlock ) {
 
 	UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <!DOCTYPE html>
 <html>
 <head>
@@ -1008,7 +1005,7 @@ ul > li {
 	</ul>
 </body>
 </html>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 
@@ -1046,12 +1043,12 @@ UTEST( UIHTML, BlockList ) {
 
 	UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <ul id="block-list">
 	<li style="height: 20px">Item 1</li>
 	<li style="height: 20px">Item 2</li>
 </ul>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1091,12 +1088,12 @@ UTEST( UIHTML, InlineList ) {
 
 	UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <ul style="display: block">
 	<li style="display: inline">Item 1</li>
 	<li style="display: inline">Item 2</li>
 </ul>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1130,12 +1127,12 @@ UTEST( UIHTML, InlineBlockExplicitWidth ) {
 
 	UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <div style="width: 200px">
 	<div id="d1" style="display: inline-block; width: 150px; height: 50px"></div>
 	<div id="d2" style="display: inline-block; width: 150px; height: 50px"></div>
 </div>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1159,13 +1156,13 @@ UTEST( UIHTML, InlineBlockMixedContent ) {
 
 	UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <div>
 	Some text
 	<div id="ib" style="display: inline-block; width: 50px; height: 50px; background-color: red"></div>
 	more text
 </div>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1212,35 +1209,8 @@ UTEST( UIHTML, InlineBlockBrowserTest ) {
 									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
 
 	UI::UISceneNode* sceneNode = init_test_inline_block();
-
-	const std::string html = R"HTML(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<style>
-  .parent-container {
-    width: 450px;
-  }
-  .target {
-    background-color: #e0f7fa;
-  }
-  .is-inline-block {
-    display: inline-block;
-  }
-  .is-inline {
-    display: inline;
-  }
-</style>
-</head>
-<body>
-  <div class="parent-container" id="parent-ib">
-    <span id="t1">Here is some normal starting text.</span>
-    <span id="ib" class="target is-inline-block">This is the target inline-block element. If the container gets too narrow, this solid block drops to the next line, and its internal text will wrap, making the block taller without breaking.</span>
-    <span id="t2">And here is the text that comes immediately after. It gets pushed down correctly.</span>
-  </div>
-</body>
-</html>
-)HTML";
+	std::string html;
+	FileSystem::fileGet( "assets/html/is_inline_block.html", html );
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1254,11 +1224,13 @@ UTEST( UIHTML, InlineBlockBrowserTest ) {
 	// If it drops to the next line:
 	EXPECT_GT( ib->getPixelsPosition().y, t1->getPixelsPosition().y );
 	// And t2 should be AFTER ib (either horizontally or vertically)
-	EXPECT_GE( t2->getPixelsPosition().y, ib->getPixelsPosition().y );
+	EXPECT_GE( t2->getPixelsPosition().y,
+			   ib->getPixelsPosition().y + ib->getPixelsSize().getHeight() );
 	if ( t2->getPixelsPosition().y == ib->getPixelsPosition().y ) {
 		EXPECT_GE( t2->getPixelsPosition().x,
 				   ib->getPixelsPosition().x + ib->getPixelsSize().getWidth() );
 	}
+	EXPECT_EQ( ib->getPixelsPosition().x, t2->getPixelsPosition().x );
 
 	Engine::destroySingleton();
 }
@@ -1321,7 +1293,7 @@ UTEST( UIHTML, HeightExpansion_FixedDoesNotExpand ) {
 
 	UI::UISceneNode* sceneNode = init_test_inline_block();
 
-	const std::string html = R"HTML(
+	const std::string html = R"html(
 <!DOCTYPE html>
 <html>
 <body style="margin: 0; padding: 0;">
@@ -1329,7 +1301,7 @@ UTEST( UIHTML, HeightExpansion_FixedDoesNotExpand ) {
     <div style="position: fixed; top: 500px; height: 50px;"></div>
 </body>
 </html>
-)HTML";
+)html";
 
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	sceneNode->update( Seconds( 1 ) );
@@ -1600,5 +1572,73 @@ UTEST( UIHTML, AnchorsSizing ) {
 		}
 	}
 
+	Engine::destroySingleton();
+}
+
+static UISceneNode* createWinAndLoadHTML( std::string winName, std::string htmlPath ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, winName, WindowStyle::Default, WindowBackend::Default, 32, {}, 1,
+						false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	if ( font == nullptr || !font->loaded() )
+		return nullptr;
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	themeManager->setDefaultFont( font );
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+	std::string html;
+	FileSystem::fileGet( htmlPath, html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	return sceneNode;
+}
+
+UTEST( UIHTML, blockFlow ) {
+	auto sceneNode = createWinAndLoadHTML( "HTML Block Flow", "assets/html/block_flow.html" );
+	ASSERT_TRUE( sceneNode != nullptr );
+	auto sections = sceneNode->getRoot()->findAllByClass( "language-section" );
+
+	ASSERT_EQ( sections.size(), (size_t)6 );
+
+	// Each section is display block so we expect a single section per line
+	// if sections position are not equal it means that some sections are floating
+	Float ref = sections[0]->getPixelsPosition().x;
+	for ( auto section : sections )
+		EXPECT_EQ( section->getPixelsPosition().x, ref );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, blockFlowFloat ) {
+	auto sceneNode =
+		createWinAndLoadHTML( "HTML Block Flow", "assets/html/block_flow_float_left.html" );
+	ASSERT_TRUE( sceneNode != nullptr );
+	auto sections = sceneNode->getRoot()->findAllByClass( "language-section" );
+
+	ASSERT_EQ( sections.size(), (size_t)6 );
+
+	// Each section is display block with float: left and width 48% so we expect two sections
+	// per line, and each odd index should be to the right
+	Float refLeft = sections[0]->getPixelsPosition().x;
+	Float refRight = sections[1]->getPixelsPosition().x;
+	for ( size_t idx = 0; idx < sections.size(); idx++ ) {
+		Float expected = idx % 2 == 0 ? refLeft : refRight;
+		EXPECT_EQ( sections[idx]->getPixelsPosition().x, expected );
+	}
 	Engine::destroySingleton();
 }

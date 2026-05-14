@@ -8,8 +8,8 @@
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
-#include <eepp/ui/uithememanager.hpp>
 #include <eepp/ui/uitheme.hpp>
+#include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
 #include <eepp/window/window.hpp>
 
@@ -19,9 +19,9 @@ using namespace EE::Window;
 using namespace EE::Graphics;
 
 static void init_float_test() {
-	Engine::instance()->createWindow(
-		WindowSettings( 800, 600, "Float Layout Test", WindowStyle::Default, WindowBackend::Default,
-						32, {}, 1, false, true ) );
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "Float Layout Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
@@ -118,11 +118,13 @@ UTEST( UIHTMLFloat, richtext_NoFloatLayout_NoChange ) {
 	child1->setParent( container );
 	child1->setPixelsSize( 100, 50 );
 	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child1->setDisplay( CSSDisplay::InlineBlock );
 
 	UIHTMLWidget* child2 = UIHTMLWidget::New();
 	child2->setParent( container );
 	child2->setPixelsSize( 150, 30 );
 	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child2->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -542,10 +544,10 @@ UTEST( UIHTMLFloat, floatLeftNonHTMLwidget_NoCrash ) {
 }
 
 UTEST( UIHTMLFloat, floatNotAffectedByTextAlignCenter ) {
-	Engine::instance()->createWindow(
-		WindowSettings( 800, 600, "Float + TextAlign Test", WindowStyle::Default,
-						WindowBackend::Default, 32, {}, 1, false, true ),
-		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "Float + TextAlign Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );

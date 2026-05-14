@@ -1032,12 +1032,15 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					CSSDisplay display = widget->asType<UIHTMLWidget>()->getDisplay();
 					if ( display == CSSDisplay::Inline || display == CSSDisplay::InlineBlock )
 						isBlock = false;
-					else if ( display == CSSDisplay::ListItem )
+					else if ( display != CSSDisplay::None )
 						isBlock = true;
 				}
 
+				bool fillParent =
+					isBlock && widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
+
 				if ( mode == IntrinsicMode::None ) {
-					if ( isBlock ) {
+					if ( fillParent ) {
 						if ( container->getPixelsSize().getWidth() != 0 ) {
 							Float maxSize =
 								eemax( 0.f, container->getPixelsSize().getWidth() -
@@ -1070,7 +1073,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				}
 
 				Float w = size.getWidth();
-				if ( isBlock && mode == IntrinsicMode::None &&
+				if ( fillParent && mode == IntrinsicMode::None &&
 					 container->getPixelsSize().getWidth() != 0 ) {
 					w = eemax( 0.f, container->getPixelsSize().getWidth() -
 										container->getPixelsContentOffset().Left -

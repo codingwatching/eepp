@@ -27,9 +27,9 @@ UTEST( CSSInheritance, HtmlXmlLoadingInheritance ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Inheritance Test", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -43,7 +43,7 @@ UTEST( CSSInheritance, HtmlXmlLoadingInheritance ) {
 	<div id="testdiv">This is not color black</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -66,7 +66,7 @@ UTEST( CSSInheritance, ComputedFontSize ) {
 						   UIApplication::Settings(
 							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
 
-		std::string xml = R"(
+		std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -82,7 +82,7 @@ UTEST( CSSInheritance, ComputedFontSize ) {
 	<h1 id="testh1">test text</h1>
 </body>
 </html>
-    )";
+    )html";
 
 		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 		EXPECT_TRUE( root != nullptr );
@@ -114,7 +114,7 @@ UTEST( CSSInheritance, ComputedFontSizePercentageAndRem ) {
 						   UIApplication::Settings(
 							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
 
-		std::string xml = R"(
+		std::string xml = R"html(
 	<html>
 	<head>
 		<style>
@@ -145,7 +145,7 @@ UTEST( CSSInheritance, ComputedFontSizePercentageAndRem ) {
 	</div>
 	</body>
 	</html>
-	)";
+	)html";
 
 		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 		EXPECT_TRUE( root != nullptr );
@@ -161,9 +161,9 @@ UTEST( CSSInheritance, ExplicitColorInherit ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Color Inherit Test", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -179,7 +179,7 @@ UTEST( CSSInheritance, ExplicitColorInherit ) {
 	<div>color set on body<div id="child">should be red via inherit</div></div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -198,7 +198,7 @@ UTEST( CSSInheritance, ExplicitFontSizeInherit ) {
 						   UIApplication::Settings(
 							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
 
-		std::string xml = R"(
+		std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -217,7 +217,7 @@ UTEST( CSSInheritance, ExplicitFontSizeInherit ) {
 	<div id="parent">parent<div id="child">child with inherit</div></div>
 </body>
 </html>
-    )";
+    )html";
 
 		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 		EXPECT_TRUE( root != nullptr );
@@ -236,7 +236,7 @@ UTEST( CSSInheritance, ExplicitFontSizeInheritEm ) {
 						   UIApplication::Settings(
 							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), scale ) );
 
-		std::string xml = R"(
+		std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -255,7 +255,7 @@ UTEST( CSSInheritance, ExplicitFontSizeInheritEm ) {
 	<div id="parent">parent (1.5em = 36px)<div id="child">inherit should be 36px</div></div>
 </body>
 </html>
-    )";
+    )html";
 
 		UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 		EXPECT_TRUE( root != nullptr );
@@ -271,9 +271,9 @@ UTEST( CSSInheritance, ExplicitFontFamilyInherit ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS FontFamily Inherit Test", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -289,7 +289,7 @@ UTEST( CSSInheritance, ExplicitFontFamilyInherit ) {
 	<div id="parent"><div id="child">child with font-family: inherit</div></div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -308,9 +308,9 @@ UTEST( CSSInheritance, ExplicitBackgroundColorInherit ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS BGColor Inherit Test", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -326,7 +326,7 @@ UTEST( CSSInheritance, ExplicitBackgroundColorInherit ) {
 	<div id="child">child with background-color: inherit</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -353,7 +353,7 @@ UTEST( CSSUnits, ExChWithFont ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Units Ex/Ch Test", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1.f );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
 	Graphics::Font* font = app.getUI()->getUIThemeManager()->getDefaultFont();
 	EXPECT_TRUE( font != nullptr );
@@ -378,9 +378,9 @@ UTEST( CSSVariables, VariableReferencesSimple ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 1", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -395,7 +395,7 @@ UTEST( CSSVariables, VariableReferencesSimple ) {
 	<div id="testdiv">Test text</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -410,9 +410,9 @@ UTEST( CSSVariables, VariableReferencesChain ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 2", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -428,7 +428,7 @@ UTEST( CSSVariables, VariableReferencesChain ) {
 	<div id="testdiv">Test text</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -442,10 +442,10 @@ UTEST( CSSVariables, VariableReferencesChain ) {
 UTEST( CSSVariables, VariableReferencesWithPadding ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 3", WindowStyle::Default,
-						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+						WindowBackend::Default, 32, {}, 1 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -460,7 +460,7 @@ UTEST( CSSVariables, VariableReferencesWithPadding ) {
 	<div id="testdiv">Test text</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -476,9 +476,9 @@ UTEST( CSSVariables, VariableReferencesMultiple ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 4", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -494,7 +494,7 @@ UTEST( CSSVariables, VariableReferencesMultiple ) {
 	<div id="testdiv">Test text</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
@@ -509,9 +509,9 @@ UTEST( CSSVariables, VariableReferencesCircular ) {
 	UIApplication app(
 		WindowSettings( 800, 600, "eepp - CSS Var Ref Test 5", WindowStyle::Default,
 						WindowBackend::Default, 32 ),
-		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash() ), 1 );
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 
-	std::string xml = R"(
+	std::string xml = R"html(
 <html>
 	<head>
 		<style>
@@ -526,7 +526,7 @@ UTEST( CSSVariables, VariableReferencesCircular ) {
 	<div id="testdiv">Test text</div>
 </body>
 </html>
-    )";
+    )html";
 
 	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
 	EXPECT_TRUE( root != nullptr );
