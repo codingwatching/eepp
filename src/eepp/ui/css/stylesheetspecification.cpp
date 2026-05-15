@@ -1,3 +1,4 @@
+#include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/system/log.hpp>
 #include <eepp/ui/css/propertyspecification.hpp>
 #include <eepp/ui/css/stylesheetspecification.hpp>
@@ -1348,8 +1349,26 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		static const std::string systemFonts[] = { "caption",	  "icon",		   "menu",
 												   "message-box", "small-caption", "status-bar" };
 		for ( const auto& sysFont : systemFonts ) {
-			if ( lowerVal == sysFont )
-				return {};
+			if ( lowerVal == sysFont ) {
+				std::vector<StyleSheetProperty> properties;
+				const std::vector<std::string>& propNames = shorthand->getProperties();
+				int familyPos = getIndexEndingWith( propNames, "-family" );
+				int stylePos = getIndexEndingWith( propNames, "-style" );
+				if ( familyPos != -1 && Graphics::SystemFontResolver::isEnabled() ) {
+					Graphics::FontDesc desc =
+						Graphics::SystemFontResolver::instance()->resolveGeneric(
+							Graphics::GenericFamily::SystemUi, Graphics::FontWeight::Normal,
+							false );
+					if ( !desc.family.empty() ) {
+						properties.emplace_back(
+							StyleSheetProperty( propNames[familyPos], desc.family ) );
+						if ( stylePos != -1 )
+							properties.emplace_back( StyleSheetProperty(
+								propNames[stylePos], desc.italic ? "italic" : "normal" ) );
+					}
+				}
+				return properties;
+			}
 		}
 
 		std::vector<StyleSheetProperty> properties;

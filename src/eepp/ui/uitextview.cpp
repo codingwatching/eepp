@@ -179,6 +179,10 @@ UITextView* UITextView::setFontStyle( const Uint32& fontStyle ) {
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
 		invalidateDraw();
+
+		if ( auto* newFont =
+				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, fontStyle ) )
+			setFont( newFont );
 	}
 
 	return this;
@@ -742,7 +746,8 @@ bool UITextView::applyProperty( const StyleSheetProperty& attribute ) {
 				setSelectionBackColor( attribute.asColor() );
 			break;
 		case PropertyId::FontFamily: {
-			Font* font = getUISceneNode()->getFontFromNamesList( attribute.value() );
+			Font* font =
+				getUISceneNode()->getFontFromNamesList( attribute.value(), getFontStyle() );
 			if ( !mUsingCustomStyling && NULL != font && font->loaded() ) {
 				setFont( font );
 			}

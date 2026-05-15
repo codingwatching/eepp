@@ -518,6 +518,10 @@ UIRichText* UIRichText::setFontStyle( const Uint32& fontStyle ) {
 		notifyLayoutAttrChange();
 		notifyLayoutAttrChangeParent();
 		updateDefaultSpansStyle();
+
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mRichText.getFontStyleConfig().Font, fontStyle ) )
+			setFont( newFont );
 	}
 	return this;
 }
