@@ -762,6 +762,7 @@ struct FcLib {
 	static constexpr int FC_SLANT_ITALIC = 100;
 	static constexpr int FC_SLANT_OBLIQUE = 110;
 
+	static constexpr int FC_PROPORTIONAL = 0;
 	static constexpr int FC_MONO = 100;
 
 	FcBool ( *Init )( void );
@@ -912,13 +913,13 @@ void SystemFontResolver::populateFontList() const {
 		int fcSlant = FC_S( ROMAN );
 		fc.PatternGetInteger( font, "slant", 0, &fcSlant );
 
-		int fcSpacing = FcLib::FC_MONO;
+		int fcSpacing = FcLib::FC_PROPORTIONAL;
 		fc.PatternGetInteger( font, "spacing", 0, &fcSpacing );
 
 		FontDesc desc;
 		desc.family = reinterpret_cast<const char*>( family );
 		desc.path = reinterpret_cast<const char*>( file );
-		desc.faceIndex = fcIndex >= 0 ? static_cast<Uint32>( fcIndex ) : 0;
+		desc.faceIndex = fcIndex >= 0 ? static_cast<Uint32>( fcIndex & 0xFFFF ) : 0;
 		desc.weight = fcWeightToFontWeight( fcWeight );
 		desc.stretch = fcWidthToFontStretch( fcWidth );
 		desc.italic = ( fcSlant == FC_S( ITALIC ) || fcSlant == FC_S( OBLIQUE ) );
