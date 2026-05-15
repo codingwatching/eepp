@@ -61,7 +61,7 @@ UTEST( SystemFontResolver, enumerate ) {
 	SystemFontResolver::setEnabled( true );
 	auto* resolver = SystemFontResolver::instance();
 	const auto& fonts = resolver->enumerate();
-	UTEST_PRINTF( "Enumerated %zu system fonts\n", fonts.size() );
+	UTEST_PRINT_INFO( String::format( "Enumerated %zu system fonts", fonts.size() ).c_str() );
 
 #if EE_PLATFORM == EE_PLATFORM_LINUX || EE_PLATFORM == EE_PLATFORM_BSD
 	EXPECT_TRUE_MSG( fonts.size() > 0, "Fontconfig should find fonts on Linux/BSD" );
@@ -85,14 +85,14 @@ UTEST( SystemFontResolver, enumerateFamily ) {
 	SystemFontResolver::setEnabled( true );
 	auto* resolver = SystemFontResolver::instance();
 	auto fonts = resolver->enumerateFamily( "DejaVu Sans" );
-	UTEST_PRINTF( "Found %zu DejaVu Sans fonts\n", fonts.size() );
+	UTEST_PRINT_INFO( String::format( "Found %zu DejaVu Sans fonts", fonts.size() ).c_str() );
 
 	for ( const auto& desc : fonts ) {
 		EXPECT_FALSE( desc.path.empty() );
 	}
 
 	if ( !fonts.empty() ) {
-		UTEST_PRINT_STEP( "Verify faceIndex is set" );
+		UTEST_PRINT_INFO( "Verify faceIndex is set" );
 		EXPECT_EQ( (Uint32)0, fonts[0].faceIndex );
 	}
 
@@ -175,7 +175,9 @@ UTEST( SystemFontResolver, resolveGeneric ) {
 	UTEST_PRINT_STEP( "Resolve monospace" );
 	FontDesc descMono =
 		resolver->resolveGeneric( GenericFamily::Monospace, FontWeight::Normal, false );
-	UTEST_PRINTF( "Monospace default: %s at %s\n", descMono.family.c_str(), descMono.path.c_str() );
+	UTEST_PRINT_INFO( String::format( "Monospace default: %s at %s", descMono.family.c_str(),
+									  descMono.path.c_str() )
+						  .c_str() );
 
 	UTEST_PRINT_STEP( "Resolve sans-serif" );
 	FontDesc descSans =
@@ -206,7 +208,8 @@ UTEST( SystemFontResolver, fontContainsCodepoint ) {
 
 	UTEST_PRINT_STEP( "CJK character U+65E5 (日)" );
 	bool hasCJK = resolver->fontContainsCodepoint( fontPath, 0x65E5 );
-	UTEST_PRINTF( "DejaVuSansMono has CJK U+65E5: %s\n", hasCJK ? "yes" : "no" );
+	UTEST_PRINT_INFO(
+		String::format( "DejaVuSansMono has CJK U+65E5: %s", hasCJK ? "yes" : "no" ).c_str() );
 
 	UTEST_PRINT_STEP( "Non-existent file" );
 	EXPECT_FALSE( resolver->fontContainsCodepoint( "/nonexistent/font.ttf", 'A' ) );
@@ -223,15 +226,17 @@ UTEST( SystemFontResolver, getFallbackForCodepoint ) {
 	FontDesc desc = resolver->getFallbackForCodepoint( 0x65E5, FontWeight::Normal, false );
 
 	if ( !desc.path.empty() ) {
-		UTEST_PRINTF( "Fallback for U+65E5: %s (%s)\n", desc.family.c_str(), desc.path.c_str() );
+		UTEST_PRINT_INFO(
+			String::format( "Fallback for U+65E5: %s (%s)", desc.family, desc.path ).c_str() );
 		EXPECT_FALSE( desc.family.empty() );
 	}
 
 	UTEST_PRINT_STEP( "Look up fallback for Arabic U+0627 (ا)" );
 	FontDesc descArabic = resolver->getFallbackForCodepoint( 0x0627, FontWeight::Normal, false );
 	if ( !descArabic.path.empty() ) {
-		UTEST_PRINTF( "Fallback for U+0627: %s (%s)\n", descArabic.family.c_str(),
-					  descArabic.path.c_str() );
+		UTEST_PRINT_INFO(
+			String::format( "Fallback for U+0627: %s (%s)", descArabic.family, descArabic.path )
+				.c_str() );
 	}
 
 	SystemFontResolver::setEnabled( false );
@@ -277,13 +282,12 @@ UTEST( SystemFontResolver, genericFallbackPurity ) {
 	auto* resolver = SystemFontResolver::instance();
 
 	std::vector<const char*> scriptSuffixes = {
-		"georgian", "cjk", "arabic", "hebrew", "armenian", "lao", "thai",
-		"devanagari", "tamil", "bengali", "gurmukhi", "gujarati", "oriya",
-		"telugu", "kannada", "malayalam", "sinhala", "khmer", "tibetan",
-		"myanmar", "ethiopic", "cherokee", "canadian", "mongolian", "yi",
-		"nko", "tifinagh", "vai", "bamum", "coptic", "glagolitic", "gothic",
-		"old", "ugaritic", "osmanya", "osmanya", "phags", "syloti"
-	};
+		"georgian",	  "cjk",	   "arabic",	 "hebrew",	 "armenian", "lao",		 "thai",
+		"devanagari", "tamil",	   "bengali",	 "gurmukhi", "gujarati", "oriya",	 "telugu",
+		"kannada",	  "malayalam", "sinhala",	 "khmer",	 "tibetan",	 "myanmar",	 "ethiopic",
+		"cherokee",	  "canadian",  "mongolian",	 "yi",		 "nko",		 "tifinagh", "vai",
+		"bamum",	  "coptic",	   "glagolitic", "gothic",	 "old",		 "ugaritic", "osmanya",
+		"osmanya",	  "phags",	   "syloti" };
 
 	auto checkFamily = [&scriptSuffixes]( const FontDesc& desc, const char* genericName ) {
 		if ( desc.path.empty() )
@@ -292,8 +296,10 @@ UTEST( SystemFontResolver, genericFallbackPurity ) {
 		for ( const char* suffix : scriptSuffixes ) {
 			std::string suffixStr( suffix );
 			if ( lowerFamily.find( suffixStr ) != std::string::npos ) {
-				UTEST_PRINTF( "WARNING: %s fallback resolved to script-specific font: %s\n",
-							  genericName, desc.family.c_str() );
+				UTEST_PRINT_INFO(
+					String::format( "WARNING: %s fallback resolved to script-specific font: %s",
+									genericName, desc.family )
+						.c_str() );
 			}
 		}
 	};
@@ -320,33 +326,34 @@ UTEST( SystemFontResolver, resolveFromNamesListRealWorld ) {
 
 	UTEST_PRINT_STEP( "Resolve with double-quoted font names" );
 	FontDesc desc1 = resolver->resolveFromNamesList(
-		"\"Helvetica Neue\", Arial, Helvetica, \"Nimbus Sans L\", sans-serif",
-		FontWeight::Normal, false );
-	UTEST_PRINTF( "Resolved: %s (%s)\n", desc1.family.c_str(), desc1.path.c_str() );
+		"\"Helvetica Neue\", Arial, Helvetica, \"Nimbus Sans L\", sans-serif", FontWeight::Normal,
+		false );
+	UTEST_PRINT_INFO(
+		String::format( "Resolved: %s (%s)", desc1.family.c_str(), desc1.path.c_str() ).c_str() );
 
 	UTEST_PRINT_STEP( "Resolve with single-quoted font names" );
-	FontDesc desc2 = resolver->resolveFromNamesList(
-		"'Times New Roman', serif",
-		FontWeight::Normal, false );
-	UTEST_PRINTF( "Resolved: %s (%s)\n", desc2.family.c_str(), desc2.path.c_str() );
+	FontDesc desc2 =
+		resolver->resolveFromNamesList( "'Times New Roman', serif", FontWeight::Normal, false );
+	UTEST_PRINT_INFO(
+		String::format( "Resolved: %s (%s)", desc2.family.c_str(), desc2.path.c_str() ).c_str() );
 
 	UTEST_PRINT_STEP( "Resolve with mixture of quoted and unquoted" );
 	FontDesc desc3 = resolver->resolveFromNamesList(
-		"Roboto, \"Helvetica Neue\", Arial, sans-serif",
-		FontWeight::Normal, false );
-	UTEST_PRINTF( "Resolved: %s (%s)\n", desc3.family.c_str(), desc3.path.c_str() );
+		"Roboto, \"Helvetica Neue\", Arial, sans-serif", FontWeight::Normal, false );
+	UTEST_PRINT_INFO(
+		String::format( "Resolved: %s (%s)", desc3.family.c_str(), desc3.path.c_str() ).c_str() );
 
 	UTEST_PRINT_STEP( "Georgia, serif (regression: substring overmatch)" );
-	FontDesc desc4 = resolver->resolveFromNamesList(
-		"Georgia, \"Bitstream Charter\", serif",
-		FontWeight::Normal, false );
-	UTEST_PRINTF( "Resolved: %s (%s)\n", desc4.family.c_str(), desc4.path.c_str() );
+	FontDesc desc4 = resolver->resolveFromNamesList( "Georgia, \"Bitstream Charter\", serif",
+													 FontWeight::Normal, false );
+	UTEST_PRINT_INFO(
+		String::format( "Resolved: %s (%s)", desc4.family.c_str(), desc4.path.c_str() ).c_str() );
 	if ( !desc4.path.empty() ) {
 		std::string lower = String::toLower( desc4.family );
-		EXPECT_TRUE_MSG( lower == "georgia" || lower == "times new roman" ||
-							 lower.find( "serif" ) != std::string::npos,
-						 ( "Should resolve to Georgia or a serif font, got: " + desc4.family )
-							 .c_str() );
+		EXPECT_TRUE_MSG(
+			lower == "georgia" || lower == "times new roman" ||
+				lower.find( "serif" ) != std::string::npos,
+			( "Should resolve to Georgia or a serif font, got: " + desc4.family ).c_str() );
 	}
 
 	SystemFontResolver::setEnabled( false );
@@ -358,15 +365,16 @@ UTEST( SystemFontResolver, resolveGenericWeights ) {
 	auto* resolver = SystemFontResolver::instance();
 
 	UTEST_PRINT_STEP( "Resolve sans-serif at multiple weights" );
-	FontDesc normal = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, false );
+	FontDesc normal =
+		resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, false );
 	FontDesc bold = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Bold, false );
 	FontDesc light = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Light, false );
 	FontDesc black = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Black, false );
 
-	UTEST_PRINTF( "Normal: %s\n", normal.family.c_str() );
-	UTEST_PRINTF( "Bold:   %s\n", bold.family.c_str() );
-	UTEST_PRINTF( "Light:  %s\n", light.family.c_str() );
-	UTEST_PRINTF( "Black:  %s\n", black.family.c_str() );
+	UTEST_PRINT_INFO( String::format( "Normal: %s", normal.family.c_str() ).c_str() );
+	UTEST_PRINT_INFO( String::format( "Bold:   %s", bold.family.c_str() ).c_str() );
+	UTEST_PRINT_INFO( String::format( "Light:  %s", light.family.c_str() ).c_str() );
+	UTEST_PRINT_INFO( String::format( "Black:  %s", black.family.c_str() ).c_str() );
 
 	if ( !normal.path.empty() )
 		EXPECT_FALSE( normal.family.empty() );
@@ -380,27 +388,31 @@ UTEST( SystemFontResolver, resolveGenericWeightPreference ) {
 	auto* resolver = SystemFontResolver::instance();
 
 	UTEST_PRINT_STEP( "Normal weight should prefer Normal or close weight" );
-	FontDesc normal = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, false );
+	FontDesc normal =
+		resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, false );
 	if ( !normal.path.empty() ) {
 		int diff = std::abs( (int)normal.weight - (int)FontWeight::Normal );
-		EXPECT_TRUE_MSG( diff <= 300,
-						 ( "Normal weight diff too large: " + normal.family + " weight=" +
-						   String::toString( (int)normal.weight ) )
-							 .c_str() );
+		EXPECT_TRUE_MSG( diff <= 300, ( "Normal weight diff too large: " + normal.family +
+										" weight=" + String::toString( (int)normal.weight ) )
+										  .c_str() );
 	}
 
 	UTEST_PRINT_STEP( "Bold weight should prefer Bold or close weight" );
 	FontDesc bold = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Bold, false );
 	if ( !bold.path.empty() ) {
 		int diff = std::abs( (int)bold.weight - (int)FontWeight::Bold );
-		UTEST_PRINTF( "Bold: %s (weight=%d diff=%d)\n", bold.family.c_str(), (int)bold.weight, diff );
+		UTEST_PRINT_INFO( String::format( "Bold: %s (weight=%d diff=%d)", bold.family.c_str(),
+										  (int)bold.weight, diff )
+							  .c_str() );
 	}
 
 	UTEST_PRINT_STEP( "Light weight should prefer Light or close weight" );
 	FontDesc light = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Light, false );
 	if ( !light.path.empty() ) {
 		int diff = std::abs( (int)light.weight - (int)FontWeight::Light );
-		UTEST_PRINTF( "Light: %s (weight=%d diff=%d)\n", light.family.c_str(), (int)light.weight, diff );
+		UTEST_PRINT_INFO( String::format( "Light: %s (weight=%d diff=%d)", light.family.c_str(),
+										  (int)light.weight, diff )
+							  .c_str() );
 	}
 
 	SystemFontResolver::setEnabled( false );
@@ -412,9 +424,12 @@ UTEST( SystemFontResolver, resolveGenericItalicFallback ) {
 	auto* resolver = SystemFontResolver::instance();
 
 	UTEST_PRINT_STEP( "Request italic — should return a font even if no italic variant" );
-	FontDesc italic = resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, true );
+	FontDesc italic =
+		resolver->resolveGeneric( GenericFamily::SansSerif, FontWeight::Normal, true );
 	if ( !italic.path.empty() ) {
-		UTEST_PRINTF( "Italic: %s (italic=%d)\n", italic.family.c_str(), (int)italic.italic );
+		UTEST_PRINT_INFO(
+			String::format( "Italic: %s (italic=%d)", italic.family.c_str(), (int)italic.italic )
+				.c_str() );
 		EXPECT_FALSE( italic.family.empty() );
 	}
 
@@ -428,7 +443,8 @@ UTEST( SystemFontResolver, resolveBoldFromNamesList ) {
 
 	UTEST_PRINT_STEP( "Resolve Arial with bold weight" );
 	FontDesc desc = resolver->resolveFromNamesList( "Arial, sans-serif", FontWeight::Bold, false );
-	UTEST_PRINTF( "Bold: %s (weight=%d)\n", desc.family.c_str(), (int)desc.weight );
+	UTEST_PRINT_INFO(
+		String::format( "Bold: %s (weight=%d)", desc.family.c_str(), (int)desc.weight ).c_str() );
 	if ( !desc.path.empty() ) {
 		EXPECT_FALSE( desc.family.empty() );
 	}
@@ -446,14 +462,16 @@ UTEST( SystemFontResolver, invalidateCachePersistence ) {
 	query.family = "sans-serif";
 	query.weight = FontWeight::Normal;
 	FontDesc first = resolver->resolve( query );
-	UTEST_PRINTF( "First: %s (%s)\n", first.family.c_str(), first.path.c_str() );
+	UTEST_PRINT_INFO(
+		String::format( "First: %s (%s)", first.family.c_str(), first.path.c_str() ).c_str() );
 
 	UTEST_PRINT_STEP( "Invalidate cache" );
 	resolver->invalidateCache();
 
 	UTEST_PRINT_STEP( "Second resolve after invalidation" );
 	FontDesc second = resolver->resolve( query );
-	UTEST_PRINTF( "Second: %s (%s)\n", second.family.c_str(), second.path.c_str() );
+	UTEST_PRINT_INFO(
+		String::format( "Second: %s (%s)", second.family.c_str(), second.path.c_str() ).c_str() );
 
 	EXPECT_STDSTREQ( first.path, second.path );
 	EXPECT_STDSTREQ( first.family, second.family );
@@ -469,21 +487,22 @@ UTEST( SystemFontResolver, glyphFallbackRoundTrip ) {
 	UTEST_PRINT_STEP( "Look up fallback for CJK U+65E5" );
 	FontDesc cjk = resolver->getFallbackForCodepoint( 0x65E5, FontWeight::Normal, false );
 	if ( !cjk.path.empty() ) {
-		UTEST_PRINTF( "CJK fallback: %s\n", cjk.family.c_str() );
+		UTEST_PRINT_INFO( String::format( "CJK fallback: %s", cjk.family.c_str() ).c_str() );
 		EXPECT_TRUE( resolver->fontContainsCodepoint( cjk.path, 0x65E5 ) );
 	}
 
 	UTEST_PRINT_STEP( "Look up fallback for Arabic U+0627" );
 	FontDesc arabic = resolver->getFallbackForCodepoint( 0x0627, FontWeight::Normal, false );
 	if ( !arabic.path.empty() ) {
-		UTEST_PRINTF( "Arabic fallback: %s\n", arabic.family.c_str() );
+		UTEST_PRINT_INFO(
+			String::format( "Arabic fallback: %s", arabic.family.c_str() ).c_str() );
 		EXPECT_TRUE( resolver->fontContainsCodepoint( arabic.path, 0x0627 ) );
 	}
 
 	UTEST_PRINT_STEP( "Verify ASCII fallback" );
 	FontDesc ascii = resolver->getFallbackForCodepoint( 'A', FontWeight::Normal, false );
 	if ( !ascii.path.empty() ) {
-		UTEST_PRINTF( "ASCII fallback: %s\n", ascii.family.c_str() );
+		UTEST_PRINT_INFO( String::format( "ASCII fallback: %s", ascii.family.c_str() ).c_str() );
 		EXPECT_TRUE( resolver->fontContainsCodepoint( ascii.path, 'A' ) );
 	}
 

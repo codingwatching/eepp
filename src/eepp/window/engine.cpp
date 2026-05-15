@@ -4,6 +4,7 @@
 #include <eepp/graphics/ninepatchmanager.hpp>
 #include <eepp/graphics/renderer/renderer.hpp>
 #include <eepp/graphics/shaderprogrammanager.hpp>
+#include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/graphics/textlayout.hpp>
 #include <eepp/graphics/textureatlasmanager.hpp>
 #include <eepp/graphics/texturefactory.hpp>
@@ -25,7 +26,7 @@
 #include <eepp/window/backend.hpp>
 #include <eepp/window/backend/SDL2/backendsdl2.hpp>
 #include <eepp/window/backend/SDL2/platformhelpersdl2.hpp>
-#if defined(EE_SDL_VERSION_3)
+#if defined( EE_SDL_VERSION_3 )
 #include <eepp/window/backend/SDL3/backendsdl3.hpp>
 #include <eepp/window/backend/SDL3/platformhelpersdl3.hpp>
 #endif
@@ -127,6 +128,8 @@ Engine::~Engine() {
 	Log::destroySingleton();
 
 	TextLayout::clearLayoutCache();
+
+	SystemFontResolver::destroySingleton();
 }
 
 void Engine::destroy() {

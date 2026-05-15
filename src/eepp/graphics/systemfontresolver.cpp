@@ -936,9 +936,9 @@ void SystemFontResolver::populateFontList() const {
 // =====================================================================
 #elif EE_PLATFORM == EE_PLATFORM_ANDROID
 
-void SystemFontResolver::populateFontList() {
-	// Android's NDK ASystemFontIterator lacks family name exposure, 
-	// and AFontMatcher only matches text to a single font. 
+void SystemFontResolver::populateFontList() const {
+	// Android's NDK ASystemFontIterator lacks family name exposure,
+	// and AFontMatcher only matches text to a single font.
 	// Parsing fonts.xml is the standard way to get logical font families.
 	static const char* fontPaths[] = { "/system/etc/fonts.xml", "/system/fonts/fonts.xml",
 									   "/vendor/etc/fonts.xml", nullptr };
@@ -991,9 +991,9 @@ void SystemFontResolver::populateFontList() {
 			desc.faceIndex = 0;
 			desc.weight = weight;
 			desc.italic = italic;
-			// Note: Android XML doesn't strictly provide a generic monospace flag in this node, 
+			// Note: Android XML doesn't strictly provide a generic monospace flag in this node,
 			// so you may need to default to false or infer from the family name.
-			desc.monospace = ( familyName.find("monospace") != std::string::npos ); 
+			desc.monospace = ( familyName.find( "monospace" ) != std::string::npos );
 
 			mFontList.push_back( desc );
 		}
@@ -1005,7 +1005,7 @@ void SystemFontResolver::populateFontList() {
 // =====================================================================
 #elif EE_PLATFORM == EE_PLATFORM_HAIKU
 
-void SystemFontResolver::populateFontList() const { 
+void SystemFontResolver::populateFontList() const {
 	return populateFontListFallback();
 }
 
@@ -1020,16 +1020,15 @@ void SystemFontResolver::populateFontList() const {}
 
 void SystemFontResolver::populateFontListFallback() const {
 	// Added Haiku font paths so testing this fallback on Haiku actually finds files
-	static const char* fontDirs[] = { 
-		"/usr/share/fonts", 
-		"/usr/local/share/fonts", 
+	static const char* fontDirs[] = { "/usr/share/fonts",
+									  "/usr/share/fonts/truetype",
+									  "/usr/local/share/fonts",
 #if EE_PLATFORM == EE_PLATFORM_HAIKU
-		"/system/data/fonts/ttfonts", 
-		"/system/data/fonts/otfonts", 
-		"/system/non-packaged/data/fonts", 
+									  "/system/data/fonts/ttfonts",
+									  "/system/data/fonts/otfonts",
+									  "/system/non-packaged/data/fonts",
 #endif
-		nullptr 
-	};
+									  nullptr };
 
 	FT_Library ftLibrary;
 	if ( FT_Init_FreeType( &ftLibrary ) != 0 )
@@ -1037,17 +1036,17 @@ void SystemFontResolver::populateFontListFallback() const {
 
 	for ( int d = 0; fontDirs[d]; ++d ) {
 		std::string dir( fontDirs[d] );
-		
+
 		if ( !FileSystem::isDirectory( dir ) )
 			continue;
 
 		auto files = FileSystem::filesGetInPath( dir, false, true );
 		for ( const auto& file : files ) {
 			std::string ext = FileSystem::fileExtension( file );
-			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" && 
-				 ext != "woff" && ext != "woff2" && ext != "bdf" && ext != "otb" )
+			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" && ext != "woff" &&
+				 ext != "woff2" && ext != "bdf" && ext != "otb" )
 				continue;
-			
+
 			FileSystem::dirAddSlashAtEnd( dir );
 			std::string path = dir + file;
 
@@ -1065,8 +1064,10 @@ void SystemFontResolver::populateFontListFallback() const {
 						desc.family = face->family_name ? face->family_name : "Unknown";
 						desc.path = path;
 						desc.faceIndex = static_cast<Uint32>( i );
-						
-						desc.weight = ( face->style_flags & FT_STYLE_FLAG_BOLD ) ? FontWeight::Bold : FontWeight::Normal;
+
+						desc.weight = ( face->style_flags & FT_STYLE_FLAG_BOLD )
+										  ? FontWeight::Bold
+										  : FontWeight::Normal;
 						desc.italic = ( face->style_flags & FT_STYLE_FLAG_ITALIC ) != 0;
 						desc.monospace = FT_IS_FIXED_WIDTH( face ) != 0;
 
