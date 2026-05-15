@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <eepp/network/http.hpp>
 #include <eepp/network/http/httpstreamchunked.hpp>
 #include <eepp/network/ssl/sslsocket.hpp>
@@ -10,6 +11,7 @@
 #include <eepp/system/iostreamfile.hpp>
 #include <eepp/system/iostreaminflate.hpp>
 #include <eepp/system/iostreamstring.hpp>
+#include <eepp/system/log.hpp>
 #include <eepp/system/sys.hpp>
 #include <iostream>
 #include <iterator>
@@ -661,6 +663,11 @@ Uint64 Http::requestAsync( const Http::AsyncResponseCallback& cb, const URI& uri
 						   const Http::Request::FieldTable& headers, const std::string& body,
 						   const bool& validateCertificate, const URI& proxy,
 						   bool followRedirect ) {
+	if ( Log::existsSingleton() && Log::instance()->getLogLevelThreshold() == LogLevel::Debug ) {
+		Log::debug( "Http::requestAsync: %s \"%s\"", Request::methodToString( method ),
+					uri.toString() );
+	}
+
 	auto http = sGlobalHttpPool.get( uri, proxy );
 	Request request( uri.getPathAndQuery(), method, body, validateCertificate, validateCertificate,
 					 true, true );
@@ -978,8 +985,6 @@ Http::Response Http::downloadRequest( const Http::Request& request, IOStream& wr
 				std::size_t currentTotalBytes = 0;
 				std::size_t len = 0;
 				std::size_t read = 0;
-				char* eol = NULL; // end of line
-				char* bol = NULL; // beginning of line
 				char buffer[PACKET_BUFFER_SIZE + 1];
 				bool isnheader = false;
 				bool chunked = false;
@@ -998,173 +1003,147 @@ Http::Response Http::downloadRequest( const Http::Request& request, IOStream& wr
 					// If we didn't receive the header yet, we will try to find the end of the
 					// header
 					if ( !isnheader ) {
-						// calculate combined length of unprocessed data and new data
-						len += read;
+						headerBuffer.append( readBuffer, read );
 
-						// NULL terminate buffer for string functions
-						readBuffer[len] = '\0';
+						std::size_t headerEnd = headerBuffer.find( "\r\n\r\n" );
+						std::size_t headerDelimiterSize = 4;
 
-						// process each line in buffer looking for header break
-						bol = readBuffer;
+						if ( headerEnd == std::string::npos ) {
+							headerEnd = headerBuffer.find( "\n\n" );
+							headerDelimiterSize = 2;
+						}
 
-						while ( !isnheader && ( eol = strchr( bol, '\n' ) ) != NULL ) {
-							// update bol based upon the value of eol
-							bol = eol + 1;
+						if ( headerEnd != std::string::npos ) {
+							isnheader = true;
+							headerEnd += headerDelimiterSize;
+							len = headerBuffer.size() - headerEnd;
 
-							// test if end of headers has been reached
-							if ( 0 == strncmp( bol, "\r\n", 2 ) || 0 == strncmp( bol, "\n", 1 ) ) {
-								// note that end of headers has been reached
-								isnheader = true;
+							std::string responseHead( headerBuffer, 0, headerEnd );
 
-								// update the value of bol to reflect the beginning of the line
-								// immediately after the headers
-								if ( bol[0] != '\n' )
-									bol += 1;
+							if ( !responseHead.empty() ) {
+								// Build the Response object from the received data
+								received.parse( responseHead );
 
-								bol += 1;
+								// Check if the response is chunked
+								chunked = received.getField( "transfer-encoding" ) == "chunked";
 
-								// calculate the amount of data remaining in the buffer
-								len = read - ( bol - readBuffer );
+								// Check if the content is compressed
+								std::string encoding( received.getField( "content-encoding" ) );
+								compressed =
+									encoding == "gzip" || encoding == "deflate" || encoding == "br";
 
-								// Fill the header buffer
-								headerBuffer.append( readBuffer, ( bol - readBuffer ) );
+								if ( compressed ) {
+									Compression::Mode compressionMode =
+										"gzip" == encoding
+											? Compression::MODE_GZIP
+											: ( "br" == encoding ? Compression::MODE_BROTLI
+																 : Compression::MODE_DEFLATE );
 
-								if ( !headerBuffer.empty() ) {
-									// Build the Response object from the received data
-									received.parse( headerBuffer );
+									inflateStream =
+										IOStreamInflate::New( writeTo, compressionMode );
+								}
 
-									// Check if the response is chunked
-									chunked = received.getField( "transfer-encoding" ) == "chunked";
+								if ( chunked ) {
+									IOStream& writeToStream = compressed ? *inflateStream : writeTo;
+									chunkedStream = eeNew( HttpStreamChunked, ( writeToStream ) );
+								}
 
-									// Check if the content is compressed
-									std::string encoding( received.getField( "content-encoding" ) );
-									compressed = encoding == "gzip" || encoding == "deflate" ||
-												 encoding == "br";
-
-									if ( compressed ) {
-										Compression::Mode compressionMode =
-											"gzip" == encoding
-												? Compression::MODE_GZIP
-												: ( "br" == encoding ? Compression::MODE_BROTLI
-																	 : Compression::MODE_DEFLATE );
-
-										inflateStream =
-											IOStreamInflate::New( writeTo, compressionMode );
-									}
-
-									if ( chunked ) {
-										IOStream& writeToStream =
-											compressed ? *inflateStream : writeTo;
-										chunkedStream =
-											eeNew( HttpStreamChunked, ( writeToStream ) );
-									}
-
-									bufferStream = chunked
-													   ? chunkedStream
+								bufferStream = chunked ? chunkedStream
 													   : ( compressed ? inflateStream : &writeTo );
 
-									// Get the content length
-									if ( !received.getField( "content-length" ).empty() ) {
-										if ( !String::fromString(
-												 contentLength,
-												 received.getField( "content-length" ) ) )
-											contentLength = 0;
-									}
+								// Get the content length
+								if ( !received.getField( "content-length" ).empty() ) {
+									if ( !String::fromString(
+											 contentLength,
+											 received.getField( "content-length" ) ) )
+										contentLength = 0;
+								}
 
-									if ( mConnection &&
-										 received.getField( "connection" ) == "closed" ) {
-										mConnection->setConnected( false );
-										mConnection->setTunneled( false );
-									}
+								if ( mConnection &&
+									 received.getField( "connection" ) == "closed" ) {
+									mConnection->setConnected( false );
+									mConnection->setTunneled( false );
+								}
 
-									// If a redirection is requested, and requests follows
-									// redirections, send a new request to the redirection location.
-									if ( ( received.getStatus() == Response::MovedPermanently ||
-										   received.getStatus() == Response::MovedTemporarily ||
-										   received.getStatus() == Response::PermanentRedirect ||
-										   received.getStatus() == Response::TemporaryRedirect ) &&
-										 request.getFollowRedirect() ) {
+								// If a redirection is requested, and requests follows
+								// redirections, send a new request to the redirection location.
+								if ( ( received.getStatus() == Response::MovedPermanently ||
+									   received.getStatus() == Response::MovedTemporarily ||
+									   received.getStatus() == Response::PermanentRedirect ||
+									   received.getStatus() == Response::TemporaryRedirect ) &&
+									 request.getFollowRedirect() ) {
 
-										// Only continue redirecting if less than 10 redirections
-										// were done
-										if ( request.mRedirectionCount <
-											 request.getMaxRedirects() ) {
-											std::string location( received.getField( "location" ) );
-											URI uri( location );
+									// Only continue redirecting if less than 10 redirections
+									// were done
+									if ( request.mRedirectionCount < request.getMaxRedirects() ) {
+										std::string location( received.getField( "location" ) );
+										URI uri( location );
 
-											// Close the connection
-											if ( mConnection && !mConnection->isKeepAlive() )
-												mConnection->disconnect();
+										// Close the connection
+										if ( mConnection && !mConnection->isKeepAlive() )
+											mConnection->disconnect();
 
-											eeSAFE_DELETE( chunkedStream );
-											eeSAFE_DELETE( inflateStream );
+										eeSAFE_DELETE( chunkedStream );
+										eeSAFE_DELETE( inflateStream );
 
-											if ( !request.isCancelled() &&
-												 !sendProgress( *this, request, received,
-																Request::Redirect, contentLength,
-																currentTotalBytes ) ) {
-												request.mCancel = true;
+										if ( !request.isCancelled() &&
+											 !sendProgress( *this, request, received,
+															Request::Redirect, contentLength,
+															currentTotalBytes ) ) {
+											request.mCancel = true;
+										} else {
+											Http::Request newRequest( request );
+											newRequest.setUri( uri.getPathAndQuery() );
+											newRequest.setMethod(
+												Http::Request::getRedirectMethodFromStatus(
+													request.getMethod(), received.getStatus() ) );
+
+											newRequest.setProgressCallback(
+												request.getProgressCallback() );
+
+											if ( received.hasField( "set-cookie" ) ) {
+												newRequest.setField(
+													"Cookie", received.getField( "set-cookie" ) );
+											}
+
+											request.mRedirectionCount++;
+											newRequest.mRedirectionCount =
+												request.mRedirectionCount;
+
+											// Same host, expects a path in the same domain
+											if ( uri.getHost().empty() ||
+												 uri.getHost() == getHostName() ) {
+												return downloadRequest( newRequest, writeTo,
+																		timeout );
 											} else {
-												Http::Request newRequest( request );
-												newRequest.setUri( uri.getPathAndQuery() );
-												newRequest.setMethod(
-													Http::Request::getRedirectMethodFromStatus(
-														request.getMethod(),
-														received.getStatus() ) );
-
-												newRequest.setProgressCallback(
-													request.getProgressCallback() );
-
-												if ( received.hasField( "set-cookie" ) ) {
-													newRequest.setField(
-														"Cookie",
-														received.getField( "set-cookie" ) );
-												}
-
-												request.mRedirectionCount++;
-												newRequest.mRedirectionCount =
-													request.mRedirectionCount;
-
-												// Same host, expects a path in the same domain
-												if ( uri.getHost().empty() ||
-													 uri.getHost() == getHostName() ) {
-													return downloadRequest( newRequest, writeTo,
-																			timeout );
-												} else {
-													// New host, we need to solve the host
-													Http http( uri.getHost(), uri.getPort(),
-															   uri.getScheme() == "https" ? true
-																						  : false );
-													return http.downloadRequest( newRequest,
-																				 writeTo, timeout );
-												}
+												// New host, we need to solve the host
+												Http http( uri.getHost(), uri.getPort(),
+														   uri.getScheme() == "https" ? true
+																					  : false );
+												return http.downloadRequest( newRequest, writeTo,
+																			 timeout );
 											}
 										}
 									}
-
-									if ( !request.isCancelled() &&
-										 !sendProgress( *this, request, received,
-														Request::HeaderReceived, contentLength,
-														0 ) ) {
-										request.mCancel = true;
-									}
-
-									// Move the readBuffer to the starting point
-									// of the file buffer
-									if ( len > 0 ) {
-										readBuffer = bol;
-										read = len;
-									} else {
-										read = 0;
-									}
-
-									headerBuffer.clear();
 								}
-							}
-						}
 
-						if ( !isnheader ) {
-							headerBuffer.append( readBuffer, ( bol - readBuffer ) );
+								if ( !request.isCancelled() &&
+									 !sendProgress( *this, request, received,
+													Request::HeaderReceived, contentLength, 0 ) ) {
+									request.mCancel = true;
+								}
+
+								// Move the response body bytes already read into the socket buffer.
+								if ( len > 0 ) {
+									std::memmove( buffer, headerBuffer.data() + headerEnd, len );
+									readBuffer = buffer;
+									read = len;
+								} else {
+									read = 0;
+								}
+
+								headerBuffer.clear();
+							}
 						}
 					}
 

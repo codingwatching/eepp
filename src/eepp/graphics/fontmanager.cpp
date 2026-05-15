@@ -105,8 +105,6 @@ Font* FontManager::getByInternalId( Uint32 internalId ) const {
 }
 
 FontTrueType* FontManager::getOrLoadSystemFallbackFont( const FontDesc& desc ) {
-	static constexpr Uint32 MAX_SYSTEM_FALLBACK_FONTS = 32;
-
 	if ( desc.path.empty() )
 		return nullptr;
 
@@ -125,12 +123,6 @@ FontTrueType* FontManager::getOrLoadSystemFallbackFont( const FontDesc& desc ) {
 	}
 
 	mSystemFallbackFonts.push_back( ttf );
-
-	if ( mSystemFallbackFonts.size() > MAX_SYSTEM_FALLBACK_FONTS ) {
-		Font* oldest = mSystemFallbackFonts.front();
-		mSystemFallbackFonts.erase( mSystemFallbackFonts.begin() );
-		eeSAFE_DELETE( oldest );
-	}
 
 	return ttf;
 }

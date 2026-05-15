@@ -1190,9 +1190,11 @@ void UISceneNode::loadFontFaces( const StyleSheetStyleVector& styles, URI baseUR
 					Base64::decode( data, decoded );
 					FontTrueType* font = FontTrueType::New( familyName );
 					if ( font->loadFromMemory( &decoded[0], decoded.size() ) ) {
-						trySetFontFamily( fontFamily, fontStyle, font );
-						mFontFaces.push_back( font );
-						runOnMainThread( [this] { mRoot->reloadFontFamily(); } );
+						runOnMainThread( [this, trySetFontFamily, fontFamily, fontStyle, font] {
+							trySetFontFamily( fontFamily, fontStyle, font );
+							mFontFaces.push_back( font );
+							mRoot->reloadFontFamily();
+						} );
 					} else
 						eeSAFE_DELETE( font );
 				}
@@ -1517,18 +1519,38 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 			name = String::trim( name, ' ' );
 			name = String::trim( name, '\'' );
 			name = String::trim( name, '"' );
+
 			std::string fontFamily{ name };
+			size_t size = fontFamily.size();
 			if ( fontStyle )
 				fontFamily += "#" + Text::styleFlagToString( fontStyle );
+
 			font = FontManager::instance()->getByName( fontFamily );
+
+			if ( fontStyle )
+				fontFamily.resize( size );
+
+			if ( font == nullptr &&
+				 SystemFontResolver::genericFamilyFromName( fontFamily ) != GenericFamily::None ) {
+				FontQuery query;
+				query.family = fontFamily;
+				query.italic = fontStyle & Text::Italic;
+				query.weight = ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
+				fontFamily = SystemFontResolver::instance()->resolve( query ).family;
+
+				if ( fontStyle )
+					fontFamily += "#" + Text::styleFlagToString( fontStyle );
+
+				font = FontManager::instance()->getByName( fontFamily );
+			}
+
 			return font != nullptr;
 		},
 		',' );
 
-	if ( !font && Graphics::SystemFontResolver::isEnabled() ) {
-		Graphics::FontWeight weight =
-			( fontStyle & Text::Bold ) ? Graphics::FontWeight::Bold : Graphics::FontWeight::Normal;
-		Graphics::FontDesc desc = Graphics::SystemFontResolver::instance()->resolveFromNamesList(
+	if ( font == nullptr && SystemFontResolver::isEnabled() ) {
+		FontWeight weight = ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
+		FontDesc desc = SystemFontResolver::instance()->resolveFromNamesList(
 			std::string{ names }, weight, fontStyle & Text::Italic );
 		if ( !desc.path.empty() ) {
 			std::string family = desc.family;
@@ -1559,7 +1581,7 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 }
 
 Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) const {
-	if ( !currentFont || !Graphics::SystemFontResolver::isEnabled() )
+	if ( !currentFont || !SystemFontResolver::isEnabled() )
 		return nullptr;
 
 	if ( currentFont->getType() != FontType::TTF )
@@ -1579,7 +1601,7 @@ Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) co
 }
 
 void UISceneNode::loadFontStyleVariants( Font* font, const std::string& family ) const {
-	if ( !font || !Graphics::SystemFontResolver::isEnabled() )
+	if ( !font || !SystemFontResolver::isEnabled() )
 		return;
 	if ( font->getType() != FontType::TTF )
 		return;

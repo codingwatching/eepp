@@ -1,6 +1,5 @@
 #include "utest.h"
 
-#include <eepp/network/http.hpp>
 #include <eepp/network/cookiemanager.hpp>
 
 using namespace EE;

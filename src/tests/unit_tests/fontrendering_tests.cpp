@@ -34,6 +34,36 @@ using namespace EE::Graphics;
 using namespace EE::Window;
 using namespace EE::UI;
 
+UTEST( FontRendering, relatedFontsDisconnectReplacedCallbacks ) {
+	FontTrueType* font = FontTrueType::New( "RelatedFontsDisconnect-Regular" );
+	FontTrueType* oldBold = FontTrueType::New( "RelatedFontsDisconnect-OldBold" );
+	FontTrueType* newBold = FontTrueType::New( "RelatedFontsDisconnect-NewBold" );
+	FontTrueType* oldItalic = FontTrueType::New( "RelatedFontsDisconnect-OldItalic" );
+	FontTrueType* newItalic = FontTrueType::New( "RelatedFontsDisconnect-NewItalic" );
+	FontTrueType* oldBoldItalic = FontTrueType::New( "RelatedFontsDisconnect-OldBoldItalic" );
+	FontTrueType* newBoldItalic = FontTrueType::New( "RelatedFontsDisconnect-NewBoldItalic" );
+
+	font->setBoldFont( oldBold );
+	font->setBoldFont( newBold );
+	eeDelete( oldBold );
+	EXPECT_EQ( newBold, font->getBoldFont() );
+
+	font->setItalicFont( oldItalic );
+	font->setItalicFont( newItalic );
+	eeDelete( oldItalic );
+	EXPECT_EQ( newItalic, font->getItalicFont() );
+
+	font->setBoldItalicFont( oldBoldItalic );
+	font->setBoldItalicFont( newBoldItalic );
+	eeDelete( oldBoldItalic );
+	EXPECT_EQ( newBoldItalic, font->getBoldItalicFont() );
+
+	eeDelete( font );
+	eeDelete( newBold );
+	eeDelete( newItalic );
+	eeDelete( newBoldItalic );
+}
+
 UTEST( FontRendering, fontsTest ) {
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 

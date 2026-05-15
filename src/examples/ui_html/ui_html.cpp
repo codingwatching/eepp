@@ -4,7 +4,11 @@
 #include <iostream>
 
 EE_MAIN_FUNC int main( int argc, char** argv ) {
+	std::shared_ptr<ThreadPool> threadPool(
+		ThreadPool::createShared( eemax<int>( 4, Sys::getCPUCount() ) ) );
+	Http::setThreadPool( threadPool );
 	SystemFontResolver::setEnabled( true );
+
 	args::ArgumentParser parser( "eepp HTML Example" );
 	args::HelpFlag help( parser, "help", "Display this help menu", { 'h', "help" } );
 

@@ -131,6 +131,11 @@ UTEST( UIHTMLTable, complexLayout2 ) {
 
 	win->getInput()->update();
 	SceneManager::instance()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
 
 	win->clear();
 	SceneManager::instance()->draw();

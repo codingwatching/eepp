@@ -484,6 +484,8 @@ Uint32 UIRichText::getFontSize() const {
 
 UIRichText* UIRichText::setFontSize( const Uint32& characterSize ) {
 	if ( mRichText.getFontStyleConfig().CharacterSize != characterSize ) {
+		if ( characterSize == 0 )
+			return this;
 		mRichText.getFontStyleConfig().CharacterSize = characterSize;
 		mRichText.invalidate();
 		mLineHeightPxDirty = true;
@@ -745,6 +747,12 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 			} else {
 				// Let parent logic load standard child widget
 				UIWidget* uiwidget = UIWidgetCreator::createFromName( child.name() );
+
+				// For not known elements it should create an HTMLUnknown element, in practice
+				// an span with a the tag name used is enough
+				if ( uiwidget == nullptr )
+					uiwidget = UITextSpan::NewWithTag( child.name() );
+
 				if ( uiwidget ) {
 					uiwidget->setParent( this );
 					uiwidget->loadFromXmlNode( child );

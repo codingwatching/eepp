@@ -274,6 +274,12 @@ class EE_API FontTrueType : public Font {
 	bool setFontFace( void* face );
 
 	void updateMonospaceState() const;
+
+	void disconnectBoldFont();
+
+	void disconnectItalicFont();
+
+	void disconnectBoldItalicFont();
 };
 
 }} // namespace EE::Graphics

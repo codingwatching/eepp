@@ -231,6 +231,8 @@ Uint32 UITextSpan::getFontSize() const {
 
 UITextSpan* UITextSpan::setFontSize( const Uint32& characterSize ) {
 	if ( mRichText.getFontStyleConfig().CharacterSize != characterSize ) {
+		if ( characterSize == 0 )
+			return this;
 		mRichText.getFontStyleConfig().CharacterSize = characterSize;
 		mStyleState |= StyleStateFontSize;
 		mRichText.invalidate();
@@ -414,6 +416,10 @@ void UITextSpan::loadFromXmlNode( const pugi::xml_node& node ) {
 		for ( pugi::xml_node child = node.first_child(); child; child = child.next_sibling() ) {
 			if ( child.type() == pugi::node_element ) {
 				UIWidget* widget = UIWidgetCreator::createFromName( child.name() );
+
+				if ( widget == nullptr )
+					widget = UITextSpan::NewWithTag( child.name() );
+
 				if ( widget ) {
 					widget->setParent( this );
 					widget->loadFromXmlNode( child );

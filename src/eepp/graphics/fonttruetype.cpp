@@ -359,10 +359,12 @@ bool FontTrueType::loadFromFile( const std::string& filename, Uint32 faceIndex )
 
 	// Load the new font face from the specified file
 	FT_Face face;
-	if ( FT_New_Face( static_cast<FT_Library>( mLibrary ), filename.c_str(),
-					  static_cast<FT_Long>( mFaceIndex ), &face ) != 0 ) {
-		Log::error( "Failed to load font \"%s\" (%s) (failed to create the font face)",
-					filename.c_str(), mFontName.c_str() );
+	FT_Error err = FT_New_Face( static_cast<FT_Library>( mLibrary ), filename.c_str(),
+								static_cast<FT_Long>( mFaceIndex ), &face );
+	if ( err != 0 ) {
+		const char* err_str = FT_Error_String( err );
+		Log::error( "Failed to load font \"%s\" (%s, face index %zu) - %s (code %d)", filename,
+					mFontName, mFaceIndex, err_str ? err_str : "Unknown error", err );
 		return false;
 	}
 
@@ -397,11 +399,14 @@ bool FontTrueType::loadFromMemory( const void* data, std::size_t sizeInBytes, bo
 
 	// Load the new font face from the specified file
 	FT_Face face;
-	if ( FT_New_Memory_Face( static_cast<FT_Library>( mLibrary ),
-							 reinterpret_cast<const FT_Byte*>( ptr ),
-							 static_cast<FT_Long>( sizeInBytes ),
-							 static_cast<FT_Long>( mFaceIndex ), &face ) != 0 ) {
-		Log::error( "Failed to load font from memory (failed to create the font face)" );
+	FT_Error err = FT_New_Memory_Face(
+		static_cast<FT_Library>( mLibrary ), reinterpret_cast<const FT_Byte*>( ptr ),
+		static_cast<FT_Long>( sizeInBytes ), static_cast<FT_Long>( mFaceIndex ), &face );
+	if ( err != 0 ) {
+		const char* err_str = FT_Error_String( err );
+		Log::error( "Failed to load font from memory (failed to create the font face, face index "
+					"%zu): %s (code %d)",
+					mFaceIndex, err_str ? err_str : "Unknown error", err );
 		return false;
 	}
 
@@ -1071,20 +1076,9 @@ void FontTrueType::cleanup() {
 	if ( FontManager::existsSingleton() && FontManager::instance()->getColorEmojiFont() == this )
 		FontManager::instance()->setColorEmojiFont( nullptr );
 
-	if ( mFontBoldItalicCb != 0 && mFontBoldItalic != nullptr ) {
-		mFontBoldItalic->popFontEventCallback( mFontBoldItalicCb );
-		mFontBoldItalicCb = 0;
-	}
-
-	if ( mFontBoldCb != 0 && mFontBold != nullptr ) {
-		mFontBold->popFontEventCallback( mFontBoldCb );
-		mFontBoldCb = 0;
-	}
-
-	if ( mFontItalicCb != 0 && mFontItalic != nullptr ) {
-		mFontItalic->popFontEventCallback( mFontItalicCb );
-		mFontItalicCb = 0;
-	}
+	disconnectBoldItalicFont();
+	disconnectBoldFont();
+	disconnectItalicFont();
 
 	mCallbacks.clear();
 	mNumCallBacks = 0;
@@ -1772,6 +1766,7 @@ void FontTrueType::updateMonospaceState() const {
 void FontTrueType::setBoldFont( FontTrueType* fontBold ) {
 	if ( fontBold == mFontBold )
 		return;
+	disconnectBoldFont();
 	mFontBold = fontBold;
 	if ( mFontBold != nullptr ) {
 		mFontBoldCb = mFontBold->pushFontEventCallback( [this]( Uint32, Event event, Font* ) {
@@ -1788,6 +1783,7 @@ void FontTrueType::setBoldFont( FontTrueType* fontBold ) {
 void FontTrueType::setItalicFont( FontTrueType* fontItalic ) {
 	if ( fontItalic == mFontItalic )
 		return;
+	disconnectItalicFont();
 	mFontItalic = fontItalic;
 	if ( mFontItalic != nullptr ) {
 		mFontItalicCb = mFontItalic->pushFontEventCallback( [this]( Uint32, Event event, Font* ) {
@@ -1804,6 +1800,7 @@ void FontTrueType::setItalicFont( FontTrueType* fontItalic ) {
 void FontTrueType::setBoldItalicFont( FontTrueType* fontBoldItalic ) {
 	if ( fontBoldItalic == mFontBoldItalic )
 		return;
+	disconnectBoldItalicFont();
 	mFontBoldItalic = fontBoldItalic;
 	if ( mFontBoldItalic != nullptr ) {
 		mFontBoldItalicCb =
@@ -1816,6 +1813,27 @@ void FontTrueType::setBoldItalicFont( FontTrueType* fontBoldItalic ) {
 			} );
 	}
 	updateMonospaceState();
+}
+
+void FontTrueType::disconnectBoldFont() {
+	if ( mFontBoldCb != 0 && mFontBold != nullptr )
+		mFontBold->popFontEventCallback( mFontBoldCb );
+	mFontBold = nullptr;
+	mFontBoldCb = 0;
+}
+
+void FontTrueType::disconnectItalicFont() {
+	if ( mFontItalicCb != 0 && mFontItalic != nullptr )
+		mFontItalic->popFontEventCallback( mFontItalicCb );
+	mFontItalic = nullptr;
+	mFontItalicCb = 0;
+}
+
+void FontTrueType::disconnectBoldItalicFont() {
+	if ( mFontBoldItalicCb != 0 && mFontBoldItalic != nullptr )
+		mFontBoldItalic->popFontEventCallback( mFontBoldItalicCb );
+	mFontBoldItalic = nullptr;
+	mFontBoldItalicCb = 0;
 }
 
 bool FontTrueType::hasSvgGlyphs() const {
