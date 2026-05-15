@@ -3,6 +3,7 @@
 
 #include <eepp/config.hpp>
 #include <eepp/graphics/base.hpp>
+#include <eepp/system/mutex.hpp>
 #include <eepp/system/singleton.hpp>
 
 #include <atomic>
@@ -69,10 +70,6 @@ class EE_API SystemFontResolver {
   public:
 	~SystemFontResolver();
 
-	const std::vector<FontDesc>& enumerate();
-
-	std::vector<FontDesc> enumerateFamily( const std::string& family );
-
 	FontDesc resolve( const FontQuery& query );
 
 	FontDesc resolveFromNamesList( const std::string& namesList, FontWeight weight, bool italic );
@@ -93,6 +90,16 @@ class EE_API SystemFontResolver {
 
 	bool isLoading() const { return mFontListLoading; }
 
+	std::vector<FontDesc> enumerate();
+
+	std::vector<FontDesc> enumerateFamily( const std::string& family );
+
+	template <typename Fn> void forEach( Fn&& fn ) {
+		System::Lock lock( mMutex );
+		for ( const auto& desc : mFontList )
+			fn( desc );
+	}
+
 	static void setEnabled( bool enabled );
 
 	static bool isEnabled();
@@ -111,6 +118,7 @@ class EE_API SystemFontResolver {
 
 	static int scoreMatch( const FontQuery& query, const FontDesc& candidate );
 
+	mutable System::Mutex mMutex;
 	mutable std::vector<FontDesc> mFontList;
 	mutable bool mFontListPopulated{ false };
 	mutable std::atomic<bool> mFontListLoading{ false };

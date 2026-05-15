@@ -48,12 +48,14 @@
 #include FT_FREETYPE_H
 #include <memory>
 
+using namespace EE::System;
+
 namespace {
 
 struct FreeTypeState {
 	FT_Library library{ nullptr };
 	EE::UnorderedMap<std::string, FT_Face> faceCache;
-	EE::System::Mutex mutex;
+	Mutex mutex;
 
 	FreeTypeState() { FT_Init_FreeType( &library ); }
 
@@ -88,7 +90,7 @@ struct FreeTypeState {
 };
 
 std::shared_ptr<FreeTypeState> gFtState;
-EE::System::Mutex gStateInitMutex;
+Mutex gStateInitMutex;
 
 std::shared_ptr<FreeTypeState> getFTState() {
 	Lock lock( gStateInitMutex );
@@ -126,6 +128,7 @@ bool SystemFontResolver::isEnabled() {
 }
 
 void SystemFontResolver::invalidateCache() {
+	Lock lock( mMutex );
 	mResolveCache.clear();
 	mGenericCache.clear();
 	mCodepointFallbackCache.clear();
@@ -152,20 +155,25 @@ GenericFamily SystemFontResolver::genericFamilyFromName( const std::string& name
 
 void SystemFontResolver::ensureFontListPopulated() const {
 	if ( !mFontListPopulated ) {
-		AtomicBoolScopedOp op( mFontListLoading );
-		populateFontList();
-		populateGenericFallbacks();
-		mFontListPopulated = true;
+		Lock lock( mMutex );
+		if ( !mFontListPopulated ) {
+			AtomicBoolScopedOp op( mFontListLoading );
+			populateFontList();
+			populateGenericFallbacks();
+			mFontListPopulated = true;
+		}
 	}
 }
 
-const std::vector<FontDesc>& SystemFontResolver::enumerate() {
+std::vector<FontDesc> SystemFontResolver::enumerate() {
 	ensureFontListPopulated();
+	Lock lock( mMutex );
 	return mFontList;
 }
 
 std::vector<FontDesc> SystemFontResolver::enumerateFamily( const std::string& family ) {
 	ensureFontListPopulated();
+	Lock lock( mMutex );
 	std::vector<FontDesc> result;
 	std::string normFamily = normalizeFamily( family );
 	for ( const auto& desc : mFontList ) {
@@ -236,6 +244,8 @@ FontDesc SystemFontResolver::resolve( const FontQuery& query ) {
 
 	std::string normFamily = normalizeFamily( query.family );
 
+	Lock lock( mMutex );
+
 	Uint64 key = makeCacheKey( normFamily, query.weight, query.stretch, query.italic );
 
 	auto cacheIt = mResolveCache.find( key );
@@ -294,6 +304,8 @@ FontDesc SystemFontResolver::resolveGeneric( GenericFamily generic, FontWeight w
 											 bool italic ) {
 	ensureFontListPopulated();
 
+	Lock lock( mMutex );
+
 	Uint32 cacheKey = ( static_cast<Uint32>( generic ) << 16 ) |
 					  ( static_cast<Uint32>( weight ) << 1 ) | ( italic ? 1 : 0 );
 
@@ -329,6 +341,8 @@ FontDesc SystemFontResolver::resolveGeneric( GenericFamily generic, FontWeight w
 }
 
 FontDesc SystemFontResolver::getSystemFont() const {
+	ensureFontListPopulated();
+	Lock lock( mMutex );
 	if ( !mGenericFallbacks.empty() ) {
 		for ( const auto& entry : mGenericFallbacks ) {
 			if ( entry.generic == GenericFamily::SystemUi )
@@ -339,6 +353,8 @@ FontDesc SystemFontResolver::getSystemFont() const {
 }
 
 FontDesc SystemFontResolver::getSystemMonospaceFont() const {
+	ensureFontListPopulated();
+	Lock lock( mMutex );
 	if ( !mGenericFallbacks.empty() ) {
 		for ( const auto& entry : mGenericFallbacks ) {
 			if ( entry.generic == GenericFamily::Monospace )
@@ -352,25 +368,33 @@ FontDesc SystemFontResolver::getFallbackForCodepoint( Uint32 codepoint, FontWeig
 													  bool italic ) {
 	ensureFontListPopulated();
 
-	Uint32 cacheKey = codepoint;
-	auto it = mCodepointFallbackCache.find( cacheKey );
-	if ( it != mCodepointFallbackCache.end() ) {
-		const std::string& path = it->second;
-		if ( path.empty() )
-			return FontDesc();
-		for ( const auto& desc : mFontList ) {
-			if ( desc.path == path ) {
-				FontDesc result = desc;
-				result.weight = weight;
-				result.italic = italic;
-				return result;
+	std::vector<FontDesc> snapshot;
+	{
+		Lock lock( mMutex );
+
+		Uint32 cacheKey = codepoint;
+		auto it = mCodepointFallbackCache.find( cacheKey );
+		if ( it != mCodepointFallbackCache.end() ) {
+			const std::string& path = it->second;
+			if ( path.empty() )
+				return FontDesc();
+			for ( const auto& desc : mFontList ) {
+				if ( desc.path == path ) {
+					FontDesc result = desc;
+					result.weight = weight;
+					result.italic = italic;
+					return result;
+				}
 			}
 		}
+
+		snapshot = mFontList;
 	}
 
-	for ( const auto& desc : mFontList ) {
+	for ( const auto& desc : snapshot ) {
 		if ( fontContainsCodepoint( desc.path, codepoint ) ) {
-			mCodepointFallbackCache[cacheKey] = desc.path;
+			Lock lock( mMutex );
+			mCodepointFallbackCache[codepoint] = desc.path;
 			FontDesc result = desc;
 			result.weight = weight;
 			result.italic = italic;
@@ -378,7 +402,10 @@ FontDesc SystemFontResolver::getFallbackForCodepoint( Uint32 codepoint, FontWeig
 		}
 	}
 
-	mCodepointFallbackCache[cacheKey] = "";
+	{
+		Lock lock( mMutex );
+		mCodepointFallbackCache[codepoint] = "";
+	}
 	return FontDesc();
 }
 
