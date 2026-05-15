@@ -5,6 +5,7 @@
 #include <eepp/graphics/base.hpp>
 #include <eepp/system/singleton.hpp>
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,8 @@ class EE_API SystemFontResolver {
 
 	void ensureFontListPopulated() const;
 
+	bool isLoading() const { return mFontListLoading; }
+
 	static void setEnabled( bool enabled );
 
 	static bool isEnabled();
@@ -110,6 +113,7 @@ class EE_API SystemFontResolver {
 
 	mutable std::vector<FontDesc> mFontList;
 	mutable bool mFontListPopulated{ false };
+	mutable std::atomic<bool> mFontListLoading{ false };
 
 	static Uint64 makeCacheKey( const std::string& normFamily, FontWeight weight,
 								FontStretch stretch, bool italic );

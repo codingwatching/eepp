@@ -8,11 +8,12 @@
 #include <eepp/core/string.hpp>
 #include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/system/filesystem.hpp>
+#include <eepp/system/lock.hpp>
 #include <eepp/system/log.hpp>
+#include <eepp/system/mutex.hpp>
+#include <eepp/system/scopedop.hpp>
+#include <eepp/system/sys.hpp>
 #include <eepp/window/engine.hpp>
-
-#include <algorithm>
-#include <cstring>
 
 #if EE_PLATFORM == EE_PLATFORM_WIN
 #ifndef NOMINMAX
@@ -43,6 +44,65 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <memory>
+
+namespace {
+
+struct FreeTypeState {
+	FT_Library library{ nullptr };
+	EE::UnorderedMap<std::string, FT_Face> faceCache;
+	EE::System::Mutex mutex;
+
+	FreeTypeState() { FT_Init_FreeType( &library ); }
+
+	~FreeTypeState() {
+		Lock lock( mutex );
+
+		for ( auto& pair : faceCache ) {
+			FT_Done_Face( pair.second );
+		}
+
+		if ( library ) {
+			FT_Done_FreeType( library );
+		}
+	}
+
+	FT_Face getFace( const std::string& path ) {
+		Lock lock( mutex );
+
+		auto it = faceCache.find( path );
+		if ( it != faceCache.end() ) {
+			return it->second;
+		}
+
+		FT_Face face;
+		if ( FT_New_Face( library, path.c_str(), 0, &face ) == 0 ) {
+			faceCache[path] = face;
+			return face;
+		}
+
+		return nullptr;
+	}
+};
+
+std::shared_ptr<FreeTypeState> gFtState;
+EE::System::Mutex gStateInitMutex;
+
+std::shared_ptr<FreeTypeState> getFTState() {
+	Lock lock( gStateInitMutex );
+	if ( !gFtState )
+		gFtState = std::make_shared<FreeTypeState>();
+	return gFtState;
+}
+
+void destroyFTState() {
+	Lock lock( gStateInitMutex );
+	gFtState.reset();
+}
+
+} // namespace
 
 namespace EE { namespace Graphics {
 
@@ -54,6 +114,7 @@ SystemFontResolver::SystemFontResolver() {}
 
 SystemFontResolver::~SystemFontResolver() {
 	invalidateCache();
+	destroyFTState();
 }
 
 void SystemFontResolver::setEnabled( bool enabled ) {
@@ -91,6 +152,7 @@ GenericFamily SystemFontResolver::genericFamilyFromName( const std::string& name
 
 void SystemFontResolver::ensureFontListPopulated() const {
 	if ( !mFontListPopulated ) {
+		AtomicBoolScopedOp op( mFontListLoading );
 		populateFontList();
 		populateGenericFallbacks();
 		mFontListPopulated = true;
@@ -321,24 +383,15 @@ FontDesc SystemFontResolver::getFallbackForCodepoint( Uint32 codepoint, FontWeig
 }
 
 bool SystemFontResolver::fontContainsCodepoint( const std::string& path, Uint32 codepoint ) {
-	if ( !FileSystem::fileExists( path ) )
+	std::shared_ptr<FreeTypeState> state = getFTState();
+	if ( !state )
 		return false;
 
-	FT_Library ftLib;
-	if ( FT_Init_FreeType( &ftLib ) != 0 )
+	FT_Face face = state->getFace( path );
+	if ( !face )
 		return false;
 
-	FT_Face face;
-	if ( FT_New_Face( ftLib, path.c_str(), 0, &face ) != 0 ) {
-		FT_Done_FreeType( ftLib );
-		return false;
-	}
-
-	bool hasGlyph = FT_Get_Char_Index( face, codepoint ) != 0;
-
-	FT_Done_Face( face );
-	FT_Done_FreeType( ftLib );
-	return hasGlyph;
+	return FT_Get_Char_Index( face, codepoint ) != 0;
 }
 
 void SystemFontResolver::populateGenericFallbacks() const {
@@ -719,8 +772,6 @@ void SystemFontResolver::populateFontList() const {
 // Platform: Linux / FreeBSD (Fontconfig — dynamically loaded)
 // =====================================================================
 #elif EE_PLATFORM == EE_PLATFORM_LINUX || EE_PLATFORM == EE_PLATFORM_BSD
-
-#include <eepp/system/sys.hpp>
 
 struct FcLib {
 	void* handle{ nullptr };
