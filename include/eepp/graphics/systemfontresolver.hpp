@@ -102,7 +102,7 @@ class EE_API SystemFontResolver {
   private:
 	void populateFontList() const;
 
-	void populateFontListXml() const;
+	void populateFontListFallback() const;
 
 	void populateGenericFallbacks() const;
 

@@ -859,12 +859,12 @@ static FontStretch fcWidthToFontStretch( int fcWidth ) {
 void SystemFontResolver::populateFontList() const {
 	FcLib fc;
 	if ( !fc.load() ) {
-		populateFontListXml();
+		populateFontListFallback();
 		return;
 	}
 	if ( !fc.Init() ) {
 		fc.unload();
-		populateFontListXml();
+		populateFontListFallback();
 		return;
 	}
 
@@ -885,7 +885,7 @@ void SystemFontResolver::populateFontList() const {
 
 	if ( !fontSet ) {
 		fc.unload();
-		populateFontListXml();
+		populateFontListFallback();
 		return;
 	}
 
@@ -932,109 +932,14 @@ void SystemFontResolver::populateFontList() const {
 }
 
 // =====================================================================
-// Platform: Android (NDK Font API + XML fallback)
+// Platform: Android (XML fallback)
 // =====================================================================
 #elif EE_PLATFORM == EE_PLATFORM_ANDROID
 
-#if __ANDROID_API__ >= 29
-
-void SystemFontResolver::populateFontList() const {
-	AFontMatcher* matcher = AFontMatcher_create();
-	if ( !matcher ) {
-		Log::warning( "SystemFontResolver: AFontMatcher_create failed, trying XML fallback" );
-		goto xml_fallback;
-	}
-
-	// Use the NDK font matcher to get system fonts
-	// The AFontMatcher API provides only matching, not full enumeration.
-	// Fall back to XML parsing for complete enumeration.
-
-	AFontMatcher_destroy( matcher );
-	goto xml_fallback;
-
-xml_fallback:
-	populateFontListXml();
-}
-
-#else
-
-void SystemFontResolver::populateFontList() const {
-	populateFontListXml();
-}
-
-#endif
-
-// =====================================================================
-// Platform: Haiku (BFont)
-// =====================================================================
-#elif EE_PLATFORM == EE_PLATFORM_HAIKU
-
-void SystemFontResolver::populateFontList() const {
-	static const char* fontDirs[] = { "/system/data/fonts", "/system/non-packaged/data/fonts",
-									  nullptr };
-
-	for ( int d = 0; fontDirs[d]; ++d ) {
-		BDirectory dir( fontDirs[d] );
-		if ( dir.InitCheck() != B_OK )
-			continue;
-
-		BEntry entry;
-		while ( dir.GetNextEntry( &entry, true ) == B_OK ) {
-			BPath path;
-			if ( entry.GetPath( &path ) != B_OK )
-				continue;
-
-			std::string pathStr( path.Path() );
-			if ( pathStr.empty() )
-				continue;
-
-			std::string ext = FileSystem::fileExtension( pathStr );
-			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" && ext != "pfa" &&
-				 ext != "pfb" && ext != "dfont" )
-				continue;
-
-			char nameBuf[B_FONT_FAMILY_LENGTH + 1] = {};
-			char styleBuf[B_FONT_STYLE_LENGTH + 1] = {};
-			bool isMono = false;
-
-			BFont font;
-			if ( font.SetFamilyAndStyle( nullptr, nullptr ) == B_OK ) {
-				font_family family;
-				font_style style;
-				font.GetFamilyAndStyle( &family, &style );
-
-				FontDesc desc;
-				desc.family = family;
-				desc.path = pathStr;
-				desc.faceIndex = 0;
-				desc.weight = FontWeight::Normal;
-
-				std::string styleStr( style );
-				if ( styleStr.find( "Bold" ) != std::string::npos ||
-					 styleStr.find( "bold" ) != std::string::npos )
-					desc.weight = FontWeight::Bold;
-				if ( styleStr.find( "Italic" ) != std::string::npos ||
-					 styleStr.find( "italic" ) != std::string::npos ||
-					 styleStr.find( "Oblique" ) != std::string::npos )
-					desc.italic = true;
-
-				mFontList.push_back( desc );
-			}
-		}
-	}
-}
-
-// =====================================================================
-// Platform: Emscripten / Unknown (no system font access)
-// =====================================================================
-#else
-
-void SystemFontResolver::populateFontList() const {}
-
-#endif
-
-void SystemFontResolver::populateFontListXml() const {
-#if EE_PLATFORM == EE_PLATFORM_ANDROID
+void SystemFontResolver::populateFontList() {
+	// Android's NDK ASystemFontIterator lacks family name exposure, 
+	// and AFontMatcher only matches text to a single font. 
+	// Parsing fonts.xml is the standard way to get logical font families.
 	static const char* fontPaths[] = { "/system/etc/fonts.xml", "/system/fonts/fonts.xml",
 									   "/vendor/etc/fonts.xml", nullptr };
 
@@ -1086,34 +991,94 @@ void SystemFontResolver::populateFontListXml() const {
 			desc.faceIndex = 0;
 			desc.weight = weight;
 			desc.italic = italic;
+			// Note: Android XML doesn't strictly provide a generic monospace flag in this node, 
+			// so you may need to default to false or infer from the family name.
+			desc.monospace = ( familyName.find("monospace") != std::string::npos ); 
 
 			mFontList.push_back( desc );
 		}
 	}
+}
+
+// =====================================================================
+// Platform: Haiku (Fallback)
+// =====================================================================
+#elif EE_PLATFORM == EE_PLATFORM_HAIKU
+
+void SystemFontResolver::populateFontList() const { 
+	return populateFontListFallback();
+}
+
+// =====================================================================
+// Platform: Emscripten / Unknown (no system font access)
+// =====================================================================
 #else
-	static const char* fontDirs[] = { "/usr/share/fonts", "/usr/local/share/fonts", nullptr };
+
+void SystemFontResolver::populateFontList() const {}
+
+#endif
+
+void SystemFontResolver::populateFontListFallback() const {
+	// Added Haiku font paths so testing this fallback on Haiku actually finds files
+	static const char* fontDirs[] = { 
+		"/usr/share/fonts", 
+		"/usr/local/share/fonts", 
+#if EE_PLATFORM == EE_PLATFORM_HAIKU
+		"/system/data/fonts/ttfonts", 
+		"/system/data/fonts/otfonts", 
+		"/system/non-packaged/data/fonts", 
+#endif
+		nullptr 
+	};
+
+	FT_Library ftLibrary;
+	if ( FT_Init_FreeType( &ftLibrary ) != 0 )
+		return;
 
 	for ( int d = 0; fontDirs[d]; ++d ) {
-		if ( !FileSystem::isDirectory( std::string( fontDirs[d] ) ) )
+		std::string dir( fontDirs[d] );
+		
+		if ( !FileSystem::isDirectory( dir ) )
 			continue;
 
-		auto files = FileSystem::filesGetInPath( std::string( fontDirs[d] ), false, true );
+		auto files = FileSystem::filesGetInPath( dir, false, true );
 		for ( const auto& file : files ) {
 			std::string ext = FileSystem::fileExtension( file );
-			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" )
+			if ( ext != "ttf" && ext != "otf" && ext != "ttc" && ext != "otc" && 
+				 ext != "woff" && ext != "woff2" && ext != "bdf" && ext != "otb" )
 				continue;
+			
+			FileSystem::dirAddSlashAtEnd( dir );
+			std::string path = dir + file;
 
-			std::string path = std::string( fontDirs[d] ) + FileSystem::getOSSlash() + file;
+			// Temporarily load the face to get the total number of sub-faces
+			FT_Face tempFace;
+			if ( FT_New_Face( ftLibrary, path.c_str(), 0, &tempFace ) == 0 ) {
+				long numFaces = tempFace->num_faces;
+				FT_Done_Face( tempFace );
 
-			FontDesc desc;
-			desc.family = FileSystem::fileRemoveExtension( file );
-			desc.path = path;
-			desc.faceIndex = 0;
-			desc.weight = FontWeight::Normal;
-			mFontList.push_back( desc );
+				// Loop through all faces in the file (Crucial for .ttc/.otc files)
+				for ( long i = 0; i < numFaces; ++i ) {
+					FT_Face face;
+					if ( FT_New_Face( ftLibrary, path.c_str(), i, &face ) == 0 ) {
+						FontDesc desc;
+						desc.family = face->family_name ? face->family_name : "Unknown";
+						desc.path = path;
+						desc.faceIndex = static_cast<Uint32>( i );
+						
+						desc.weight = ( face->style_flags & FT_STYLE_FLAG_BOLD ) ? FontWeight::Bold : FontWeight::Normal;
+						desc.italic = ( face->style_flags & FT_STYLE_FLAG_ITALIC ) != 0;
+						desc.monospace = FT_IS_FIXED_WIDTH( face ) != 0;
+
+						mFontList.push_back( desc );
+						FT_Done_Face( face );
+					}
+				}
+			}
 		}
 	}
-#endif
+
+	FT_Done_FreeType( ftLibrary );
 }
 
 }} // namespace EE::Graphics

@@ -93,7 +93,7 @@ UTEST( SystemFontResolver, enumerateFamily ) {
 
 	if ( !fonts.empty() ) {
 		UTEST_PRINT_STEP( "Verify faceIndex is set" );
-		EXPECT_EQ( 0, fonts[0].faceIndex );
+		EXPECT_EQ( (Uint32)0, fonts[0].faceIndex );
 	}
 
 	SystemFontResolver::setEnabled( false );
