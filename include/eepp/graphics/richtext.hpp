@@ -35,7 +35,7 @@ class EE_API RichText : public Drawable {
 	void addSpan( const String& text, const FontStyleConfig& style );
 
 	void addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-				  const Rectf& padding, Float lineHeight = 0, bool isAtomic = false );
+				  const Rectf& padding, Float lineHeight = 0 );
 
 	/**
 	 * @brief Adds a text span with individual style parameters.
@@ -83,9 +83,9 @@ class EE_API RichText : public Drawable {
 
 	struct CustomBlock {
 		Sizef size;
-		bool isBlock{ false };
 		UI::CSSFloat floatType{ UI::CSSFloat::None };
 		UI::CSSClear clearType{ UI::CSSClear::None };
+		bool isLineBreak{ false };
 	};
 
 	struct SpanBlock {
@@ -93,7 +93,6 @@ class EE_API RichText : public Drawable {
 		Rectf margin;
 		Rectf padding;
 		Float lineHeight{ 0 };
-		bool isAtomic{ false };
 	};
 
 	using Block = std::variant<SpanBlock, std::shared_ptr<Drawable>, CustomBlock>;
@@ -107,11 +106,12 @@ class EE_API RichText : public Drawable {
 	/**
 	 * @brief Adds a custom size spacer into the text flow.
 	 * @param size The physical dimensions of the spacer.
-	 * @param isBlock Whether this spacer acts as a block-level element.
 	 */
-	void addCustomSize( const Sizef& size, bool isBlock = false,
-						UI::CSSFloat floatType = UI::CSSFloat::None,
+	void addCustomSize( const Sizef& size, UI::CSSFloat floatType = UI::CSSFloat::None,
 						UI::CSSClear clearType = UI::CSSClear::None );
+
+	/** @brief Adds a virtual line break that is not associated with a DOM text character. */
+	void addLineBreak();
 
 	/** @return The list of blocks. */
 	const std::vector<Block>& getBlocks() { return mBlocks; }

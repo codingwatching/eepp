@@ -302,14 +302,14 @@ Sizef RichText::getPixelsSize() {
 }
 
 void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-						const Rectf& padding, Float lineHeight, bool isAtomic ) {
+						const Rectf& padding, Float lineHeight ) {
 	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
 	auto span = std::make_shared<Text>();
 	span->setString( text );
 	span->setStyleConfig( style );
-	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight, isAtomic } );
+	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight } );
 	invalidateLayout();
 }
 
@@ -320,9 +320,13 @@ void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 	invalidateLayout();
 }
 
-void RichText::addCustomSize( const Sizef& size, bool isBlock, UI::CSSFloat floatType,
-							  UI::CSSClear clearType ) {
-	mBlocks.push_back( CustomBlock{ size, isBlock, floatType, clearType } );
+void RichText::addCustomSize( const Sizef& size, UI::CSSFloat floatType, UI::CSSClear clearType ) {
+	mBlocks.push_back( CustomBlock{ size, floatType, clearType, false } );
+	invalidateLayout();
+}
+
+void RichText::addLineBreak() {
+	mBlocks.push_back( CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, true } );
 	invalidateLayout();
 }
 
@@ -443,15 +447,8 @@ Float RichText::getMaxIntrinsicWidth() {
 		} else if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
 			curX += ( *pDrawable )->getPixelsSize().getWidth();
 		} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-			if ( pSize->isBlock ) {
-				if ( curX > 0 ) {
-					maxW = std::max( maxW, curX );
-					curX = 0;
-				}
-				maxW = std::max( maxW, pSize->size.getWidth() );
-			} else {
+			if ( !pSize->isLineBreak )
 				curX += pSize->size.getWidth();
-			}
 		}
 	}
 	maxW = std::max( maxW, curX );
@@ -512,18 +509,6 @@ void RichText::updateLayout() {
 				if ( !mLines.empty() )
 					mLines.back().width += extraLeft;
 
-				if ( pText->isAtomic && curX > extraLeft && mMaxWidth > 0 ) {
-					Float extraRight = pText->margin.Right + pText->padding.Right;
-					Float fullTextWidth = span->getTextWidth();
-					if ( curX + fullTextWidth + extraRight > mMaxWidth ) {
-						maxWidth = std::max( maxWidth, curX - extraLeft );
-						mLines.push_back( RenderParagraph() );
-						curX = extraLeft;
-						if ( !mLines.empty() )
-							mLines.back().width += extraLeft;
-					}
-				}
-
 				Uint32 textHints = span->getTextHints();
 
 				// Compute where lines break within this text span.
@@ -537,7 +522,6 @@ void RichText::updateLayout() {
 					wrapInfo.wraps.push_back( span->getString().size() );
 
 				// Emit a RenderSpan for each segment, wrapping to new lines as needed.
-				Float atomicMaxX = 0;
 				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 					size_t startIdx = wrapInfo.wraps[i];
 					size_t endIdx = wrapInfo.wraps[i + 1];
@@ -559,7 +543,7 @@ void RichText::updateLayout() {
 
 						RenderSpan renderSpan{
 							SpanBlock{ renderSpanText, pText->margin, pText->padding,
-									   pText->lineHeight, pText->isAtomic },
+									   pText->lineHeight },
 							{ curX, 0 },
 							Sizef( spanWidth, height ),
 							curCharIdx,
@@ -574,8 +558,6 @@ void RichText::updateLayout() {
 
 						curX += spanWidth;
 						currentLine.width += spanWidth;
-						if ( pText->isAtomic )
-							atomicMaxX = std::max( atomicMaxX, curX );
 					}
 
 					// After the last segment, add trailing margin and check if the
@@ -584,8 +566,6 @@ void RichText::updateLayout() {
 						Float extraRight = pText->margin.Right + pText->padding.Right;
 						curX += extraRight;
 						mLines.back().width += extraRight;
-						if ( pText->isAtomic )
-							atomicMaxX = std::max( atomicMaxX, curX );
 						if ( !isNewline && mMaxWidth > 0 && curX > mMaxWidth ) {
 							maxWidth = std::max( maxWidth, curX );
 							mLines.push_back( RenderParagraph() );
@@ -609,43 +589,28 @@ void RichText::updateLayout() {
 						curX = 0;
 					}
 				}
-
-				// Atomic (inline-block) spans reserve the width of their widest line
-				// so subsequent content does not flow beside a shorter last line.
-				if ( pText->isAtomic && atomicMaxX > curX ) {
-					curX = atomicMaxX;
-					if ( !mLines.empty() )
-						mLines.back().width = std::max( mLines.back().width, curX );
-				}
-
-				// If the inline-block spanned multiple lines, force a new line
-				// so trailing content starts below the entire block.
-				if ( pText->isAtomic && wrapInfo.wraps.size() > 2 && curX > 0 ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
 			} else {
 				// Drawable or CustomBlock (non-float).
 				Sizef blockSize;
-				bool isBlock = false;
+				bool isLineBreak = false;
 				if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
 					auto& drawable = *pDrawable;
 					blockSize = drawable ? drawable->getPixelsSize() : Sizef();
 				} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
 					blockSize = pSize->size;
-					isBlock = pSize->isBlock;
+					isLineBreak = pSize->isLineBreak;
 				}
 
-				// Block elements force a line break before themselves.
-				if ( isBlock && curX > 0 ) {
+				if ( isLineBreak ) {
 					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
+					if ( !mLines.back().spans.empty() )
+						mLines.push_back( RenderParagraph() );
 					curX = 0;
+					continue;
 				}
 
 				// Inline elements that don't fit wrap to the next line.
-				if ( mMaxWidth > 0 && !isBlock &&
+				if ( mMaxWidth > 0 &&
 					 ( curX + blockSize.getWidth() >= mMaxWidth || curX >= mMaxWidth ) &&
 					 curX > 0 ) {
 					maxWidth = std::max( maxWidth, curX );
@@ -665,8 +630,7 @@ void RichText::updateLayout() {
 				curX += blockSize.getWidth();
 				currentLine.width += blockSize.getWidth();
 
-				// Block elements also force a line break after themselves.
-				if ( ( mMaxWidth > 0 && curX >= mMaxWidth ) || isBlock ) {
+				if ( mMaxWidth > 0 && curX >= mMaxWidth ) {
 					maxWidth = std::max( maxWidth, curX );
 					mLines.push_back( RenderParagraph() );
 					curX = 0;
@@ -768,6 +732,19 @@ void RichText::updateLayout() {
 		return floatRightEdge( y ) - floatLeftEdge( y );
 	};
 
+	auto activeFloatBottom = [&]( Float y ) -> Float {
+		Float bottom = y;
+		for ( const auto& f : leftFloats ) {
+			if ( y >= f.Top && y < f.Bottom )
+				bottom = std::max( bottom, f.Bottom );
+		}
+		for ( const auto& f : rightFloats ) {
+			if ( y >= f.Top && y < f.Bottom )
+				bottom = std::max( bottom, f.Bottom );
+		}
+		return bottom;
+	};
+
 	// Advances curY past the bottom of active floats specified by clearType.
 	// Returns true if curY was moved.
 	auto clearFloats = [&]( UI::CSSClear clearType ) -> bool {
@@ -819,18 +796,6 @@ void RichText::updateLayout() {
 			if ( !mLines.empty() )
 				mLines.back().width += extraLeft;
 
-			if ( pText->isAtomic && curX > extraLeft && mMaxWidth > 0 ) {
-				Float extraRight = pText->margin.Right + pText->padding.Right;
-				Float fullTextWidth = span->getTextWidth();
-				if ( curX + fullTextWidth + extraRight > mMaxWidth ) {
-					maxWidth = std::max( maxWidth, curX - extraLeft );
-					mLines.push_back( RenderParagraph() );
-					curX = extraLeft;
-					if ( !mLines.empty() )
-						mLines.back().width += extraLeft;
-				}
-			}
-
 			// Shift curX inside to the left edge — text starts
 			// to the right of any left floats.
 			Float le = floatLeftEdge( curY );
@@ -852,7 +817,6 @@ void RichText::updateLayout() {
 				 wrapInfo.wraps.back() != (Float)span->getString().size() )
 				wrapInfo.wraps.push_back( span->getString().size() );
 
-			Float atomicMaxX = 0;
 			for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 				size_t startIdx = wrapInfo.wraps[i];
 				size_t endIdx = wrapInfo.wraps[i + 1];
@@ -871,8 +835,8 @@ void RichText::updateLayout() {
 					Float spanWidth = renderSpanText->getTextWidth();
 
 					RenderSpan renderSpan{
-						SpanBlock{ renderSpanText, pText->margin, pText->padding, pText->lineHeight,
-								   pText->isAtomic },
+						SpanBlock{ renderSpanText, pText->margin, pText->padding,
+								   pText->lineHeight },
 						{ curX, 0 },
 						Sizef( spanWidth, height ),
 						curCharIdx,
@@ -888,8 +852,6 @@ void RichText::updateLayout() {
 
 					curX += spanWidth;
 					currentLine.width += spanWidth;
-					if ( pText->isAtomic )
-						atomicMaxX = std::max( atomicMaxX, curX );
 				}
 
 				// After the last segment, add trailing margin and check if the
@@ -898,8 +860,6 @@ void RichText::updateLayout() {
 					Float extraRight = pText->margin.Right + pText->padding.Right;
 					curX += extraRight;
 					mLines.back().width += extraRight;
-					if ( pText->isAtomic )
-						atomicMaxX = std::max( atomicMaxX, curX );
 					if ( effW > 0 && effW < 1e9f && curX > effW ) {
 						maxWidth = std::max( maxWidth, curX );
 						mLines.push_back( RenderParagraph() );
@@ -923,25 +883,10 @@ void RichText::updateLayout() {
 					curX = 0;
 				}
 			}
-
-			// Atomic (inline-block) spans reserve the width of their widest line.
-			if ( pText->isAtomic && atomicMaxX > curX ) {
-				curX = atomicMaxX;
-				if ( !mLines.empty() )
-					mLines.back().width = std::max( mLines.back().width, curX );
-			}
-
-			// If the inline-block spanned multiple lines, force a new line
-			// so trailing content starts below the entire block.
-			if ( pText->isAtomic && wrapInfo.wraps.size() > 2 && curX > 0 ) {
-				maxWidth = std::max( maxWidth, curX );
-				mLines.push_back( RenderParagraph() );
-				curX = 0;
-			}
 		} else {
 			// ── Drawable or CustomBlock ────────────────────────────
 			Sizef blockSize;
-			bool isBlock = false;
+			bool isLineBreak = false;
 			UI::CSSFloat floatType = UI::CSSFloat::None;
 			UI::CSSClear clearType = UI::CSSClear::None;
 			if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
@@ -949,9 +894,20 @@ void RichText::updateLayout() {
 				blockSize = drawable ? drawable->getPixelsSize() : Sizef();
 			} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
 				blockSize = pSize->size;
-				isBlock = pSize->isBlock;
 				floatType = pSize->floatType;
 				clearType = pSize->clearType;
+				isLineBreak = pSize->isLineBreak;
+			}
+
+			if ( isLineBreak ) {
+				maxWidth = std::max( maxWidth, curX );
+				if ( !mLines.back().spans.empty() ) {
+					curY += mLines.back().height;
+					mLines.push_back( RenderParagraph() );
+					mLines.back().y = curY;
+				}
+				curX = 0;
+				continue;
 			}
 
 			// ── Clear: advance curY past active floats ─────────────
@@ -959,6 +915,7 @@ void RichText::updateLayout() {
 				if ( clearFloats( clearType ) ) {
 					maxWidth = std::max( maxWidth, curX );
 					mLines.push_back( RenderParagraph() );
+					mLines.back().y = curY;
 					curX = 0;
 				}
 			}
@@ -988,6 +945,7 @@ void RichText::updateLayout() {
 							mLines.push_back( RenderParagraph() );
 							curX = 0;
 							curY = maxBottom;
+							mLines.back().y = curY;
 							posX = floatLeftEdge( curY );
 						}
 					}
@@ -1005,6 +963,7 @@ void RichText::updateLayout() {
 							mLines.push_back( RenderParagraph() );
 							curX = 0;
 							curY = maxBottom;
+							mLines.back().y = curY;
 							re = floatRightEdge( curY );
 							le = floatLeftEdge( curY );
 							posX = re - blockSize.getWidth();
@@ -1028,45 +987,28 @@ void RichText::updateLayout() {
 					rightFloats.push_back( fr );
 			} else {
 				// ── Normal (non-float) block ────────────────────
-				Float flowX = curX;
 				if ( curX < le )
 					curX = le;
 
-				// Block elements force a line break before
-				// only when there is inline-flow content on the line.
-				if ( isBlock && flowX > 0 ) {
-					maxWidth = std::max( maxWidth, flowX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-					if ( curX < le )
-						curX = le;
-				}
-
 				Float effW = effectiveMaxWidthAt( curY );
 
-				// When a block does not fit beside active floats,
-				// advance curY below them.
-				if ( isBlock && effW > 0 && effW < 1e9f &&
-					 curX + blockSize.getWidth() > effW + 0.01f && curX > 0 ) {
-					Float maxBottom = curY;
-					for ( auto& f : leftFloats )
-						maxBottom = std::max( maxBottom, f.Bottom );
-					for ( auto& f : rightFloats )
-						maxBottom = std::max( maxBottom, f.Bottom );
+				if ( effW > 0 && effW < 1e9f && blockSize.getWidth() > effW + 0.01f ) {
+					Float maxBottom = activeFloatBottom( curY );
 					if ( maxBottom > curY ) {
 						maxWidth = std::max( maxWidth, curX );
-						mLines.push_back( RenderParagraph() );
+						if ( !mLines.back().spans.empty() )
+							mLines.push_back( RenderParagraph() );
 						curX = 0;
 						curY = maxBottom;
+						mLines.back().y = curY;
 						le = floatLeftEdge( curY );
-						if ( curX < le )
-							curX = le;
+						effW = effectiveMaxWidthAt( curY );
 					}
 				}
 
 				// Wrap if the block doesn't fit in the available width
 				// (narrowed by active floats).
-				if ( effW > 0 && effW < 1e9f && !isBlock &&
+				if ( effW > 0 && effW < 1e9f &&
 					 ( curX + blockSize.getWidth() >= effW || curX >= effW ) && curX > 0 ) {
 					maxWidth = std::max( maxWidth, curX );
 					mLines.push_back( RenderParagraph() );
@@ -1085,8 +1027,7 @@ void RichText::updateLayout() {
 				curX += blockSize.getWidth();
 				currentLine.width += blockSize.getWidth();
 
-				// Block elements or overflow force a line break after.
-				if ( ( effW > 0 && effW < 1e9f && curX >= effW ) || isBlock ) {
+				if ( effW > 0 && effW < 1e9f && curX >= effW ) {
 					maxWidth = std::max( maxWidth, curX );
 					mLines.push_back( RenderParagraph() );
 					curX = 0;
@@ -1106,6 +1047,8 @@ void RichText::updateLayout() {
 	// text-align only affects inline-flow content, not floated elements.
 	Float accumY = 0;
 	for ( auto& line : mLines ) {
+		if ( line.y > accumY )
+			accumY = line.y;
 		line.y = accumY;
 
 		Float xOffset = 0;
@@ -1136,8 +1079,12 @@ void RichText::updateLayout() {
 				if ( offsetY < 0 )
 					offsetY = 0;
 				// Float spans keep their edge-aligned x; only inline-flow spans shift.
-				if ( !isFloat )
+				if ( isFloat ) {
+					span.position.y = 0;
+					continue;
+				} else {
 					span.position.x += xOffset;
+				}
 				span.position.y = offsetY;
 				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 			}
@@ -1149,7 +1096,13 @@ void RichText::updateLayout() {
 		accumY += line.height;
 	}
 
-	mSize = Sizef( maxWidth, accumY );
+	Float floatBoundsBottom = 0;
+	for ( const auto& f : leftFloats )
+		floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
+	for ( const auto& f : rightFloats )
+		floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
+
+	mSize = Sizef( maxWidth, std::max( accumY, floatBoundsBottom ) );
 	mTotalCharacterCount = curCharIdx;
 	mNeedsLayoutUpdate = false;
 }

@@ -25,6 +25,10 @@ bool UIHTMLTextArea::isType( const Uint32& type ) const {
 	return UIHTMLTextArea::getType() == type || UITextEdit::isType( type );
 }
 
+bool UIHTMLTextArea::isInlineDisplay() const {
+	return true;
+}
+
 bool UIHTMLTextArea::applyProperty( const StyleSheetProperty& attribute ) {
 	if ( !attribute.getPropertyDefinition() )
 		return false;

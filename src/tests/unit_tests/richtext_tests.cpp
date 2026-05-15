@@ -396,6 +396,23 @@ UTEST( UIRichText, IntegrationAndLayoutVerification ) {
 	destroyRichTextScene( sceneNode );
 }
 
+UTEST( RichText, VirtualLineBreakSeparatesCustomBlocks ) {
+	RichText rt;
+	rt.addCustomSize( { 10, 5 } );
+	rt.addLineBreak();
+	rt.addCustomSize( { 20, 7 } );
+	rt.updateLayout();
+
+	const auto& lines = rt.getLines();
+	ASSERT_EQ( lines.size(), (size_t)2 );
+	ASSERT_EQ( lines[0].spans.size(), (size_t)1 );
+	ASSERT_EQ( lines[1].spans.size(), (size_t)1 );
+	EXPECT_EQ( lines[0].spans[0].position.x, 0 );
+	EXPECT_EQ( lines[1].spans[0].position.x, 0 );
+	EXPECT_EQ( lines[1].y, lines[0].height );
+	EXPECT_EQ( rt.getSize().getHeight(), lines[0].height + lines[1].height );
+}
+
 UTEST( UIRichText, selection ) {
 	auto sceneNode = createRichTextScene();
 	ASSERT_TRUE( sceneNode != nullptr );

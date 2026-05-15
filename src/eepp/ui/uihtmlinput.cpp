@@ -17,6 +17,7 @@ UIHTMLInput* UIHTMLInput::New() {
 
 UIHTMLInput::UIHTMLInput() : UIHTMLWidget( "input" ) {
 	mFlags |= UI_HTML_ELEMENT;
+	mDisplay = CSSDisplay::InlineBlock;
 	mWidthPolicy = SizePolicy::WrapContent;
 	mHeightPolicy = SizePolicy::WrapContent;
 	createChildWidget();

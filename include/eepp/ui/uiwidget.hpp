@@ -812,7 +812,7 @@ class EE_API UIWidget : public UINode {
 	 *
 	 * @return True if this widget is inline-level.
 	 */
-	bool isInlineDisplay() const;
+	virtual bool isInlineDisplay() const;
 
 	/** @return The index of this element among its sibling elements. */
 	Uint32 getElementIndex() const;

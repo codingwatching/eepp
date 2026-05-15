@@ -1,4 +1,5 @@
 #include <eepp/graphics/fontmanager.hpp>
+#include <eepp/graphics/primitives.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
@@ -289,6 +290,13 @@ void UIRichText::draw() {
 								 mScreenPos.y + contentOffset.Top,
 								 mSize.getWidth() - contentOffset.Left - contentOffset.Right,
 								 mSize.getHeight() - contentOffset.Top - contentOffset.Bottom );
+			}
+
+			if ( isType( UI_TYPE_TEXTSPAN ) && !asType<UITextSpan>()->isMergeable() &&
+				 asType<UITextSpan>()->getFontBackgroundColor() != Color::Transparent ) {
+				Primitives p;
+				p.setColor( asType<UITextSpan>()->getFontBackgroundColor() );
+				p.drawRectangle( Rectf( mScreenPos.trunc(), mSize.floor() ), 0.f, Vector2f::One );
 			}
 
 			mRichText.draw( std::trunc( mScreenPos.x ) + (int)contentOffset.Left,
@@ -824,7 +832,14 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 							  : true;
 	bool lastSpanEndsWithSpace = false;
 	Float maxWidth = 0;
-	if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
+	bool isInlineBlockTextSpan =
+		container->isType( UI_TYPE_TEXTSPAN ) && container->asType<UITextSpan>()->isInlineBlock();
+	if ( isInlineBlockTextSpan && mode == IntrinsicMode::None &&
+		 container->getPixelsSize().getWidth() > 0 ) {
+		maxWidth = container->getPixelsSize().getWidth() -
+				   container->getPixelsContentOffset().Left -
+				   container->getPixelsContentOffset().Right;
+	} else if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 		maxWidth = container->getMatchParentWidth() - container->getPixelsContentOffset().Left -
 				   container->getPixelsContentOffset().Right;
 	} else {
@@ -859,7 +874,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		if ( !selfSpan->getText().empty() && !selfSpan->isMergeable() &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
 			String::View selfText = selfSpan->getText().view();
-			richText.addSpan( selfText, selfSpan->getFontStyleConfig() );
+			FontStyleConfig style = selfSpan->getFontStyleConfig();
+			style.BackgroundColor = Color::Transparent;
+			richText.addSpan( selfText, style );
 			if ( shouldCollapse )
 				lastSpanEndsWithSpace = !selfText.empty() && selfText.back() == ' ';
 		}
@@ -992,7 +1009,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 				if ( !spanText.empty() ) {
 					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding,
-									  spanLineHeight, span->isInlineBlock() );
+									  spanLineHeight );
 					span->setLayoutCharCount( spanText.length() );
 					if ( shouldCollapse )
 						lastSpanEndsWithSpace = spanText.back() == ' ';
@@ -1065,8 +1082,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					}
 
 					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
-						 widget->asType<UITextSpan>()->isInlineBlock() &&
-						 widget->getPixelsSize().getWidth() == 0 )
+						 widget->asType<UITextSpan>()->isInlineBlock() )
 						widget->asType<UIRichText>()->updateLayout();
 				}
 
@@ -1094,10 +1110,28 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					floatType = widget->asType<UIHTMLWidget>()->getCSSFloat();
 					clearType = widget->asType<UIHTMLWidget>()->getCSSClear();
 				}
+				bool isNormalFlowBlock = isBlock && floatType == CSSFloat::None;
+
+				if ( isNormalFlowBlock )
+					richText.addLineBreak();
 
 				richText.addCustomSize( Sizef( w + margin.Left + margin.Right,
 											   size.getHeight() + margin.Top + margin.Bottom ),
-										isBlock, floatType, clearType );
+										floatType, clearType );
+
+				if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
+					 widget->asType<UITextSpan>()->isInlineBlock() &&
+					 widget->asType<UIRichText>()->getRichTextPtr() )
+					widget->asType<UIRichText>()->getRichTextPtr()->updateLayout();
+
+				if ( isNormalFlowBlock )
+					richText.addLineBreak();
+				else if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
+						  widget->asType<UITextSpan>()->isInlineBlock() &&
+						  widget->asType<UIRichText>()->getRichTextPtr() &&
+						  widget->asType<UIRichText>()->getRichTextPtr()->getLines().size() > 1 )
+					richText.addLineBreak();
+
 				lastSpanEndsWithSpace = false;
 			}
 		}

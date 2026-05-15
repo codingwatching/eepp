@@ -150,8 +150,6 @@ class EE_API UITextSpan : public UIRichText {
 
 	explicit UITextSpan( const std::string& tag = "span" );
 
-	virtual void drawBorder();
-
 	virtual void onTextChanged();
 
 	virtual void onFontChanged();

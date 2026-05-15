@@ -15,6 +15,8 @@ class EE_API UIHTMLTextArea : public UITextEdit {
 
 	virtual bool isType( const Uint32& type ) const;
 
+	virtual bool isInlineDisplay() const;
+
 	virtual bool applyProperty( const StyleSheetProperty& attribute );
 
 	virtual std::string getPropertyString( const PropertyDefinition* propertyDef,

@@ -159,8 +159,10 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			while ( currentSpan < line.spans.size() ) {
 				const auto& span = line.spans[currentSpan];
 				currentSpan++;
-				if ( std::holds_alternative<RichText::CustomBlock>( span.block ) )
-					return &span;
+				if ( auto custom = std::get_if<RichText::CustomBlock>( &span.block ) ) {
+					if ( !custom->isLineBreak )
+						return &span;
+				}
 			}
 			currentSpan = 0;
 			currentLine++;
@@ -351,21 +353,6 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 					widget->setPixelsPosition( targetPos - offset );
 
 					bounds = Rectf( targetPos, span->size );
-
-					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
-						 widget->asType<UITextSpan>()->isInlineBlock() ) {
-						Rectf pad = widget->getPixelsPadding();
-						bounds.Left -= pad.Left;
-						bounds.Top -= pad.Top;
-						bounds.Right += pad.Right;
-						bounds.Bottom += pad.Bottom;
-						Vector2f boundsPos = bounds.getPosition();
-						widget->setPixelsPosition( boundsPos - offset );
-						if ( bounds.getSize() != widget->getPixelsSize() ) {
-							widget->setPixelsSize( bounds.getSize() );
-							mResizedCount++;
-						}
-					}
 				}
 			}
 		}

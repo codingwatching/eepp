@@ -62,36 +62,11 @@ bool UITextSpan::isType( const Uint32& type ) const {
 }
 
 bool UITextSpan::isMergeable() const {
-	if ( mDisplay == CSSDisplay::Inline )
-		return true;
-	if ( mDisplay == CSSDisplay::InlineBlock ) {
-		if ( getText().empty() || NULL == getFontStyleConfig().Font )
-			return false;
-		if ( getLayoutWidthPolicy() == SizePolicy::Fixed ||
-			 getLayoutHeightPolicy() == SizePolicy::Fixed )
-			return false;
-		return true;
-	}
-	return false;
+	return mDisplay == CSSDisplay::Inline;
 }
 
 bool UITextSpan::isInlineBlock() const {
 	return mDisplay == CSSDisplay::InlineBlock;
-}
-
-void UITextSpan::drawBorder() {
-	if ( ( mFlags & UI_BORDER ) && NULL != mBorder ) {
-		mBorder->setAlpha( mAlpha );
-		if ( isInlineBlock() ) {
-			mBorder->draw( Vector2f( std::trunc( mScreenPos.x ), std::trunc( mScreenPos.y ) ),
-						   Sizef( std::floor( mSize.x ), std::floor( mSize.y ) ) );
-		} else {
-			mBorder->draw( { std::trunc( mScreenPos.x - mPaddingPx.Left ),
-							 std::trunc( mScreenPos.y - mPaddingPx.Top ) },
-						   { std::floor( mSize.x + mPaddingPx.Left + mPaddingPx.Right ),
-							 std::floor( mSize.y + mPaddingPx.Top + mPaddingPx.Bottom ) } );
-		}
-	}
 }
 
 void UITextSpan::draw() {

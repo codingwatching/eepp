@@ -541,6 +541,40 @@ UTEST( UIHTMLTextArea, rowsColsAttribute ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, FormControlsDefaultInlineBlock ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<div id="container" style="width: 600px;">
+			<input id="i1" size="5">
+			<input id="i2" size="5">
+			<textarea id="t1" rows="2" cols="8"></textarea>
+			<textarea id="t2" rows="2" cols="8"></textarea>
+		</div>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* i1 = sceneNode->getRoot()->find( "i1" )->asType<UIHTMLInput>();
+	auto* i2 = sceneNode->getRoot()->find( "i2" )->asType<UIHTMLInput>();
+	auto* t1 = sceneNode->getRoot()->find( "t1" )->asType<UIHTMLTextArea>();
+	auto* t2 = sceneNode->getRoot()->find( "t2" )->asType<UIHTMLTextArea>();
+
+	ASSERT_TRUE( i1 != nullptr );
+	ASSERT_TRUE( i2 != nullptr );
+	ASSERT_TRUE( t1 != nullptr );
+	ASSERT_TRUE( t2 != nullptr );
+
+	EXPECT_EQ( i1->getDisplay(), CSSDisplay::InlineBlock );
+	EXPECT_EQ( i2->getDisplay(), CSSDisplay::InlineBlock );
+
+	EXPECT_EQ( i1->getPixelsPosition().y, i2->getPixelsPosition().y );
+	EXPECT_LT( i1->getPixelsPosition().x, i2->getPixelsPosition().x );
+	EXPECT_EQ( t1->getPixelsPosition().y, t2->getPixelsPosition().y );
+	EXPECT_LT( t1->getPixelsPosition().x, t2->getPixelsPosition().x );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLTable, tableLayoutFixed ) {
 	Engine::instance()->createWindow( WindowSettings( 1024, 650, "HTML Tables Test",
 													  WindowStyle::Default, WindowBackend::Default,
