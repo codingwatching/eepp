@@ -1540,10 +1540,8 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 
 				Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
 				if ( weightStyle ) {
-					Font* regular =
-						FontManager::instance()->getByName( desc.family );
-					if ( regular && regular != font &&
-						 regular->getType() == FontType::TTF ) {
+					Font* regular = FontManager::instance()->getByName( desc.family );
+					if ( regular && regular != font && regular->getType() == FontType::TTF ) {
 						auto* regularFT = static_cast<FontTrueType*>( regular );
 						if ( weightStyle == Text::Bold )
 							regularFT->setBoldFont( ttf );
@@ -1587,7 +1585,7 @@ void UISceneNode::loadFontStyleVariants( Font* font, const std::string& family )
 		return;
 	auto* ft = static_cast<FontTrueType*>( font );
 
-	auto loadVariant = [this, family]( FontWeight weight, bool italic ) -> FontTrueType* {
+	auto loadVariant = [family]( FontWeight weight, bool italic ) -> FontTrueType* {
 		Uint32 style = 0;
 		if ( italic )
 			style |= Text::Italic;
