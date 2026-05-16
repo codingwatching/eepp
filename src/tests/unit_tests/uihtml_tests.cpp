@@ -533,6 +533,53 @@ UTEST( UIHTMLInput, sizeAttribute ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, DataProperties ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<html>
+			<body>
+				<div id="target"
+					 data-role="hero"
+					 data-tags="featured primary"
+					 data-lang="en-US"
+					 data-language="cpp"
+					 data-id="user-42"
+					 data-empty="">
+				</div>
+				<div id="missing-control"></div>
+			</body>
+		</html>
+	)html" ) );
+
+	auto* target = sceneNode->getRoot()->find( "target" )->asType<UIHTMLWidget>();
+	ASSERT_TRUE( target != nullptr );
+
+	EXPECT_TRUE( target->hasDataProperty( "data-role" ) );
+	EXPECT_TRUE( target->hasDataProperty( "DATA-ROLE" ) );
+	EXPECT_TRUE( target->hasDataProperty( "data-empty" ) );
+	EXPECT_FALSE( target->hasDataProperty( "data-missing" ) );
+	EXPECT_TRUE( target->getDataPropertyString( "data-role" ) == "hero" );
+	EXPECT_TRUE( target->getDataPropertyString( "data-empty", "fallback" ) == "" );
+	EXPECT_TRUE( target->getDataPropertyString( "data-missing", "fallback" ) == "fallback" );
+	EXPECT_TRUE( target->getPropertyString( "data-role" ) == "hero" );
+
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-role]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-role=\"hero\"]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-tags~=\"featured\"]" ).size(),
+			   (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-lang|=\"en\"]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-id^=\"user-\"]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-id$=\"-42\"]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-id*=\"ser\"]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-empty]" ).size(), (size_t)1 );
+	EXPECT_EQ( sceneNode->getRoot()->querySelectorAll( "[data-missing]" ).size(), (size_t)0 );
+
+	EXPECT_TRUE( target->getDataPropertyString( "data-language" ) == "cpp" );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLTextArea, rowsColsAttribute ) {
 	init_ui_test();
 	auto* scene = SceneManager::instance()->getUISceneNode();

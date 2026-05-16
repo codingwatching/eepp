@@ -13,6 +13,10 @@
 
 namespace EE { namespace UI { namespace CSS {
 
+static bool isDataPropertyName( std::string_view name ) {
+	return String::istartsWith( String::trim( name ), "data-" );
+}
+
 StyleSheetProperty::StyleSheetProperty() :
 	mSpecificity( 0 ), mVolatile( false ), mImportant( false ) {}
 
@@ -38,7 +42,7 @@ StyleSheetProperty::StyleSheetProperty( const PropertyDefinition* definition,
 	checkVars();
 
 	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
-		 !String::startsWith( mName, "-" ) ) {
+		 !String::startsWith( mName, "-" ) && !isDataPropertyName( mName ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }
@@ -62,7 +66,7 @@ StyleSheetProperty::StyleSheetProperty( bool isVolatile, const PropertyDefinitio
 	checkVars();
 
 	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
-		 !String::startsWith( mName, "-" ) ) {
+		 !String::startsWith( mName, "-" ) && !isDataPropertyName( mName ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }
@@ -89,7 +93,7 @@ StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::stri
 	checkVars();
 
 	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
-		 !String::startsWith( mName, "-" ) ) {
+		 !String::startsWith( mName, "-" ) && !isDataPropertyName( mName ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }
@@ -115,7 +119,8 @@ StyleSheetProperty::StyleSheetProperty( const std::string& name, const std::stri
 	createIndexed();
 	checkVars();
 
-	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition ) {
+	if ( NULL == mShorthandDefinition && NULL == mPropertyDefinition &&
+		 !isDataPropertyName( mName ) ) {
 		Log::warning( "Property \"%s\" is not defined!", mName );
 	}
 }

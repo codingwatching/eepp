@@ -7,6 +7,29 @@
 
 namespace EE { namespace UI {
 
+static bool isDataPropertyName( std::string_view name ) {
+	return String::istartsWith( String::trim( name ), "data-" );
+}
+
+static bool isNormalizedDataPropertyName( std::string_view name ) {
+	if ( !String::startsWith( name, "data-" ) || String::trim( name ).size() != name.size() )
+		return false;
+
+	for ( auto c : name ) {
+		if ( c >= 'A' && c <= 'Z' )
+			return false;
+	}
+
+	return true;
+}
+
+static std::string normalizeDataPropertyName( std::string_view name ) {
+	auto trimmedName = String::trim( name );
+	std::string normalizedName( trimmedName );
+	String::toLowerInPlace( normalizedName );
+	return normalizedName;
+}
+
 UIHTMLWidget* UIHTMLWidget::New() {
 	return eeNew( UIHTMLWidget, () );
 }
@@ -465,6 +488,50 @@ void UIHTMLWidget::invalidateIntrinsicSize() {
 
 bool UIHTMLWidget::isOutOfFlow() const {
 	return mPosition == CSSPosition::Absolute || mPosition == CSSPosition::Fixed;
+}
+
+bool UIHTMLWidget::hasDataProperty( const std::string& name ) const {
+	if ( isNormalizedDataPropertyName( name ) )
+		return mDataProperties.find( name ) != mDataProperties.end();
+	return mDataProperties.find( normalizeDataPropertyName( name ) ) != mDataProperties.end();
+}
+
+const StyleSheetProperty* UIHTMLWidget::getDataProperty( const std::string& name ) const {
+	auto it = isNormalizedDataPropertyName( name )
+				  ? mDataProperties.find( name )
+				  : mDataProperties.find( normalizeDataPropertyName( name ) );
+	return it != mDataProperties.end() ? &it->second : nullptr;
+}
+
+std::string UIHTMLWidget::getDataPropertyString( const std::string& name,
+												 const std::string& defaultValue ) const {
+	const StyleSheetProperty* property = getDataProperty( name );
+	return property ? property->value() : defaultValue;
+}
+
+void UIHTMLWidget::setDataProperty( const StyleSheetProperty& property ) {
+	const auto& name = property.getName();
+	if ( isDataPropertyName( name ) )
+		mDataProperties[isNormalizedDataPropertyName( name ) ? name
+															 : normalizeDataPropertyName( name )] =
+			property;
+}
+
+void UIHTMLWidget::setDataProperty( const std::string& name, const std::string& value ) {
+	if ( !isDataPropertyName( name ) )
+		return;
+
+	std::string normalizedName =
+		isNormalizedDataPropertyName( name ) ? name : normalizeDataPropertyName( name );
+	mDataProperties[normalizedName] = StyleSheetProperty( normalizedName, value, false );
+}
+
+void UIHTMLWidget::removeDataProperty( const std::string& name ) {
+	if ( isNormalizedDataPropertyName( name ) ) {
+		mDataProperties.erase( name );
+		return;
+	}
+	mDataProperties.erase( normalizeDataPropertyName( name ) );
 }
 
 }} // namespace EE::UI

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <eepp/ui/css/stylesheetselectorrule.hpp>
+#include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uiwidget.hpp>
 
 namespace EE { namespace UI { namespace CSS {
@@ -39,6 +40,10 @@ static bool isStructuralPseudoClass( const std::string& pseudoClass ) {
 	}
 
 	return false;
+}
+
+static bool isDataAttributeName( std::string_view name ) {
+	return String::istartsWith( String::trim( name ), "data-" );
 }
 
 StyleSheetSelectorRule::PseudoClasses
@@ -135,6 +140,8 @@ void StyleSheetSelectorRule::parseFragment( const std::string& selectorFragment 
 
 			mAttributeSelectors.push_back( attr );
 			mSpecificity += SpecificityClass;
+			buffer.clear();
+			return;
 		}
 
 		if ( curSelectorType == TAG || curSelectorType == CLASS || curSelectorType == ID ) {
@@ -216,6 +223,9 @@ void StyleSheetSelectorRule::parseFragment( const std::string& selectorFragment 
 
 	if ( !mClasses.empty() )
 		mRequirementFlags |= Class;
+
+	if ( !mAttributeSelectors.empty() )
+		mRequirementFlags |= Attribute;
 
 	if ( mPseudoClasses ) {
 		mRequirementFlags |= PseudoClass;
@@ -310,28 +320,44 @@ bool StyleSheetSelectorRule::matches( UIWidget* element, const bool& applyPseudo
 
 	if ( !mAttributeSelectors.empty() ) {
 		for ( const auto& attr : mAttributeSelectors ) {
-			if ( attr.op != AttributeOperator::None ) {
-				std::string elVal = element->getPropertyString( attr.name );
+			bool attrExists = false;
+			std::string elValStorage;
+			const std::string* elVal = &elValStorage;
 
+			if ( element->isType( UI_TYPE_HTML_WIDGET ) && isDataAttributeName( attr.name ) ) {
+				auto* htmlElement = element->asType<UIHTMLWidget>();
+				const auto* property = htmlElement->getDataProperty( attr.name );
+				attrExists = property != nullptr;
+				if ( attrExists )
+					elVal = &property->value();
+			} else {
+				elValStorage = element->getPropertyString( attr.name );
+				attrExists = !elValStorage.empty();
+			}
+
+			if ( !attrExists )
+				return false;
+
+			if ( attr.op != AttributeOperator::None ) {
 				switch ( attr.op ) {
 					case AttributeOperator::Exact: // =
-						if ( elVal != attr.value )
+						if ( *elVal != attr.value )
 							return false;
 						break;
 					case AttributeOperator::StartsWith: // ^=
-						if ( !String::startsWith( elVal, attr.value ) )
+						if ( !String::startsWith( *elVal, attr.value ) )
 							return false;
 						break;
 					case AttributeOperator::EndsWith: // $=
-						if ( !String::endsWith( elVal, attr.value ) )
+						if ( !String::endsWith( *elVal, attr.value ) )
 							return false;
 						break;
 					case AttributeOperator::Contains: // *=
-						if ( elVal.find( attr.value ) == std::string::npos )
+						if ( elVal->find( attr.value ) == std::string::npos )
 							return false;
 						break;
 					case AttributeOperator::ContainsWord: { // ~= (Space-separated word check)
-						auto words = String::split( elVal, ' ', true );
+						auto words = String::split( *elVal, ' ', true );
 						if ( std::find( words.begin(), words.end(), attr.value ) == words.end() ) {
 							return false;
 						}
@@ -339,8 +365,8 @@ bool StyleSheetSelectorRule::matches( UIWidget* element, const bool& applyPseudo
 					}
 					case AttributeOperator::StartsWithDash: // |= (Exact match or starts with value
 															// + "-")
-						if ( elVal != attr.value &&
-							 !String::startsWith( elVal, attr.value + "-" ) ) {
+						if ( *elVal != attr.value &&
+							 !String::startsWith( *elVal, attr.value + "-" ) ) {
 							return false;
 						}
 						break;

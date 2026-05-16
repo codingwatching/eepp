@@ -26,6 +26,10 @@ using namespace EE::Window;
 
 namespace EE { namespace UI {
 
+static bool isDataAttributeName( std::string_view name ) {
+	return String::istartsWith( String::trim( name ), "data-" );
+}
+
 UIWidget* UIWidget::New() {
 	return eeNew( UIWidget, () );
 }
@@ -1674,6 +1678,8 @@ std::vector<PropertyId> UIWidget::getPropertiesImplemented() const {
 }
 
 std::string UIWidget::getPropertyString( const std::string& property ) const {
+	if ( isType( UI_TYPE_HTML_WIDGET ) && isDataAttributeName( property ) )
+		return asConstType<UIHTMLWidget>()->getDataPropertyString( property );
 	return getPropertyString( StyleSheetSpecification::instance()->getProperty( property ) );
 }
 
@@ -2412,6 +2418,11 @@ void UIWidget::loadFromXmlNode( const pugi::xml_node& node ) {
 
 	for ( pugi::xml_attribute_iterator ait = node.attributes_begin(); ait != node.attributes_end();
 		  ++ait ) {
+		if ( isType( UI_TYPE_HTML_WIDGET ) && isDataAttributeName( ait->name() ) ) {
+			asType<UIHTMLWidget>()->setDataProperty( ait->name(), ait->value() );
+			continue;
+		}
+
 		if ( String::iequals( ait->name(), "style" ) ) {
 			StyleSheetPropertiesParser propertiesParser;
 			propertiesParser.parse( std::string_view{ ait->value() } );

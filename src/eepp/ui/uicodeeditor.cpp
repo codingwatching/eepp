@@ -3062,10 +3062,6 @@ bool UICodeEditor::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::Text:
 			mDoc->textInput( attribute.asString() );
 			break;
-		case PropertyId::DataLanguage:
-			setSyntaxDefinition(
-				SyntaxDefinitionManager::instance()->findFromString( attribute.asString() ) );
-			break;
 		case PropertyId::BackgroundColor: {
 			setBackgroundColor( attribute.asColor() );
 			updateDynamicTheme();

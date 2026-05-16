@@ -489,8 +489,6 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "display-options", "" ).setType( PropertyType::String );
 	registerProperty( "menu-width-mode", "" ).setType( PropertyType::String );
 
-	registerProperty( "data-language", "" ).setType( PropertyType::String );
-
 	registerProperty( "action", "" ).setType( PropertyType::String );
 	registerProperty( "method", "GET" ).setType( PropertyType::String );
 	registerProperty( "enctype", "application/x-www-form-urlencoded" )

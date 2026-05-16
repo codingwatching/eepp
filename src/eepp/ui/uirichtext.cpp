@@ -377,13 +377,6 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 				setTextAlign( TEXT_ALIGN_RIGHT );
 			break;
 		}
-		case PropertyId::DataLanguage: {
-			if ( mTag == "pre" && mChild && mChild->isType( UI_TYPE_CODEEDITOR ) ) {
-				mChild->asType<UICodeEditor>()->applyProperty( attribute );
-			} else
-				mDataProperties["data-language"] = attribute;
-			break;
-		}
 		case PropertyId::LineHeight:
 			setLineHeightEq( attribute.value() );
 			break;

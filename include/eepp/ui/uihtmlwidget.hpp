@@ -56,6 +56,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual std::vector<PropertyId> getPropertiesImplemented() const;
 
+	using UIWidget::getPropertyString;
+
 	virtual std::string getPropertyString( const PropertyDefinition* propertyDef,
 										   const Uint32& state = 0 ) const;
 
@@ -84,6 +86,23 @@ class EE_API UIHTMLWidget : public UILayout {
 	virtual void invalidateIntrinsicSize();
 
 	bool isOutOfFlow() const;
+
+	bool hasDataProperty( const std::string& name ) const;
+
+	const StyleSheetProperty* getDataProperty( const std::string& name ) const;
+
+	std::string getDataPropertyString( const std::string& name,
+									   const std::string& defaultValue = "" ) const;
+
+	void setDataProperty( const StyleSheetProperty& property );
+
+	void setDataProperty( const std::string& name, const std::string& value );
+
+	void removeDataProperty( const std::string& name );
+
+	const UnorderedMap<std::string, StyleSheetProperty>& getDataProperties() const {
+		return mDataProperties;
+	}
 
   protected:
 	CSSDisplay mDisplay{ CSSDisplay::Block };

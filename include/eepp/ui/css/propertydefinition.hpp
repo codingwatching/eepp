@@ -263,7 +263,6 @@ enum class PropertyId : Uint32 {
 	ListStyleImage = String::hash( "list-style-image" ),
 	Float = String::hash( "float" ),
 	Clear = String::hash( "clear" ),
-	DataLanguage = String::hash( "data-language" ), // Minor hack
 	Action = String::hash( "action" ),
 	Method = String::hash( "method" ),
 	Enctype = String::hash( "enctype" ),

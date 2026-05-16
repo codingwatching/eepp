@@ -55,9 +55,33 @@ void StyleSheetSelector::parseSelector( std::string selector ) {
 
 		std::string buffer;
 		StyleSheetSelectorRule::PatternMatch curPatternMatch = StyleSheetSelectorRule::ANY;
+		bool inAttribute = false;
+		char quote = 0;
 
 		for ( auto charIt = selector.rbegin(); charIt != selector.rend(); ++charIt ) {
 			char curChar = *charIt;
+
+			if ( quote != 0 ) {
+				buffer = curChar + buffer;
+				if ( curChar == quote )
+					quote = 0;
+				continue;
+			}
+
+			if ( inAttribute ) {
+				buffer = curChar + buffer;
+				if ( curChar == '"' || curChar == '\'' )
+					quote = curChar;
+				else if ( curChar == '[' )
+					inAttribute = false;
+				continue;
+			}
+
+			if ( curChar == ']' ) {
+				inAttribute = true;
+				buffer = curChar + buffer;
+				continue;
+			}
 
 			switch ( curChar ) {
 				case StyleSheetSelectorRule::DESCENDANT:
