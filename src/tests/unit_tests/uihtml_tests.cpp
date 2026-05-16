@@ -1,5 +1,5 @@
 #include "compareimages.hpp"
-#include "utest.h"
+#include "utest.hpp"
 
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
@@ -129,17 +129,25 @@ UTEST( UIHTMLTable, complexLayout2 ) {
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	win->setClearColor( Color::White );
 
-	win->getInput()->update();
-	SceneManager::instance()->update();
-	SceneManager::instance()->update();
+	const Color expectedMainBg( "#f6f6ef" );
+	UIWidget* hnMain = nullptr;
+	for ( int i = 0; i < 8; i++ ) {
+		win->getInput()->update();
+		SceneManager::instance()->update();
 
-	win->clear();
-	SceneManager::instance()->draw();
-	win->display();
+		if ( !hnMain )
+			hnMain = sceneNode->getRoot()->find( "hnmain" )->asType<UIWidget>();
 
-	win->clear();
-	SceneManager::instance()->draw();
-	win->display();
+		win->clear();
+		SceneManager::instance()->draw();
+		win->display();
+
+		if ( hnMain && hnMain->getBackgroundColor() == expectedMainBg )
+			break;
+	}
+
+	ASSERT_TRUE( hnMain != nullptr );
+	EXPECT_STDSTREQ( hnMain->getBackgroundColor().toHexString(), expectedMainBg.toHexString() );
 
 	compareImages( utest_state, utest_result, win, "eepp-uihtmltable-complex-layout-2", "html" );
 
