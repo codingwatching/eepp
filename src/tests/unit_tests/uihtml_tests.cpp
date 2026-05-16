@@ -126,6 +126,9 @@ UTEST( UIHTMLTable, complexLayout2 ) {
 	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
 	std::string html;
 	FileSystem::fileGet( "assets/html/hn_threaded_test.html", html );
+	// Keep this fixture close to the captured viewport. Apple Software Renderer drops the
+	// large offscreen solid-background quad if the original full HN thread is used, even
+	// though GPU renderers and other software renderers rasterize it correctly.
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
 	win->setClearColor( Color::White );
 

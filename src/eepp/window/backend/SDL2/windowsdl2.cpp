@@ -18,6 +18,8 @@
 #include <eepp/window/backend/backendhelper.hpp>
 #include <eepp/window/engine.hpp>
 
+#include <cstdlib>
+
 #if EE_PLATFORM == EE_PLATFORM_WIN
 #include <eepp/window/backend/SDL2/displaymanagersdl2.hpp>
 #endif
@@ -181,6 +183,12 @@ bool WindowSDL::create( WindowSettings Settings, ContextSettings Context ) {
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
 	}
 #endif
+
+	if ( const char* forceSoftwareRendering = std::getenv( "EEPP_FORCE_SOFTWARE_RENDERING" ) ) {
+		if ( forceSoftwareRendering[0] != '\0' &&
+			 !( forceSoftwareRendering[0] == '0' && forceSoftwareRendering[1] == '\0' ) )
+			SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 0 );
+	}
 
 #ifdef SDL2_THREADED_GLCONTEXT
 	if ( mWindow.ContextConfig.SharedGLContext ) {
