@@ -41,7 +41,7 @@ class EE_API UITextSpan : public UIRichText {
 
 	virtual bool isType( const Uint32& type ) const;
 
-	virtual bool isMergeable() const;
+	virtual bool isInline() const;
 
 	virtual bool isInlineBlock() const;
 

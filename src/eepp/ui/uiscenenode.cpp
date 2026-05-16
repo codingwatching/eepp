@@ -1,3 +1,4 @@
+#include "eepp/ui/uirichtext.hpp"
 #include <algorithm>
 #include <eepp/core/string.hpp>
 #include <eepp/graphics/fontmanager.hpp>
@@ -316,6 +317,7 @@ std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 
 			uiwidget->setParent( parent );
 			uiwidget->loadFromXmlNode( widget );
+			uiwidget->getUIStyle()->applyInheritedProperties();
 
 			if ( mVerbose ) {
 				std::string name( widget.name() );

@@ -118,22 +118,6 @@ h6 {
 	font-weight: bold;
 }
 
-table, td {
-	text-align: left;
-}
-
-center {
-	text-align: center;
-}
-
-ul {
-	list-style-type: disc;
-}
-
-ol {
-	list-style-type: decimal;
-}
-
 a {
 	cursor: arrow;
 	text-decoration: none;

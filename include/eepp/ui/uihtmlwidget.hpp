@@ -77,7 +77,7 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual RichText* getRichTextPtr() { return nullptr; }
 
-	virtual bool isMergeable() const { return false; }
+	virtual bool isInline() const { return false; }
 
 	virtual String getFormValue() const { return String(); }
 

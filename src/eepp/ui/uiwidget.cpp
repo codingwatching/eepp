@@ -2776,6 +2776,14 @@ Sizef UIWidget::getSizeFromLayoutPolicy() {
 	return size;
 }
 
+Float UIWidget::getPropertyLength( PropertyId propId ) const {
+	const StyleSheetProperty* prop = nullptr;
+	if ( mStyle && ( prop = mStyle->getProperty( propId ) ) ) {
+		return lengthFromValue( *prop );
+	}
+	return 0.f;
+}
+
 Float UIWidget::getPropertyWidth() const {
 	const StyleSheetProperty* prop = nullptr;
 	if ( mStyle && ( prop = mStyle->getProperty( PropertyId::Width ) ) ) {

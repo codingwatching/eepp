@@ -95,13 +95,25 @@ static void serializeGumboNodeToXML( GumboNode* node, std::string& out ) {
 			for ( unsigned int i = 0; i < attrs->length; ++i ) {
 				GumboAttribute* attr = static_cast<GumboAttribute*>( attrs->data[i] );
 				std::string attr_name = attr->name;
-				std::string attr_value = attr->value;
+				std::string attr_value = attr->value ? attr->value : "";
 
 				// BOOLEAN ATTRIBUTE FIX:
 				// If Gumbo parsed an attribute without a value (e.g., <input disabled>),
 				// it often sets the value to empty. We enforce XML strictness.
-				if ( attr_value.empty() ) {
-					attr_value = attr_name;
+				static const UnorderedSet<std::string> boolean_attrs = {
+					"allowfullscreen", "async",	   "autofocus", "autoplay",	  "checked",
+					"controls",		   "default",  "defer",		"disabled",	  "formnovalidate",
+					"hidden",		   "inert",	   "ismap",		"itemscope",  "loop",
+					"multiple",		   "muted",	   "nomodule",	"novalidate", "open",
+					"readonly",		   "required", "reversed",	"selected" };
+
+				bool value_was_omitted = attr->original_value.length == 0;
+
+				if ( value_was_omitted ) {
+					if ( boolean_attrs.count( attr_name ) )
+						attr_value = attr_name;
+					else
+						attr_value = "";
 				}
 
 				out += " " + attr_name + "=\"" + escapeXML( attr_value ) + "\"";

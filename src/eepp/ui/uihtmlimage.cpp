@@ -41,9 +41,7 @@ void UIHTMLImage::loadFromXmlNode( const pugi::xml_node& node ) {
 		}
 	}
 
-	beginAttributesTransaction();
-	UIWidget::loadFromXmlNode( node );
-	endAttributesTransaction();
+	UIImage::loadFromXmlNode( node );
 }
 
 void UIHTMLImage::draw() {

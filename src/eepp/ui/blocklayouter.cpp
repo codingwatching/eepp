@@ -55,7 +55,7 @@ void BlockLayouter::updateLayout() {
 	if ( rt == nullptr || mPacking )
 		return;
 
-	if ( widget->isMergeable() )
+	if ( widget->isInline() )
 		return;
 
 	mResizedCount = 0;
@@ -244,7 +244,7 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 		bool handled = false;
 
 		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
-			 widget->asType<UIHTMLWidget>()->isMergeable() ) {
+			 widget->asType<UIHTMLWidget>()->isInline() ) {
 			UITextSpan* textSpan = widget->asType<UITextSpan>();
 			Int64 startChar = curCharIdx;
 			Int64 endChar = curCharIdx;

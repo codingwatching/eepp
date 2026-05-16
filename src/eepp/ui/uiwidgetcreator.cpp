@@ -36,6 +36,7 @@
 #include <eepp/ui/uisprite.hpp>
 #include <eepp/ui/uistacklayout.hpp>
 #include <eepp/ui/uistackwidget.hpp>
+#include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uisvg.hpp>
 #include <eepp/ui/uitab.hpp>
 #include <eepp/ui/uitableview.hpp>
@@ -173,6 +174,9 @@ void UIWidgetCreator::createBaseWidgetList() {
 			auto* w = UIRichText::NewWithTag( "ul" );
 			w->setFlags( UI_CREATING_NODE );
 			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
+			w->applyProperty( StyleSheetProperty( "list-style-type", "disc" ) );
+			w->getUIStyle()->setStyleSheetProperty(
+				StyleSheetProperty( "list-style-type", "disc" ) );
 			w->unsetFlags( UI_CREATING_NODE );
 			return w;
 		};
@@ -180,6 +184,9 @@ void UIWidgetCreator::createBaseWidgetList() {
 			auto* w = UIRichText::NewWithTag( "ol" );
 			w->setFlags( UI_CREATING_NODE );
 			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
+			w->applyProperty( StyleSheetProperty( "list-style-type", "decimal" ) );
+			w->getUIStyle()->setStyleSheetProperty(
+				StyleSheetProperty( "list-style-type", "decimal" ) );
 			w->unsetFlags( UI_CREATING_NODE );
 			return w;
 		};
@@ -210,7 +217,20 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["main"] = [] { return UIRichText::NewWithTag( "main" ); };
 		registeredWidget["section"] = [] { return UIRichText::NewWithTag( "section" ); };
 		registeredWidget["nav"] = [] { return UIRichText::NewWithTag( "nav" ); };
-		registeredWidget["center"] = [] { return UIRichText::NewWithTag( "center" ); };
+		registeredWidget["center"] = [] {
+			auto center = UIRichText::NewWithTag( "center" );
+			center->setTextAlign( TEXT_ALIGN_CENTER );
+			center->on( Event::OnChildCountChanged, []( const Event* event ) {
+				if ( !event->asChildCountChangedEvent()->removed() &&
+					 event->asChildCountChangedEvent()->child()->isType( UI_TYPE_HTML_WIDGET ) ) {
+					event->asChildCountChangedEvent()
+						->child()
+						->asType<UIHTMLWidget>()
+						->applyProperty( StyleSheetProperty( "text-align", "center" ) );
+				}
+			} );
+			return center;
+		};
 		registeredWidget["aside"] = [] { return UIRichText::NewWithTag( "aside" ); };
 		registeredWidget["html"] = UIRichText::NewHtml;
 		registeredWidget["head"] = [] { return UIWidget::NewWithTag( "head" ); };

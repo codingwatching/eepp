@@ -292,7 +292,7 @@ void UIRichText::draw() {
 								 mSize.getHeight() - contentOffset.Top - contentOffset.Bottom );
 			}
 
-			if ( isType( UI_TYPE_TEXTSPAN ) && !asType<UITextSpan>()->isMergeable() &&
+			if ( isType( UI_TYPE_TEXTSPAN ) && !asType<UITextSpan>()->isInline() &&
 				 asType<UITextSpan>()->getFontBackgroundColor() != Color::Transparent ) {
 				Primitives p;
 				p.setColor( asType<UITextSpan>()->getFontBackgroundColor() );
@@ -756,6 +756,7 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 				if ( uiwidget ) {
 					uiwidget->setParent( this );
 					uiwidget->loadFromXmlNode( child );
+					uiwidget->getUIStyle()->applyInheritedProperties();
 
 					if ( !uiwidget->loadsItsChildren() ) {
 						if ( child.first_child() && !uiwidget->loadsItsChildren() ) {
@@ -879,7 +880,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 	if ( container->isType( UI_TYPE_TEXTSPAN ) ) {
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
-		if ( !selfSpan->getText().empty() && !selfSpan->isMergeable() &&
+		if ( !selfSpan->getText().empty() && !selfSpan->isInline() &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
 			String::View selfText = selfSpan->getText().view();
 			FontStyleConfig style = selfSpan->getFontStyleConfig();
@@ -980,7 +981,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		bool handled = false;
 
 		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
-			 widget->asType<UIHTMLWidget>()->isMergeable() ) {
+			 widget->asType<UIHTMLWidget>()->isInline() ) {
 			UITextSpan* span = widget->asType<UITextSpan>();
 			span->setLayoutCharCount( 0 );
 			Rectf margin = span->getLayoutPixelsMargin();
@@ -1091,7 +1092,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 						 widget->asType<UITextSpan>()->isInlineBlock() )
-						widget->asType<UIRichText>()->updateLayout();
+						widget->asType<UITextSpan>()->updateLayout();
 				}
 
 				Sizef size;

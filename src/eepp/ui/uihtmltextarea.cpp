@@ -113,7 +113,6 @@ void UIHTMLTextArea::onAutoSize() {
 			setInternalPixelsHeight( height );
 		}
 	}
-	UITextEdit::onAutoSize();
 	mPacking = false;
 }
 

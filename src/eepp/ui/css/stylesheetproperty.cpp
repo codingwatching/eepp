@@ -570,10 +570,56 @@ const Uint32& StyleSheetProperty::getIndex() const {
 	return mIndex;
 }
 
-void StyleSheetProperty::cleanValue() {
-	if ( NULL != mPropertyDefinition && mPropertyDefinition->getType() == PropertyType::String ) {
-		String::trimInPlace( mValue, '"' );
+static bool isWholeQuotedString( const std::string& value ) {
+	if ( value.size() < 2 )
+		return false;
+
+	const char quote = value.front();
+
+	if ( quote != '"' && quote != '\'' )
+		return false;
+
+	if ( value.back() != quote )
+		return false;
+
+	bool escaped = false;
+
+	for ( size_t i = 1; i + 1 < value.size(); ++i ) {
+		const char c = value[i];
+
+		if ( escaped ) {
+			escaped = false;
+			continue;
+		}
+
+		if ( c == '\\' ) {
+			escaped = true;
+			continue;
+		}
+
+		if ( c == quote ) {
+			// Found the closing quote before the end.
+			// So this is something like:
+			// "Noto Sans", "Trebuchet MS"
+			return false;
+		}
 	}
+
+	return true;
+}
+
+void StyleSheetProperty::cleanValue() {
+	if ( NULL == mPropertyDefinition )
+		return;
+
+	if ( mPropertyDefinition->getType() != PropertyType::String )
+		return;
+
+	if ( !isWholeQuotedString( mValue ) )
+		return;
+
+	if ( mValue.size() >= 2 )
+		mValue = mValue.substr( 1, mValue.size() - 2 );
 }
 
 Float StyleSheetProperty::asDpDimension( UINode* node, const std::string& defaultValue ) const {

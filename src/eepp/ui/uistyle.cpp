@@ -88,6 +88,7 @@ void UIStyle::load() {
 
 void UIStyle::applyInheritedProperties() {
 	const auto& props = StyleSheetSpecification::instance()->getInheritableProperties();
+	mWidget->beginAttributesTransaction();
 	for ( const auto& propId : props ) {
 		if ( !hasLocalProperty( propId ) ) {
 			auto inheritedProp = getInheritedProperty( propId );
@@ -95,6 +96,7 @@ void UIStyle::applyInheritedProperties() {
 				mWidget->applyProperty( *inheritedProp );
 		}
 	}
+	mWidget->endAttributesTransaction();
 }
 
 void UIStyle::setStyleSheetProperties( const CSS::StyleSheetProperties& properties ) {

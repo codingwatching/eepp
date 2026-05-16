@@ -83,6 +83,8 @@ class EE_API UIStyle : public UIState {
 
 	void resetCachedProperties();
 
+	void applyInheritedProperties();
+
   protected:
 	UIWidget* mWidget;
 	std::shared_ptr<CSS::StyleSheetStyle> mElementStyle;
@@ -127,8 +129,6 @@ class EE_API UIStyle : public UIState {
 
 	void applyStyleSheetProperty( const CSS::StyleSheetProperty& property,
 								  std::shared_ptr<CSS::ElementDefinition> prevDefinition );
-
-	void applyInheritedProperties();
 
 	void updateAnimationsPlayState();
 

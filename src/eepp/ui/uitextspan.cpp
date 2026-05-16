@@ -61,7 +61,7 @@ bool UITextSpan::isType( const Uint32& type ) const {
 	return UITextSpan::getType() == type ? true : UIRichText::isType( type );
 }
 
-bool UITextSpan::isMergeable() const {
+bool UITextSpan::isInline() const {
 	return mDisplay == CSSDisplay::Inline;
 }
 
@@ -70,7 +70,7 @@ bool UITextSpan::isInlineBlock() const {
 }
 
 void UITextSpan::draw() {
-	if ( !isMergeable() )
+	if ( !isInline() )
 		UIRichText::draw();
 }
 
@@ -387,7 +387,7 @@ void UITextSpan::onTextChanged() {
 }
 
 Uint32 UITextSpan::onMessage( const NodeMessage* Msg ) {
-	if ( !isMergeable() )
+	if ( !isInline() )
 		return UIRichText::onMessage( Msg );
 
 	switch ( Msg->getMsg() ) {

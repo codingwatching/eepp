@@ -1318,8 +1318,9 @@ void Node::onParentSizeChange( const Vector2f& ) {
 	invalidateDraw();
 }
 
-void Node::onChildCountChange( Node*, const bool& ) {
-	sendCommonEvent( Event::OnChildCountChanged );
+void Node::onChildCountChange( Node* child, const bool& removed ) {
+	ChildCountChangedEvent event( this, Event::OnChildCountChanged, child, removed );
+	sendEvent( &event );
 	invalidateDraw();
 }
 

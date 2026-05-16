@@ -1357,6 +1357,9 @@ class EE_API UIWidget : public UINode {
 	 */
 	virtual void onWidgetCreated();
 
+	/**@return The property id length */
+	Float getPropertyLength( PropertyId prop ) const;
+
 	/**@return The property `width` converted as length */
 	Float getPropertyWidth() const;
 

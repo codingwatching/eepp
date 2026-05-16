@@ -98,7 +98,10 @@ void UIImage::onAutoSize() {
 		return;
 
 	Sizef size( getPixelsSize() );
-	Sizef initialSize( size );
+	if ( mFlags & UI_HTML_ELEMENT ) {
+		size.x = eemax( size.x, getPropertyLength( PropertyId::LayoutWidth ) );
+		size.y = eemax( size.y, getPropertyLength( PropertyId::LayoutHeight ) );
+	}
 
 	if ( ( mFlags & UI_AUTO_SIZE ) && Sizef::Zero == getPixelsSize() )
 		size = drawableSize.asInt().asFloat();
@@ -152,7 +155,7 @@ void UIImage::onAutoSize() {
 		}
 	}
 
-	if ( initialSize != size )
+	if ( mSize != size )
 		setInternalPixelsSize( size );
 }
 
