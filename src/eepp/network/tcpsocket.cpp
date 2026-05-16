@@ -129,12 +129,14 @@ Socket::Status TcpSocket::connect( const IpAddress& remoteAddress, unsigned shor
 
 		// Otherwise, wait until something happens to our socket (success, timeout or error)
 		if ( status == Socket::NotReady ) {
+			#if EE_PLATFORM != EE_PLATFORM_WIN
 			if ( getHandle() >= FD_SETSIZE ) {
 				// The socket FD is too large for select().
 				// You cannot safely use FD_SET.
 				setBlocking( true );
 				return Error;
 			}
+			#endif
 
 			// Setup the selector
 			fd_set selector;

@@ -20,9 +20,28 @@ UTEST( Http, responseHeaderLineLargerThanReceiveBuffer ) {
 		if ( listener.accept( client ) != Socket::Done )
 			return;
 
-		const std::string response = "HTTP/1.1 200 OK\r\nX-Long: " + std::string( 17000, 'a' ) +
-									 "\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello";
+		// Read and discard the HTTP request headers.
+		std::string request;
+		char buffer[1024];
+		std::size_t received = 0;
+
+		while ( request.find( "\r\n\r\n" ) == std::string::npos ) {
+			Socket::Status st = client.receive( buffer, sizeof( buffer ), received );
+			if ( st != Socket::Done )
+				return;
+			request.append( buffer, received );
+		}
+
+		const std::string response = "HTTP/1.1 200 OK\r\n"
+									 "X-Long: " +
+									 std::string( 17000, 'a' ) +
+									 "\r\nContent-Length: 5\r\n"
+									 "Connection: close\r\n"
+									 "\r\n"
+									 "hello";
+
 		serverOk = client.send( response.data(), response.size() ) == Socket::Done;
+
 		client.disconnect();
 	} );
 

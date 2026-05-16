@@ -1060,7 +1060,7 @@ Http::Response Http::downloadRequest( const Http::Request& request, IOStream& wr
 								}
 
 								if ( mConnection &&
-									 received.getField( "connection" ) == "closed" ) {
+									 received.getField( "connection" ) == "close" ) {
 									mConnection->setConnected( false );
 									mConnection->setTunneled( false );
 								}

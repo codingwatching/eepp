@@ -1,3 +1,4 @@
+#include <eepp/core/small_vector.hpp>
 #include <eepp/ui/uiplacementutils.hpp>
 
 namespace EE::UI {
