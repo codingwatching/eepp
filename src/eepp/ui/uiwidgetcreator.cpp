@@ -8,6 +8,7 @@
 #include <eepp/ui/uidropdownlist.hpp>
 #include <eepp/ui/uidropdownmodellist.hpp>
 #include <eepp/ui/uigridlayout.hpp>
+#include <eepp/ui/uihtmldetails.hpp>
 #include <eepp/ui/uihtmlform.hpp>
 #include <eepp/ui/uihtmlimage.hpp>
 #include <eepp/ui/uihtmlinput.hpp>
@@ -200,6 +201,8 @@ void UIWidgetCreator::createBaseWidgetList() {
 			return w;
 		};
 		registeredWidget["li"] = UIHTMLListItem::New;
+		registeredWidget["details"] = UIHTMLDetails::New;
+		registeredWidget["summary"] = UIHTMLSummary::New;
 		registeredWidget["pre"] = UIRichText::NewPre;
 		registeredWidget["picture"] = [] { return UITextSpan::NewWithTag( "picture" ); };
 		registeredWidget["img"] = UIHTMLImage::New;

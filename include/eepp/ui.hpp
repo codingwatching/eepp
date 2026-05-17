@@ -93,6 +93,7 @@
 #include <eepp/ui/uifontstyleconfig.hpp>
 #include <eepp/ui/uigridlayout.hpp>
 #include <eepp/ui/uihelper.hpp>
+#include <eepp/ui/uihtmldetails.hpp>
 #include <eepp/ui/uihtmlform.hpp>
 #include <eepp/ui/uihtmlimage.hpp>
 #include <eepp/ui/uihtmlinput.hpp>

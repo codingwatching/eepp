@@ -127,6 +127,7 @@ class EE_API Event {
 		OnNavigationCompleted,
 		OnNavigationError,
 		OnTitleChanged,
+		OnToggle,
 		NoEvent = eeINDEX_NOT_FOUND
 	};
 

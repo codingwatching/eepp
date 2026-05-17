@@ -251,6 +251,7 @@ enum class PropertyId : Uint32 {
 	Cols = String::hash( "cols" ),
 	InputMode = String::hash( "input-mode" ),
 	Hidden = String::hash( "hidden" ),
+	Open = String::hash( "open" ),
 	Display = String::hash( "display" ),
 	Position = String::hash( "position" ),
 	Top = String::hash( "top" ),

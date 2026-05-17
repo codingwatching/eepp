@@ -445,6 +445,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "input-mode", "normal" ).setType( PropertyType::String );
 
 	registerProperty( "hidden", "" ).setType( PropertyType::Bool );
+	registerProperty( "open", "" ).setType( PropertyType::Bool );
 	registerProperty( "display", "inline" ).setType( PropertyType::String );
 	registerProperty( "position", "static" ).setType( PropertyType::String );
 	registerProperty( "float", "none" ).setType( PropertyType::String );

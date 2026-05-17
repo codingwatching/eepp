@@ -1,6 +1,6 @@
-#include <eepp/graphics/primitives.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/uihtmllistitem.hpp>
+#include <eepp/ui/uihtmlliststyle.hpp>
 #include <eepp/ui/uilayouter.hpp>
 
 namespace EE { namespace UI {
@@ -41,36 +41,10 @@ void UIHTMLListItem::draw() {
 		const FontStyleConfig& style = mRichText.getFontStyleConfig();
 		Float fontSize = style.CharacterSize;
 		Float offset = 0.25f * fontSize;
-		Float lineHeight =
-			style.Font ? style.Font->getLineSpacing( (unsigned int)fontSize ) : fontSize;
 		Float lineTop = mScreenPos.y + mPaddingPx.Top;
 
-		if ( mListStyleType == CSSListStyleType::Disc ) {
-			Float radius = fontSize * 0.22f;
-			Float markerX = std::floor( mScreenPos.x + mPaddingPx.Left - radius * 2.f - offset );
-			Float markerY = std::floor( lineTop + ( lineHeight - radius * 2.f ) * 0.5f + radius );
-			Primitives p;
-			p.setColor( style.FontColor );
-			p.setFillMode( PrimitiveFillMode::DRAW_FILL );
-			p.drawCircle( { markerX, markerY }, radius );
-		} else if ( mListStyleType == CSSListStyleType::Circle ) {
-			Float radius = fontSize * 0.2f;
-			Float lineWidth = fontSize * 0.04f;
-			Float markerX = std::floor( mScreenPos.x + mPaddingPx.Left - radius * 2.f - offset );
-			Float markerY = std::floor( lineTop + ( lineHeight - radius * 2.f ) * 0.5f + radius );
-			Primitives p;
-			p.setColor( style.FontColor );
-			p.setFillMode( PrimitiveFillMode::DRAW_LINE );
-			p.setLineWidth( lineWidth );
-			p.drawCircle( { markerX, markerY }, radius );
-		} else if ( mListStyleType == CSSListStyleType::Square ) {
-			Float size = fontSize * 0.38f;
-			Float markerX = std::floor( mScreenPos.x + mPaddingPx.Left - size - fontSize * 0.5 );
-			Float markerY = std::floor( lineTop + ( lineHeight - size ) * 0.5f );
-			Primitives p;
-			p.setColor( style.FontColor );
-			p.setFillMode( PrimitiveFillMode::DRAW_FILL );
-			p.drawRectangle( Rectf( markerX, markerY, markerX + size, markerY + size ) );
+		if ( UIHTMLListStyle::isPrimitiveMarker( mListStyleType ) ) {
+			UIHTMLListStyle::drawPrimitiveMarker( mListStyleType, mScreenPos, mPaddingPx, style );
 		} else if ( mListMarkerText && !mListMarkerText->getString().empty() ) {
 			Float markerX =
 				mScreenPos.x + mPaddingPx.Left - mListMarkerText->getTextWidth() - offset;
@@ -118,9 +92,7 @@ std::vector<PropertyId> UIHTMLListItem::getPropertiesImplemented() const {
 }
 
 void UIHTMLListItem::invalidateList() {
-	if ( mListStyleType == CSSListStyleType::None || mListStyleType == CSSListStyleType::Disc ||
-		 mListStyleType == CSSListStyleType::Circle ||
-		 mListStyleType == CSSListStyleType::Square ) {
+	if ( !UIHTMLListStyle::isTextMarker( mListStyleType ) ) {
 		mListMarkerText.reset();
 	} else {
 		String::View markerStr = getListMarkerString();
@@ -150,51 +122,11 @@ int UIHTMLListItem::countPrecedingLiSiblings() const {
 String::View UIHTMLListItem::getListMarkerString() const {
 	static String sBuf;
 
-	switch ( mListStyleType ) {
-		case CSSListStyleType::None:
-		case CSSListStyleType::Disc:
-		case CSSListStyleType::Circle:
-		case CSSListStyleType::Square:
-			return {};
-		case CSSListStyleType::Decimal: {
-			int idx = countPrecedingLiSiblings() + 1;
-			sBuf = String( String::toString( idx ) + ". " );
-			return sBuf.view();
-		}
-		case CSSListStyleType::LowerAlpha: {
-			int idx = countPrecedingLiSiblings();
-			char c = 'a' + ( idx % 26 );
-			sBuf = String( 1, (String::StringBaseType)c ) + ". ";
-			return sBuf.view();
-		}
-		case CSSListStyleType::UpperAlpha: {
-			int idx = countPrecedingLiSiblings();
-			char c = 'A' + ( idx % 26 );
-			sBuf = String( 1, (String::StringBaseType)c ) + ". ";
-			return sBuf.view();
-		}
-		case CSSListStyleType::LowerRoman: {
-			static const char* numerals[] = { "i",	 "ii",	 "iii", "iv", "v",	"vi",
-											  "vii", "viii", "ix",	"x",  "xi", "xii" };
-			int idx = countPrecedingLiSiblings();
-			if ( idx < 12 )
-				sBuf = String( numerals[idx] ) + ". ";
-			else
-				sBuf = String( String::toString( idx + 1 ) + ". " );
-			return sBuf.view();
-		}
-		case CSSListStyleType::UpperRoman: {
-			static const char* numerals[] = { "I",	 "II",	 "III", "IV", "V",	"VI",
-											  "VII", "VIII", "IX",	"X",  "XI", "XII" };
-			int idx = countPrecedingLiSiblings();
-			if ( idx < 12 )
-				sBuf = String( numerals[idx] ) + ". ";
-			else
-				sBuf = String( String::toString( idx + 1 ) + ". " );
-			return sBuf.view();
-		}
-	}
-	return {};
+	if ( !UIHTMLListStyle::isTextMarker( mListStyleType ) )
+		return {};
+
+	sBuf = UIHTMLListStyle::getTextMarkerString( mListStyleType, countPrecedingLiSiblings() );
+	return sBuf.view();
 }
 
 }} // namespace EE::UI

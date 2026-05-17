@@ -107,6 +107,10 @@ std::string CSSListStyleTypeHelper::toString( CSSListStyleType type ) {
 			return "lower-roman";
 		case CSSListStyleType::UpperRoman:
 			return "upper-roman";
+		case CSSListStyleType::DisclosureClosed:
+			return "disclosure-closed";
+		case CSSListStyleType::DisclosureOpen:
+			return "disclosure-open";
 		case CSSListStyleType::None:
 		default:
 			return "none";
@@ -130,6 +134,10 @@ CSSListStyleType CSSListStyleTypeHelper::fromString( std::string_view val ) {
 		return CSSListStyleType::LowerRoman;
 	if ( val == "upper-roman" )
 		return CSSListStyleType::UpperRoman;
+	if ( val == "disclosure-closed" )
+		return CSSListStyleType::DisclosureClosed;
+	if ( val == "disclosure-open" )
+		return CSSListStyleType::DisclosureOpen;
 	return CSSListStyleType::None;
 }
 

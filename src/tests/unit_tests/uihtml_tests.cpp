@@ -4,6 +4,7 @@
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
 #include <eepp/graphics/renderer/renderer.hpp>
+#include <eepp/scene/keyevent.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/sys.hpp>
@@ -12,6 +13,7 @@
 #include <eepp/ui/tools/htmlformatter.hpp>
 #include <eepp/ui/tools/uiwidgetinspector.hpp>
 #include <eepp/ui/uicheckbox.hpp>
+#include <eepp/ui/uihtmldetails.hpp>
 #include <eepp/ui/uihtmlinput.hpp>
 #include <eepp/ui/uihtmltable.hpp>
 #include <eepp/ui/uihtmltextarea.hpp>
@@ -580,6 +582,329 @@ UTEST( UIHTML, DataProperties ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTMLDetails, closedByDefault ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d"><summary id="s">Label</summary><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* summary = sceneNode->getRoot()->find( "s" )->asType<UIHTMLSummary>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( summary != nullptr );
+	ASSERT_TRUE( content != nullptr );
+	EXPECT_FALSE( details->isOpen() );
+	EXPECT_TRUE( summary->isVisible() );
+	EXPECT_FALSE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, summaryListStyleType ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d">
+			<summary id="s1">Default</summary>
+			<summary id="s2" style="list-style-type: disclosure-open;">Open marker</summary>
+			<summary id="s3" style="list-style-type: decimal;">Decimal marker</summary>
+		</details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	const auto* propDef = StyleSheetSpecification::instance()->getProperty( "list-style-type" );
+	ASSERT_TRUE( propDef != nullptr );
+
+	auto* s1 = sceneNode->getRoot()->find( "s1" )->asType<UIHTMLSummary>();
+	auto* s2 = sceneNode->getRoot()->find( "s2" )->asType<UIHTMLSummary>();
+	auto* s3 = sceneNode->getRoot()->find( "s3" )->asType<UIHTMLSummary>();
+	ASSERT_TRUE( s1 != nullptr );
+	ASSERT_TRUE( s2 != nullptr );
+	ASSERT_TRUE( s3 != nullptr );
+
+	EXPECT_TRUE( s1->getPropertyString( propDef ) == "disclosure-closed" );
+	EXPECT_TRUE( s2->getPropertyString( propDef ) == "disclosure-open" );
+	EXPECT_TRUE( s3->getPropertyString( propDef ) == "decimal" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, summaryListStyleNoneClearsDefaultPadding ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details>
+			<summary id="default">Default marker</summary>
+			<summary id="none" style="list-style-type: none;">No marker</summary>
+			<summary id="explicit" style="list-style-type: none; padding-left: 7px;">
+				Explicit padding
+			</summary>
+		</details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* defaultSummary = sceneNode->getRoot()->find( "default" )->asType<UIHTMLSummary>();
+	auto* noneSummary = sceneNode->getRoot()->find( "none" )->asType<UIHTMLSummary>();
+	auto* explicitSummary = sceneNode->getRoot()->find( "explicit" )->asType<UIHTMLSummary>();
+	ASSERT_TRUE( defaultSummary != nullptr );
+	ASSERT_TRUE( noneSummary != nullptr );
+	ASSERT_TRUE( explicitSummary != nullptr );
+
+	EXPECT_GT( defaultSummary->getPixelsPadding().Left, 0.f );
+	EXPECT_NEAR( noneSummary->getPixelsPadding().Left, 0.f, 0.5f );
+	EXPECT_NEAR( explicitSummary->getPixelsPadding().Left, 7.f, 0.5f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, inlineBlockSummaryListStyleNoneSize ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	std::string html;
+	FileSystem::fileGet( "assets/html/lobsters_item.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->querySelector( ".caches" )->asType<UIHTMLDetails>();
+	auto* summary =
+		sceneNode->getRoot()->querySelector( ".caches summary" )->asType<UIHTMLSummary>();
+	auto* author = sceneNode->getRoot()->querySelector( ".u-author" )->asType<UIWidget>();
+	auto* time = sceneNode->getRoot()->querySelector( "time" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( summary != nullptr );
+	ASSERT_TRUE( author != nullptr );
+	ASSERT_TRUE( time != nullptr );
+
+	EXPECT_EQ( details->getDisplay(), CSSDisplay::InlineBlock );
+	EXPECT_EQ( summary->getListStyleType(), CSSListStyleType::None );
+	EXPECT_NEAR( summary->getPixelsPadding().Left, 0.f, 0.5f );
+	EXPECT_LE( details->getPixelsSize().getHeight(),
+			   eemax( author->getPixelsSize().getHeight(), time->getPixelsSize().getHeight() ) +
+				   1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, openAttribute ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d" open><summary>Label</summary><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( content != nullptr );
+	EXPECT_TRUE( details->isOpen() );
+	EXPECT_TRUE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, openAttributeExplicitFalse ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d" open="false"><summary>Label</summary><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( content != nullptr );
+	EXPECT_FALSE( details->isOpen() );
+	EXPECT_FALSE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, toggleViaMouse ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d"><summary id="s">Label</summary><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* summary = sceneNode->getRoot()->find( "s" )->asType<UIHTMLSummary>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( summary != nullptr );
+	ASSERT_TRUE( content != nullptr );
+
+	summary->onMouseClick( summary->getPixelsPosition().asInt(), EE_BUTTON_LMASK );
+	EXPECT_TRUE( details->isOpen() );
+	EXPECT_TRUE( content->isVisible() );
+	summary->onMouseClick( summary->getPixelsPosition().asInt(), EE_BUTTON_LMASK );
+	EXPECT_FALSE( details->isOpen() );
+	EXPECT_FALSE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, toggleViaKeyboard ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d"><summary id="s">Label</summary><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* summary = sceneNode->getRoot()->find( "s" )->asType<UIHTMLSummary>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( summary != nullptr );
+
+	KeyEvent enter( summary, Event::KeyDown, KEY_RETURN, SCANCODE_RETURN, 0, 0 );
+	KeyEvent space( summary, Event::KeyDown, KEY_SPACE, SCANCODE_SPACE, 0, 0 );
+	EXPECT_EQ( summary->onKeyDown( enter ), 1u );
+	EXPECT_TRUE( details->isOpen() );
+	EXPECT_EQ( summary->onKeyDown( space ), 1u );
+	EXPECT_FALSE( details->isOpen() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, toggleEvent ) {
+	init_ui_test();
+	auto* details = UIHTMLDetails::New();
+	details->setParent( SceneManager::instance()->getUISceneNode()->getRoot() );
+	int toggleCount = 0;
+	details->on( Event::OnToggle, [&toggleCount]( const Event* ) { toggleCount++; } );
+
+	details->setOpen( true );
+	details->setOpen( true );
+	details->setOpen( false );
+	EXPECT_EQ( toggleCount, 2 );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, autoSummary ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d"><p id="p">Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( content != nullptr );
+	auto* summary = details->findSummaryChild();
+	ASSERT_TRUE( summary != nullptr );
+	EXPECT_TRUE( summary->isVisible() );
+	EXPECT_FALSE( content->isVisible() );
+	EXPECT_TRUE( summary->toggleParentDetails() );
+	EXPECT_TRUE( details->isOpen() );
+	EXPECT_TRUE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, multipleSummaries ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d">
+			<summary id="s1">One</summary>
+			<summary id="s2">Two</summary>
+			<p id="p">Content</p>
+		</details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* s1 = sceneNode->getRoot()->find( "s1" )->asType<UIHTMLSummary>();
+	auto* s2 = sceneNode->getRoot()->find( "s2" )->asType<UIHTMLSummary>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( s1 != nullptr );
+	ASSERT_TRUE( s2 != nullptr );
+	EXPECT_TRUE( s1->isVisible() );
+	EXPECT_FALSE( s2->isVisible() );
+	EXPECT_TRUE( s1->toggleParentDetails() );
+	EXPECT_TRUE( details->isOpen() );
+	EXPECT_TRUE( s2->isVisible() );
+	EXPECT_FALSE( s2->toggleParentDetails() );
+	EXPECT_TRUE( details->isOpen() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, nested ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="outer" open>
+			<summary id="outer_s">Outer</summary>
+			<details id="inner">
+				<summary id="inner_s">Inner</summary>
+				<p id="inner_p">Inner content</p>
+			</details>
+		</details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* outer = sceneNode->getRoot()->find( "outer" )->asType<UIHTMLDetails>();
+	auto* inner = sceneNode->getRoot()->find( "inner" )->asType<UIHTMLDetails>();
+	auto* innerSummary = sceneNode->getRoot()->find( "inner_s" )->asType<UIHTMLSummary>();
+	ASSERT_TRUE( outer != nullptr );
+	ASSERT_TRUE( inner != nullptr );
+	ASSERT_TRUE( innerSummary != nullptr );
+	EXPECT_TRUE( outer->isOpen() );
+	EXPECT_FALSE( inner->isOpen() );
+	EXPECT_TRUE( innerSummary->toggleParentDetails() );
+	EXPECT_TRUE( outer->isOpen() );
+	EXPECT_TRUE( inner->isOpen() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, hiddenChildPreserved ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<details id="d" open><summary>Label</summary><p id="p" hidden>Content</p></details>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* details = sceneNode->getRoot()->find( "d" )->asType<UIHTMLDetails>();
+	auto* content = sceneNode->getRoot()->find( "p" )->asType<UIWidget>();
+	ASSERT_TRUE( details != nullptr );
+	ASSERT_TRUE( content != nullptr );
+	EXPECT_FALSE( content->isVisible() );
+	details->setOpen( false );
+	details->setOpen( true );
+	EXPECT_FALSE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, dynamicChildAddedWhileClosed ) {
+	init_ui_test();
+	auto* details = UIHTMLDetails::New();
+	details->setParent( SceneManager::instance()->getUISceneNode()->getRoot() );
+	auto* summary = UIHTMLSummary::New();
+	summary->setParent( details );
+	details->setOpen( false );
+	auto* content = UIRichText::NewParagraph();
+	content->setParent( details );
+	details->updateLayout();
+
+	EXPECT_TRUE( summary->isVisible() );
+	EXPECT_FALSE( content->isVisible() );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLTextArea, rowsColsAttribute ) {
 	init_ui_test();
 	auto* scene = SceneManager::instance()->getUISceneNode();
@@ -879,6 +1204,34 @@ UTEST( UILayout, listStyleTypeDisc ) {
 	ASSERT_TRUE( li1 != nullptr );
 
 	EXPECT_TRUE( li1->getPropertyString( propDef ) == "disc" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UILayout, listStyleTypeDisclosure ) {
+	init_ui_test();
+	auto* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->loadLayoutFromString( R"html(
+		<html>
+			<ul>
+				<li id="li1" style="list-style-type: disclosure-closed;">Closed</li>
+				<li id="li2" style="list-style-type: disclosure-open;">Open</li>
+			</ul>
+		</html>
+	)html" );
+
+	sceneNode->updateDirtyLayouts();
+
+	const auto* propDef = StyleSheetSpecification::instance()->getProperty( "list-style-type" );
+	ASSERT_TRUE( propDef != nullptr );
+
+	auto* li1 = sceneNode->getRoot()->find( "li1" )->asType<UIRichText>();
+	auto* li2 = sceneNode->getRoot()->find( "li2" )->asType<UIRichText>();
+	ASSERT_TRUE( li1 != nullptr );
+	ASSERT_TRUE( li2 != nullptr );
+
+	EXPECT_TRUE( li1->getPropertyString( propDef ) == "disclosure-closed" );
+	EXPECT_TRUE( li2->getPropertyString( propDef ) == "disclosure-open" );
 
 	Engine::destroySingleton();
 }

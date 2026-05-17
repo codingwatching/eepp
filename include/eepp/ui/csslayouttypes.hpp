@@ -44,7 +44,9 @@ enum class CSSListStyleType {
 	LowerAlpha,
 	UpperAlpha,
 	LowerRoman,
-	UpperRoman
+	UpperRoman,
+	DisclosureClosed,
+	DisclosureOpen
 };
 
 struct EE_API CSSListStyleTypeHelper {
