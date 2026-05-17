@@ -85,6 +85,7 @@ class EE_API RichText : public Drawable {
 		Sizef size;
 		UI::CSSFloat floatType{ UI::CSSFloat::None };
 		UI::CSSClear clearType{ UI::CSSClear::None };
+		Float baseline{ 0 };
 		bool isLineBreak{ false };
 	};
 
@@ -108,7 +109,7 @@ class EE_API RichText : public Drawable {
 	 * @param size The physical dimensions of the spacer.
 	 */
 	void addCustomSize( const Sizef& size, UI::CSSFloat floatType = UI::CSSFloat::None,
-						UI::CSSClear clearType = UI::CSSClear::None );
+						UI::CSSClear clearType = UI::CSSClear::None, Float baseline = -1.f );
 
 	/** @brief Adds a virtual line break that is not associated with a DOM text character. */
 	void addLineBreak();

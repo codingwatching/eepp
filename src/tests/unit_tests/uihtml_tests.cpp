@@ -684,6 +684,8 @@ UTEST( UIHTMLDetails, inlineBlockSummaryListStyleNoneSize ) {
 	EXPECT_LE( details->getPixelsSize().getHeight(),
 			   eemax( author->getPixelsSize().getHeight(), time->getPixelsSize().getHeight() ) +
 				   1.f );
+	EXPECT_NEAR( details->getPixelsPosition().y, author->getPixelsPosition().y, 2.f );
+	EXPECT_NEAR( details->getPixelsPosition().y, time->getPixelsPosition().y, 2.f );
 
 	Engine::destroySingleton();
 }
@@ -1338,6 +1340,185 @@ UTEST( UILayout, listStyleInheritanceFromUl ) {
 					 typeDef ) == "square" );
 	EXPECT_TRUE( sceneNode->getRoot()->find( "d1" )->asType<UIRichText>()->getPropertyString(
 					 typeDef ) == "decimal" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLDetails, lobstersInlineBlockCachesWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 424, 184, "HTML Details Lobsters Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	themeManager->setDefaultFont( font );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<!doctype html>
+		<html>
+		<head></head>
+		<body>
+			<div id="inside">
+				<ol class="stories list">
+					<li id="story_4g74mw" class="story">
+						<div class="story_liner h-entry">
+							<div class="voters">
+								<a class="upvoter" href="/login">109</a>
+							</div>
+							<div class="details">
+								<span role="heading" aria-level="1" class="link h-cite u-repost-of">
+									<a class="u-url" href="https://ratfactor.com/ascetic-computing">Ascetic Computing</a>
+								</span>
+								<span class="tags">
+									<a class="tag tag_practices" href="/t/practices">practices</a>
+								</span>
+								<a class="domain" href="/domains/ratfactor.com">ratfactor.com</a>
+								<div class="byline">
+									<a tabindex="-1" aria-hidden="true" href="/~jbauer"><img class="avatar" alt="jbauer avatar" src="/avatars/jbauer-16.png" width="16" height="16"></a>
+									<span> via </span>
+									<a class="u-author h-card" href="/~jbauer">jbauer</a>
+									<time>20 hours ago</time>
+									<span aria-hidden="true"> | </span>
+									<details class="caches" name="caches">
+										<summary>caches</summary>
+										<ul>
+											<li><a href="https://web.archive.org/">Archive.org</a></li>
+											<li><a href="https://ghostarchive.org/">Ghostarchive</a></li>
+										</ul>
+									</details>
+									<span class="comments_label">
+										<span aria-hidden="true"> | </span>
+										<a role="heading" aria-level="2" href="/s/4g74mw/ascetic_computing">17 comments</a>
+									</span>
+								</div>
+							</div>
+						</div>
+					</li>
+				</ol>
+			</div>
+		</body>
+		</html>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	sceneNode->combineStyleSheet( R"css(
+		body, textarea, input, button {
+			font-family: "helvetica neue", arial, sans-serif;
+			line-height: 1.45em;
+		}
+		ol.stories {
+			padding: 0;
+			list-style: none;
+			margin: 0;
+		}
+		div.voters {
+			float: left;
+			text-align: center;
+			width: 40px;
+		}
+		li.story {
+			clear: both;
+		}
+		ol.stories li.story div.story_liner {
+			padding-top: 0.25em;
+			padding-bottom: 0.25em;
+			word-break: break-word;
+		}
+		li div.details {
+			padding-top: 0.1em;
+			margin-left: 32px;
+		}
+		li .link {
+			font-weight: bold;
+			vertical-align: middle;
+		}
+		li .link a {
+			text-decoration: none;
+		}
+		li.story a.tag {
+			vertical-align: middle;
+		}
+		li .tags {
+			margin-right: 0.25em;
+		}
+		li .domain {
+			font-style: italic;
+			text-decoration: none;
+			vertical-align: middle;
+		}
+		img.avatar {
+			border-radius: 8px;
+			height: 16px;
+			margin-bottom: 2px;
+			margin-right: 2px;
+			vertical-align: middle;
+			width: 16px;
+		}
+		li.story .byline {
+			margin-top: 1px;
+		}
+		.caches {
+			display: inline-block;
+			position: relative;
+		}
+		.caches summary {
+			list-style: none;
+		}
+		.caches ul {
+			position: absolute;
+			white-space: nowrap;
+			list-style: none;
+			padding: 0;
+			z-index: 1;
+		}
+		.caches a {
+			text-decoration: none;
+			display: block;
+			padding: 3px 7px;
+		}
+		@media only screen and (max-width: 480px) {
+			div#inside {
+				margin: 0.5rem;
+			}
+			ol.stories {
+				margin: 0 0 0 -0.5rem;
+				padding-left: 0;
+			}
+			div.voters {
+				margin-left: 0.25em;
+				margin-top: 0px;
+				width: 30px;
+			}
+			ol.stories.list {
+				margin-top: 0;
+			}
+			ol.stories.list li.story {
+				display: table;
+			}
+			ol.stories.list li.story div.story_liner {
+				display: table-cell;
+				padding-top: 0.5em;
+				padding-bottom: 0.75em;
+				width: 100%;
+			}
+			li div.details {
+				margin: 0 0 0 36px;
+			}
+		}
+	)css" );
+	sceneNode->updateDirtyLayouts();
+
+	auto* caches = sceneNode->getRoot()->querySelector( ".caches" )->asType<UIHTMLDetails>();
+	auto* comments = sceneNode->getRoot()->querySelector( ".comments_label" );
+	auto* byline = sceneNode->getRoot()->querySelector( ".byline" );
+
+	EXPECT_LT( caches->getPixelsSize().getWidth(), byline->getPixelsSize().getWidth() * 0.5f );
+	EXPECT_NEAR( caches->getPixelsPosition().y, comments->getPixelsPosition().y, 1.f );
 
 	Engine::destroySingleton();
 }

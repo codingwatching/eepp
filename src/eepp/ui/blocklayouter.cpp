@@ -243,8 +243,7 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 
 		bool handled = false;
 
-		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
-			 widget->asType<UIHTMLWidget>()->isInline() ) {
+		if ( widget->isType( UI_TYPE_HTML_WIDGET ) && widget->asType<UIHTMLWidget>()->isInline() ) {
 			UITextSpan* textSpan = widget->asType<UITextSpan>();
 			Int64 startChar = curCharIdx;
 			Int64 endChar = curCharIdx;
@@ -351,6 +350,23 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 											span->position.y + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
+					if ( widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
+						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
+						// Stretch match-parent children only after the wrap-content parent has its
+						// final used width. During RichText measurement this width may still be a
+						// stale pre-style value, so using it there would poison shrink-to-fit
+						// inline-block sizing.
+						Float contentWidth =
+							eemax( 0.f, mContainer->getPixelsSize().getWidth() -
+											mContainer->getPixelsContentOffset().Left -
+											mContainer->getPixelsContentOffset().Right -
+											margin.Left - margin.Right );
+						if ( contentWidth != widget->getPixelsSize().getWidth() ) {
+							widget->setPixelsSize( contentWidth,
+												   widget->getPixelsSize().getHeight() );
+							mResizedCount++;
+						}
+					}
 
 					bounds = Rectf( targetPos, span->size );
 				}

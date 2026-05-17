@@ -219,6 +219,37 @@ UTEST( RichText, BaselineAlignment ) {
 	Engine::destroySingleton();
 }
 
+UTEST( RichText, CustomBlockBaselineAlignment ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Custom Block Baseline",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	RichText richText;
+	richText.getFontStyleConfig().Font = font;
+	richText.addSpan( "Large", nullptr, 30 );
+	richText.addSpan( "Small", nullptr, 12 );
+	richText.addCustomSize( Sizef( 24, 30 ), UI::CSSFloat::None, UI::CSSClear::None, 12.f );
+
+	richText.getSize();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines[0].spans.size(), (size_t)3 );
+
+	const auto& smallSpan = lines[0].spans[1];
+	const auto& customSpan = lines[0].spans[2];
+
+	EXPECT_NEAR( customSpan.position.y, smallSpan.position.y, 0.001f );
+	EXPECT_GT( customSpan.position.y, 0.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( LineWrap, SoftWrapPreventsWordSplitWithOffset ) {
 	Engine::instance()->createWindow( WindowSettings( 800, 600, "LineWrap Test",
 													  WindowStyle::Default, WindowBackend::Default,

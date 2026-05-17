@@ -821,6 +821,27 @@ String UIRichText::UIRichText::collapseInternalWhitespace( const String& s ) {
 	return out;
 }
 
+static Float getCustomBlockBaseline( UIWidget* widget, const Sizef& widgetSize,
+									 const Rectf& margin ) {
+	Float fallbackBaseline = widgetSize.getHeight() + margin.Top + margin.Bottom;
+	if ( !widget->isType( UI_TYPE_HTML_WIDGET ) )
+		return fallbackBaseline;
+
+	auto* htmlWidget = widget->asType<UIHTMLWidget>();
+	auto* rt = htmlWidget->getRichTextPtr();
+	if ( rt == nullptr )
+		return fallbackBaseline;
+
+	rt->updateLayout();
+	const auto& lines = rt->getLines();
+	for ( auto it = lines.rbegin(); it != lines.rend(); ++it ) {
+		if ( !it->spans.empty() )
+			return margin.Top + widget->getPixelsContentOffset().Top + it->y + it->maxAscent;
+	}
+
+	return fallbackBaseline;
+}
+
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
 	richText.clear();
 	if ( container->isType( UI_TYPE_RICHTEXT ) ) {
@@ -973,8 +994,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 		bool handled = false;
 
-		if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
-			 widget->asType<UIHTMLWidget>()->isInline() ) {
+		if ( widget->isType( UI_TYPE_HTML_WIDGET ) && widget->asType<UIHTMLWidget>()->isInline() ) {
 			UITextSpan* span = widget->asType<UITextSpan>();
 			span->setLayoutCharCount( 0 );
 			Rectf margin = span->getLayoutPixelsMargin();
@@ -1067,7 +1087,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 				if ( mode == IntrinsicMode::None ) {
 					if ( fillParent ) {
-						if ( container->getPixelsSize().getWidth() != 0 ) {
+						if ( container->getLayoutWidthPolicy() != SizePolicy::WrapContent &&
+							 container->getPixelsSize().getWidth() != 0 ) {
 							Float maxSize =
 								eemax( 0.f, container->getPixelsSize().getWidth() -
 												container->getPixelsContentOffset().Left -
@@ -1099,6 +1120,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 				Float w = size.getWidth();
 				if ( fillParent && mode == IntrinsicMode::None &&
+					 container->getLayoutWidthPolicy() != SizePolicy::WrapContent &&
 					 container->getPixelsSize().getWidth() != 0 ) {
 					w = eemax( 0.f, container->getPixelsSize().getWidth() -
 										container->getPixelsContentOffset().Left -
@@ -1117,9 +1139,10 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				if ( isNormalFlowBlock )
 					richText.addLineBreak();
 
-				richText.addCustomSize( Sizef( w + margin.Left + margin.Right,
-											   size.getHeight() + margin.Top + margin.Bottom ),
-										floatType, clearType );
+				Sizef customSize( w + margin.Left + margin.Right,
+								  size.getHeight() + margin.Top + margin.Bottom );
+				richText.addCustomSize( customSize, floatType, clearType,
+										getCustomBlockBaseline( widget, size, margin ) );
 
 				if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 					 widget->asType<UITextSpan>()->isInlineBlock() &&

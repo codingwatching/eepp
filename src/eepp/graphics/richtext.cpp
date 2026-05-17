@@ -320,13 +320,16 @@ void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 	invalidateLayout();
 }
 
-void RichText::addCustomSize( const Sizef& size, UI::CSSFloat floatType, UI::CSSClear clearType ) {
-	mBlocks.push_back( CustomBlock{ size, floatType, clearType, false } );
+void RichText::addCustomSize( const Sizef& size, UI::CSSFloat floatType, UI::CSSClear clearType,
+							  Float baseline ) {
+	mBlocks.push_back( CustomBlock{ size, floatType, clearType,
+									baseline >= 0.f ? baseline : size.getHeight(), false } );
 	invalidateLayout();
 }
 
 void RichText::addLineBreak() {
-	mBlocks.push_back( CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, true } );
+	mBlocks.push_back(
+		CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, 0.f, true } );
 	invalidateLayout();
 }
 
@@ -592,12 +595,15 @@ void RichText::updateLayout() {
 			} else {
 				// Drawable or CustomBlock (non-float).
 				Sizef blockSize;
+				Float blockBaseline = 0.f;
 				bool isLineBreak = false;
 				if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
 					auto& drawable = *pDrawable;
 					blockSize = drawable ? drawable->getPixelsSize() : Sizef();
+					blockBaseline = blockSize.getHeight();
 				} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
 					blockSize = pSize->size;
+					blockBaseline = pSize->baseline;
 					isLineBreak = pSize->isLineBreak;
 				}
 
@@ -624,7 +630,7 @@ void RichText::updateLayout() {
 				RenderParagraph& currentLine = mLines.back();
 				currentLine.spans.push_back( renderSpan );
 
-				currentLine.maxAscent = std::max( currentLine.maxAscent, blockSize.getHeight() );
+				currentLine.maxAscent = std::max( currentLine.maxAscent, blockBaseline );
 				currentLine.height = std::max( currentLine.height, blockSize.getHeight() );
 
 				curX += blockSize.getWidth();
@@ -671,7 +677,10 @@ void RichText::updateLayout() {
 					span.position.y = offsetY;
 					maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 				} else {
-					Float offsetY = line.maxAscent - span.size.getHeight();
+					Float baseline = span.size.getHeight();
+					if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
+						baseline = pSize->baseline;
+					Float offsetY = line.maxAscent - baseline;
 					if ( offsetY < 0 )
 						offsetY = 0;
 					span.position.x += xOffset;
@@ -886,14 +895,17 @@ void RichText::updateLayout() {
 		} else {
 			// ── Drawable or CustomBlock ────────────────────────────
 			Sizef blockSize;
+			Float blockBaseline = 0.f;
 			bool isLineBreak = false;
 			UI::CSSFloat floatType = UI::CSSFloat::None;
 			UI::CSSClear clearType = UI::CSSClear::None;
 			if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
 				auto& drawable = *pDrawable;
 				blockSize = drawable ? drawable->getPixelsSize() : Sizef();
+				blockBaseline = blockSize.getHeight();
 			} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
 				blockSize = pSize->size;
+				blockBaseline = pSize->baseline;
 				floatType = pSize->floatType;
 				clearType = pSize->clearType;
 				isLineBreak = pSize->isLineBreak;
@@ -1021,7 +1033,7 @@ void RichText::updateLayout() {
 				RenderParagraph& currentLine = mLines.back();
 				currentLine.spans.push_back( renderSpan );
 
-				currentLine.maxAscent = std::max( currentLine.maxAscent, blockSize.getHeight() );
+				currentLine.maxAscent = std::max( currentLine.maxAscent, blockBaseline );
 				currentLine.height = std::max( currentLine.height, blockSize.getHeight() );
 
 				curX += blockSize.getWidth();
@@ -1075,7 +1087,10 @@ void RichText::updateLayout() {
 				span.position.y = offsetY;
 				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 			} else {
-				Float offsetY = line.maxAscent - span.size.getHeight();
+				Float baseline = span.size.getHeight();
+				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
+					baseline = pSize->baseline;
+				Float offsetY = line.maxAscent - baseline;
 				if ( offsetY < 0 )
 					offsetY = 0;
 				// Float spans keep their edge-aligned x; only inline-flow spans shift.
