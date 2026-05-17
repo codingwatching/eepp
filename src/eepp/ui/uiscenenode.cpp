@@ -294,8 +294,9 @@ std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 			auto type = widget.attribute( "type" );
 			auto href = widget.attribute( "href" );
 			auto rel = widget.attribute( "rel" );
-			if ( !href.empty() && ( String::iequals( type.value(), "text/css" ) ||
-									String::iequals( rel.value(), "stylesheet" ) ) ) {
+			if ( !href.empty() &&
+				 ( String::iequals( type.value(), "text/css" ) ||
+				   String::icontains( std::string_view{ rel.value() }, "stylesheet" ) ) ) {
 				loadCSS( href.as_string() );
 			}
 			continue;

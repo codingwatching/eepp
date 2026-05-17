@@ -7,6 +7,7 @@
 #include <eepp/ui/uihtmlinput.hpp>
 #include <eepp/ui/uiradiobutton.hpp>
 #include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uithememanager.hpp>
@@ -193,6 +194,7 @@ UITextSpan* UITextSpan::setText( const String& text ) {
 		mText = text;
 		onTextChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -238,6 +240,7 @@ UITextSpan* UITextSpan::setFontSize( const Uint32& characterSize ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -253,6 +256,7 @@ UITextSpan* UITextSpan::setFontStyle( const Uint32& fontStyle ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
 				 mRichText.getFontStyleConfig().getFont(), fontStyle ) )
@@ -275,6 +279,7 @@ UITextSpan* UITextSpan::setTextDecoration( const Uint32& textDecoration ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -290,6 +295,7 @@ UITextSpan* UITextSpan::setOutlineThickness( const Float& outlineThickness ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -304,6 +310,7 @@ UITextSpan* UITextSpan::setOutlineColor( const Color& outlineColor ) {
 		mStyleState |= StyleStateOutlineColor;
 		mRichText.invalidate();
 		onFontStyleChanged();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -318,6 +325,7 @@ UITextSpan* UITextSpan::setFontColor( const Color& color ) {
 		mStyleState |= StyleStateFontColor;
 		mRichText.invalidate();
 		onFontStyleChanged();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -332,6 +340,7 @@ UITextSpan* UITextSpan::setFontBackgroundColor( const Color& color ) {
 		mStyleState |= StyleStateFontBackgroundColor;
 		mRichText.invalidate();
 		onFontStyleChanged();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -351,6 +360,7 @@ UITextSpan* UITextSpan::setFontShadowColor( const Color& color ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
@@ -366,6 +376,7 @@ UITextSpan* UITextSpan::setFontShadowOffset( const Vector2f& offset ) {
 		mRichText.invalidate();
 		onFontStyleChanged();
 		notifyLayoutAttrChange();
+		invalidateDraw();
 	}
 	return this;
 }
