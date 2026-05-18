@@ -103,7 +103,7 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 
 	std::vector<std::string> getUnlockedCommands();
 
-	void saveAll();
+	void saveAll( bool includeBuffers = true);
 
 	ProjectDirectoryTree* getDirTree() const;
 

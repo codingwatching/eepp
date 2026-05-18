@@ -1302,6 +1302,9 @@ void UIWidget::pushState( const Uint32& State, bool emitEvent ) {
 
 		if ( emitEvent ) {
 			onStateChange();
+
+			if ( State & UIState::StateFocusWithin )
+				sendCommonEvent( Event::OnFocusWithin );
 		} else {
 			invalidateDraw();
 		}
@@ -1324,6 +1327,9 @@ void UIWidget::popState( const Uint32& State, bool emitEvent ) {
 
 		if ( emitEvent ) {
 			onStateChange();
+
+			if ( State & UIState::StateFocusWithin )
+				sendCommonEvent( Event::OnFocusWithinLoss );
 		} else {
 			invalidateDraw();
 		}

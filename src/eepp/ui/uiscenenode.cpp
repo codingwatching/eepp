@@ -1515,6 +1515,7 @@ void UISceneNode::navigate( const NavigationRequest& request ) {
 }
 
 Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyle ) const {
+	FontManager* fm = FontManager::instance();
 	Font* font = nullptr;
 	String::readBySeparatorStoppable(
 		names,
@@ -1528,7 +1529,7 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 			if ( fontStyle )
 				fontFamily += "#" + Text::styleFlagToString( fontStyle );
 
-			font = FontManager::instance()->getByName( fontFamily );
+			font = fm->getByName( fontFamily );
 
 			if ( fontStyle )
 				fontFamily.resize( size );
@@ -1544,7 +1545,7 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 				if ( fontStyle )
 					fontFamily += "#" + Text::styleFlagToString( fontStyle );
 
-				font = FontManager::instance()->getByName( fontFamily );
+				font = fm->getByName( fontFamily );
 			}
 
 			return font != nullptr;
@@ -1559,13 +1560,16 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 			std::string family = desc.family;
 			if ( fontStyle )
 				family += "#" + Text::styleFlagToString( fontStyle );
+
+			if ( ( font = fm->getByName( family ) ) )
+				return font;
+
 			FontTrueType* ttf = FontTrueType::New( family, desc.path, desc.faceIndex );
 			if ( ttf && ttf->loaded() ) {
 				font = ttf;
-
 				Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
 				if ( weightStyle ) {
-					Font* regular = FontManager::instance()->getByName( desc.family );
+					Font* regular = fm->getByName( desc.family );
 					if ( regular && regular != font && regular->getType() == FontType::TTF ) {
 						auto* regularFT = static_cast<FontTrueType*>( regular );
 						if ( weightStyle == Text::Bold )

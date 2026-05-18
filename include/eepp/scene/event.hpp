@@ -128,6 +128,8 @@ class EE_API Event {
 		OnNavigationError,
 		OnTitleChanged,
 		OnToggle,
+		OnFocusWithin,
+		OnFocusWithinLoss,
 		NoEvent = eeINDEX_NOT_FOUND
 	};
 

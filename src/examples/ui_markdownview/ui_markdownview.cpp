@@ -2,7 +2,9 @@
 #include <eepp/ui/uimarkdownview.hpp>
 
 EE_MAIN_FUNC int main( int, char** ) {
-	UIApplication app( { 1280, 720, "eepp - UIMarkdownView Example" } );
+	UIApplication app(
+		{ 1280, 720, "eepp - UIMarkdownView Example" }, {},
+		ContextSettings( false, ContextSettings::FrameRateLimitScreenRefreshRate, 4 ) );
 
 	app.getUI()->loadLayoutFromString( R"xml(
 	<ScrollView layout_width="match_parent" layout_height="match_parent">

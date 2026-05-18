@@ -600,7 +600,7 @@ UICodeEditorSplitter::createWidgetInTabWidget( UITabWidget* tabWidget, UIWidget*
 		return std::make_pair( (UITab*)nullptr, (UIWidget*)nullptr );
 	UITab* tab = tabWidget->add( tabName, widget );
 	widget->setData( (UintPtr)tab );
-	widget->on( Event::OnFocus, [this]( const Event* event ) {
+	widget->on( Event::OnFocusWithin, [this]( const Event* event ) {
 		setCurrentWidget( event->getNode()->asType<UIWidget>() );
 	} );
 	widget->on( Event::OnTitleChange, [this]( const Event* event ) {
