@@ -516,6 +516,12 @@ void TableLayouter::updateLayout() {
 		}
 
 		UIHTMLTableRow* row = mRows[r];
+		// Respect the row's specified height (e.g., <tr style="height: 10px">)
+		if ( row->getLayoutHeightPolicy() == SizePolicy::Fixed ) {
+			Float rowSpecifiedHeight = row->getPropertyHeight();
+			if ( rowSpecifiedHeight > 0.f )
+				rowHeight = std::max( rowHeight, rowSpecifiedHeight );
+		}
 		row->setPixelsSize( containerWidth - paddingH, rowHeight );
 
 		if ( r == 0 && mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_HEAD ) ) {
