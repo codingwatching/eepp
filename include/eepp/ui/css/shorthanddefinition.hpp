@@ -25,7 +25,19 @@ enum class ShorthandId : Uint32 {
 	BorderRadius = String::hash( "border-radius" ),
 	MinSize = String::hash( "min-size" ),
 	MaxSize = String::hash( "max-size" ),
-	Font = String::hash( "font" )
+	ListStye = String::hash( "list-style" ),
+	Font = String::hash( "font" ),
+	VerticalAlign = String::hash( "vertical-align" ),
+	BoxMargin = String::hash( "box-margin" ),
+	ForegroundRadius = String::hash( "foreground-radius" ),
+	RotateOriginPoint = String::hash( "rotate-origin-point" ),
+	Border = String::hash( "border" ),
+	TextShadow = String::hash( "text-shadow" ),
+	HintShadow = String::hash( "hint-shadow" ),
+	BorderLeft = String::hash( "border-left" ),
+	BorderRight = String::hash( "border-right" ),
+	BorderTop = String::hash( "border-top" ),
+	BorderBottom = String::hash( "border-bottom" ),
 };
 
 typedef std::function<std::vector<StyleSheetProperty>( const ShorthandDefinition* shorthand,

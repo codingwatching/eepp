@@ -361,7 +361,7 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 											mContainer->getPixelsContentOffset().Left -
 											mContainer->getPixelsContentOffset().Right -
 											margin.Left - margin.Right );
-						if ( contentWidth != widget->getPixelsSize().getWidth() ) {
+						if ( widget->getPixelsSize().getWidth() == 0 && contentWidth > 0 ) {
 							widget->setPixelsSize( contentWidth,
 												   widget->getPixelsSize().getHeight() );
 							mResizedCount++;

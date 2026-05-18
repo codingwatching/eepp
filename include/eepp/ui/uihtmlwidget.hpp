@@ -46,6 +46,10 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	void setCSSClear( CSSClear cssClear );
 
+	const CSSBaselineAlignValue& getBaselineAlign() const { return mBaselineAlign; }
+
+	void setBaselineAlign( const CSSBaselineAlignValue& baselineAlign );
+
 	const Rectf& getOffsets() const { return mOffsets; }
 
 	void setOffsets( const Rectf& offsets );
@@ -109,6 +113,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	CSSPosition mPosition{ CSSPosition::Static };
 	CSSFloat mFloat{ CSSFloat::None };
 	CSSClear mClear{ CSSClear::None };
+	CSSBaselineAlignValue mBaselineAlign;
 	std::string mTopEq{ "auto" };
 	std::string mRightEq{ "auto" };
 	std::string mBottomEq{ "auto" };

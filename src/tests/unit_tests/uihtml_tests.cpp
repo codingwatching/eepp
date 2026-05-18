@@ -315,6 +315,59 @@ UTEST( UIRichText, anchorPaddingLineHeight ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, InlineBaselineAlignmentProperties ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "Inline Baseline Alignment Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	sceneNode->getUIThemeManager()->setDefaultFont( font );
+	sceneNode->loadLayoutFromString( R"html(
+		<vbox layout_width="wrap_content" layout_height="wrap_content">
+			<RichText id="baseline" font-size="20dp" layout_width="wrap_content" layout_height="wrap_content">
+				A<span id="base_box" display="inline-block" layout_width="20dp" layout_height="20dp" vertical-align="baseline">X</span>
+			</RichText>
+			<RichText id="middle" font-size="20dp" layout_width="wrap_content" layout_height="wrap_content">
+				A<span id="middle_box" display="inline-block" layout_width="20dp" layout_height="20dp" vertical-align="middle"><span id="middle_child">X</span></span>
+			</RichText>
+			<RichText id="alignment_middle" font-size="20dp" layout_width="wrap_content" layout_height="wrap_content">
+				A<span id="alignment_box" display="inline-block" layout_width="20dp" layout_height="20dp" alignment-baseline="middle">X</span>
+			</RichText>
+		</vbox>
+	)html" );
+	sceneNode->updateDirtyLayouts();
+
+	auto* baseline = sceneNode->getRoot()->find( "baseline" )->asType<UIRichText>();
+	auto* middle = sceneNode->getRoot()->find( "middle" )->asType<UIRichText>();
+	auto* alignmentMiddle = sceneNode->getRoot()->find( "alignment_middle" )->asType<UIRichText>();
+	auto* baselineBox = sceneNode->getRoot()->find( "base_box" )->asType<UIHTMLWidget>();
+	auto* middleBox = sceneNode->getRoot()->find( "middle_box" )->asType<UIHTMLWidget>();
+	auto* middleChild = sceneNode->getRoot()->find( "middle_child" )->asType<UIHTMLWidget>();
+	auto* alignmentBox = sceneNode->getRoot()->find( "alignment_box" )->asType<UIHTMLWidget>();
+	ASSERT_TRUE( baseline != nullptr );
+	ASSERT_TRUE( middle != nullptr );
+	ASSERT_TRUE( alignmentMiddle != nullptr );
+	ASSERT_TRUE( baselineBox != nullptr );
+	ASSERT_TRUE( middleBox != nullptr );
+	ASSERT_TRUE( middleChild != nullptr );
+	ASSERT_TRUE( alignmentBox != nullptr );
+
+	EXPECT_EQ( baselineBox->getBaselineAlign().type, CSSBaselineAlignment::Baseline );
+	EXPECT_EQ( middleBox->getBaselineAlign().type, CSSBaselineAlignment::Middle );
+	EXPECT_EQ( middleChild->getBaselineAlign().type, CSSBaselineAlignment::Baseline );
+	EXPECT_EQ( alignmentBox->getBaselineAlign().type, CSSBaselineAlignment::Middle );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLTable, complexLayout3 ) {
 	auto win = Engine::instance()->createWindow(
 		WindowSettings( 1024, 650, "HTML Tables Test 3", WindowStyle::Default,
@@ -2158,6 +2211,37 @@ UTEST( UIBackground, InlineBlockImageFixedSize ) {
 		EXPECT_EQ( anchor->getPixelsSize().getWidth(), 15 );
 		EXPECT_EQ( anchor->getPixelsSize().getHeight(), 12 );
 	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, RedditHeaderPagenameBottomAlign ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, "reddit header pagename bottom align", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/reddit_header.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	auto* headerLeft = sceneNode->getRoot()->find( "header-bottom-left" )->asType<UIHTMLWidget>();
+	auto* logo = sceneNode->getRoot()->find( "header-img" )->asType<UIHTMLWidget>();
+	auto* page = sceneNode->getRoot()->querySelector( ".pagename" )->asType<UIHTMLWidget>();
+	ASSERT_TRUE( headerLeft != nullptr );
+	ASSERT_TRUE( logo != nullptr );
+	ASSERT_TRUE( page != nullptr );
+
+	EXPECT_EQ( logo->getBaselineAlign().type, CSSBaselineAlignment::Bottom );
+	EXPECT_EQ( page->getBaselineAlign().type, CSSBaselineAlignment::Bottom );
+	EXPECT_NEAR( headerLeft->getPixelsSize().getHeight(),
+				 page->getPixelsPosition().y + page->getPixelsSize().getHeight(), 0.5f );
 
 	Engine::destroySingleton();
 }

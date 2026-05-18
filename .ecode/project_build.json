@@ -220,7 +220,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "",
+        "args": "-filter=\"UIRichText.InvalidWidthLengthComputation3\"",
         "command": "${project_root}/bin/unit_tests/eepp-unit_tests-debug",
         "name": "eepp-unit_tests-debug",
         "working_dir": "${project_root}/bin/unit_tests/"
@@ -377,7 +377,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "-c system --hn-dark",
+        "args": "-d1 file:///home/downloads/files/svn/eepp/bin/unit_tests/assets/html/blog_main_incorrect_widths.html",
         "command": "${project_root}/bin/eepp-ui-html-debug",
         "name": "eepp-ui-html-debug",
         "working_dir": "${project_root}/bin"

@@ -271,6 +271,7 @@ enum class PropertyId : Uint32 {
 	Target = String::hash( "target" ),
 	For = String::hash( "for" ),
 	UnicodeRange = String::hash( "unicode-range" ),
+	AlignmentBaseline = String::hash( "alignment-baseline" ),
 };
 
 enum class PropertyType : Uint32 {

@@ -75,9 +75,8 @@ static PercentagePositions isPercentagePosition( const String::HashType& strHash
 	return PercentagePositions::None;
 }
 
-StyleSheetLength::Unit StyleSheetLength::unitFromString( std::string unitStr ) {
-	String::toLowerInPlace( unitStr );
-	switch ( String::hash( unitStr ) ) {
+StyleSheetLength::Unit StyleSheetLength::unitFromString( std::string_view unitStr ) {
+	switch ( String::hashToLower( unitStr ) ) {
 		case UnitHashes::Percentage:
 			return Unit::Percentage;
 		case UnitHashes::Dp:
@@ -172,24 +171,54 @@ std::string StyleSheetLength::unitToString( const StyleSheetLength::Unit& unit )
 	return "px";
 }
 
-bool StyleSheetLength::isLength( const std::string& unitStr ) {
-	LuaPattern ptrn( "(-?%d+[%d%.]*)([eE][-+]?%d+)?(%w*)" );
-	PatternMatcher::Range matches[4];
-	if ( ptrn.matches( unitStr, matches ) ) {
-		if ( matches[3].isValid() ) {
-			std::string unit =
-				unitStr.substr( matches[3].start, matches[3].end - matches[3].start );
-			auto unitType = unitFromString( unit );
-			if ( unitType != StyleSheetLength::Unit::Px || unit == "px" )
-				return true;
-			return false;
+bool StyleSheetLength::isLength( std::string_view unitStr ) {
+	if ( unitStr.empty() )
+		return false;
+
+	size_t pos = 0;
+	if ( unitStr[pos] == '-' || unitStr[pos] == '+' )
+		pos++;
+
+	bool hasDigit = false;
+	bool hasDot = false;
+	while ( pos < unitStr.size() ) {
+		char c = unitStr[pos];
+		if ( c >= '0' && c <= '9' ) {
+			hasDigit = true;
+			pos++;
+		} else if ( c == '.' && !hasDot ) {
+			hasDot = true;
+			pos++;
+		} else {
+			break;
 		}
-		return true;
 	}
-	return false;
+
+	if ( !hasDigit )
+		return false;
+
+	if ( pos < unitStr.size() && ( unitStr[pos] == 'e' || unitStr[pos] == 'E' ) ) {
+		size_t expPos = pos + 1;
+		if ( expPos < unitStr.size() && ( unitStr[expPos] == '-' || unitStr[expPos] == '+' ) )
+			expPos++;
+		bool hasExpDigit = false;
+		while ( expPos < unitStr.size() && unitStr[expPos] >= '0' && unitStr[expPos] <= '9' ) {
+			hasExpDigit = true;
+			expPos++;
+		}
+		if ( hasExpDigit )
+			pos = expPos;
+	}
+
+	std::string_view unit = unitStr.substr( pos );
+	if ( unit.empty() )
+		return true;
+
+	auto unitType = unitFromString( unit );
+	return unitType != StyleSheetLength::Unit::Px || unit == "px";
 }
 
-bool StyleSheetLength::isPercentage( const std::string& val ) {
+bool StyleSheetLength::isPercentage( std::string_view val ) {
 	return !val.empty() && val.back() == '%';
 }
 
@@ -338,7 +367,7 @@ StyleSheetLength& StyleSheetLength::operator=( const StyleSheetLength& val ) {
 
 StyleSheetLength StyleSheetLength::fromString( const std::string& str, const Float& defaultValue,
 											   bool pxAsDp ) {
-	PercentagePositions isPercentage = isPercentagePosition( String::hash( str ) );
+	PercentagePositions isPercentage = isPercentagePosition( String::hashToLower( str ) );
 	if ( PercentagePositions::None != isPercentage )
 		return fromString( positionToPercentage( isPercentage ), defaultValue );
 

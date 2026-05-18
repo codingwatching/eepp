@@ -1,3 +1,4 @@
+#include <eepp/core/string.hpp>
 #include <eepp/ui/csslayouttypes.hpp>
 
 namespace EE { namespace UI {
@@ -193,6 +194,78 @@ CSSClear CSSClearHelper::fromString( std::string_view val ) {
 	if ( val == "both" )
 		return CSSClear::Both;
 	return CSSClear::None;
+}
+
+std::string_view CSSBaselineAlignmentHelper::toString( const CSSBaselineAlignValue& val ) {
+	switch ( val.type ) {
+		case CSSBaselineAlignment::Sub:
+			return "sub";
+		case CSSBaselineAlignment::Super:
+			return "super";
+		case CSSBaselineAlignment::TextTop:
+			return "text-top";
+		case CSSBaselineAlignment::TextBottom:
+			return "text-bottom";
+		case CSSBaselineAlignment::Middle:
+			return "middle";
+		case CSSBaselineAlignment::Top:
+			return "top";
+		case CSSBaselineAlignment::Bottom:
+			return "bottom";
+		case CSSBaselineAlignment::Length:
+			return "length";
+		case CSSBaselineAlignment::Percentage:
+			return "percentage";
+		case CSSBaselineAlignment::Auto:
+			return "auto";
+		case CSSBaselineAlignment::Baseline:
+		default:
+			return "baseline";
+	}
+}
+
+CSSBaselineAlignValue CSSBaselineAlignmentHelper::fromKeyword( std::string_view val ) {
+	CSSBaselineAlignValue out;
+
+	switch ( String::hashToLower( val ) ) {
+		case String::hash( "auto" ):
+			out.type = CSSBaselineAlignment::Auto;
+			break;
+		case String::hash( "sub" ):
+			out.type = CSSBaselineAlignment::Sub;
+			break;
+		case String::hash( "super" ):
+			out.type = CSSBaselineAlignment::Super;
+			break;
+		case String::hash( "text-top" ):
+		case String::hash( "text-before-edge" ):
+		case String::hash( "before-edge" ):
+		case String::hash( "hanging" ):
+			out.type = CSSBaselineAlignment::TextTop;
+			break;
+		case String::hash( "text-bottom" ):
+		case String::hash( "text-after-edge" ):
+		case String::hash( "after-edge" ):
+		case String::hash( "mathematical" ):
+			out.type = CSSBaselineAlignment::TextBottom;
+			break;
+		case String::hash( "middle" ):
+		case String::hash( "central" ):
+			out.type = CSSBaselineAlignment::Middle;
+			break;
+		case String::hash( "top" ):
+			out.type = CSSBaselineAlignment::Top;
+			break;
+		case String::hash( "bottom" ):
+			out.type = CSSBaselineAlignment::Bottom;
+			break;
+		case String::hash( "baseline" ):
+		default:
+			out.type = CSSBaselineAlignment::Baseline;
+			break;
+	}
+
+	return out;
 }
 
 }} // namespace EE::UI

@@ -1,4 +1,5 @@
 #include <eepp/ui/css/propertydefinition.hpp>
+#include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayouter.hpp>
 #include <eepp/ui/uilayoutermanager.hpp>
@@ -28,6 +29,37 @@ static std::string normalizeDataPropertyName( std::string_view name ) {
 	std::string normalizedName( trimmedName );
 	String::toLowerInPlace( normalizedName );
 	return normalizedName;
+}
+
+static CSSBaselineAlignValue parseBaselineAlign( UIHTMLWidget* widget,
+												 const StyleSheetProperty& property ) {
+	std::string_view val = property.value();
+	auto isSpace = []( char c ) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
+	};
+	while ( !val.empty() && isSpace( val.front() ) )
+		val.remove_prefix( 1 );
+	while ( !val.empty() && isSpace( val.back() ) )
+		val.remove_suffix( 1 );
+	if ( val.empty() )
+		return {};
+
+	if ( CSS::StyleSheetLength::isPercentage( val ) ) {
+		CSSBaselineAlignValue out;
+		out.type = CSSBaselineAlignment::Percentage;
+		out.value = CSS::StyleSheetLength::fromString( std::string( val ) ).getValue();
+		return out;
+	}
+
+	if ( CSS::StyleSheetLength::isLength( val ) ) {
+		CSSBaselineAlignValue out;
+		out.type = CSSBaselineAlignment::Length;
+		out.value =
+			widget->lengthFromValue( std::string( val ), CSS::PropertyRelativeTarget::None );
+		return out;
+	}
+
+	return CSSBaselineAlignmentHelper::fromKeyword( val );
 }
 
 UIHTMLWidget* UIHTMLWidget::New() {
@@ -122,6 +154,13 @@ void UIHTMLWidget::setCSSClear( CSSClear cssClear ) {
 	}
 }
 
+void UIHTMLWidget::setBaselineAlign( const CSSBaselineAlignValue& baselineAlign ) {
+	if ( mBaselineAlign != baselineAlign ) {
+		mBaselineAlign = baselineAlign;
+		notifyLayoutAttrChange();
+	}
+}
+
 void UIHTMLWidget::setOffsets( const Rectf& offsets ) {
 	if ( mOffsets != offsets ) {
 		mOffsets = offsets;
@@ -139,9 +178,11 @@ void UIHTMLWidget::setZIndex( int zIndex ) {
 
 std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 	auto props = UILayout::getPropertiesImplemented();
-	auto local = { PropertyId::Display, PropertyId::Position, PropertyId::Float,
-				   PropertyId::Clear,	PropertyId::Top,	  PropertyId::Right,
-				   PropertyId::Bottom,	PropertyId::Left,	  PropertyId::ZIndex };
+	auto local = { PropertyId::Display, PropertyId::Position,
+				   PropertyId::Float,	PropertyId::Clear,
+				   PropertyId::Top,		PropertyId::Right,
+				   PropertyId::Bottom,	PropertyId::Left,
+				   PropertyId::ZIndex,	PropertyId::AlignmentBaseline };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -170,6 +211,8 @@ std::string UIHTMLWidget::getPropertyString( const PropertyDefinition* propertyD
 			return mLeftEq;
 		case PropertyId::ZIndex:
 			return String::toString( mZIndex );
+		case PropertyId::AlignmentBaseline:
+			return std::string( CSSBaselineAlignmentHelper::toString( mBaselineAlign ) );
 		default:
 			return UILayout::getPropertyString( propertyDef );
 	}
@@ -218,6 +261,10 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::Left: {
 			mLeftEq = attribute.asString();
 			notifyLayoutAttrChange();
+			return true;
+		}
+		case PropertyId::AlignmentBaseline: {
+			setBaselineAlign( parseBaselineAlign( this, attribute ) );
 			return true;
 		}
 		default:

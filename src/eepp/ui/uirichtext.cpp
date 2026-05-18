@@ -842,6 +842,33 @@ static Float getCustomBlockBaseline( UIWidget* widget, const Sizef& widgetSize,
 	return fallbackBaseline;
 }
 
+static CSSBaselineAlignValue getWidgetBaselineAlign( UIWidget* widget ) {
+	if ( widget->isType( UI_TYPE_HTML_WIDGET ) )
+		return widget->asType<UIHTMLWidget>()->getBaselineAlign();
+	return {};
+}
+
+static bool isDefaultBaselineAlign( const CSSBaselineAlignValue& align ) {
+	return align.type == CSSBaselineAlignment::Baseline || align.type == CSSBaselineAlignment::Auto;
+}
+
+static CSSBaselineAlignValue getEffectiveInlineBaselineAlign( Node* node, UILayout* container ) {
+	// vertical-align is not inherited, but nested inline boxes can be flattened into a single
+	// RichText span. Preserve the nearest explicit inline box alignment so the generated span
+	// still represents the parent inline box being aligned.
+	for ( Node* cur = node; cur && cur != container; cur = cur->getParent() ) {
+		if ( !cur->isWidget() )
+			continue;
+		UIWidget* widget = cur->asType<UIWidget>();
+		if ( !widget->isInlineDisplay() )
+			continue;
+		CSSBaselineAlignValue align = getWidgetBaselineAlign( widget );
+		if ( !isDefaultBaselineAlign( align ) )
+			return align;
+	}
+	return {};
+}
+
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
 	richText.clear();
 	if ( container->isType( UI_TYPE_RICHTEXT ) ) {
@@ -899,7 +926,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			String::View selfText = selfSpan->getText().view();
 			FontStyleConfig style = selfSpan->getFontStyleConfig();
 			style.BackgroundColor = Color::Transparent;
-			richText.addSpan( selfText, style );
+			richText.addSpan( selfText, style, Rectf::Zero, Rectf::Zero, 0,
+							  selfSpan->getBaselineAlign() );
 			if ( shouldCollapse )
 				lastSpanEndsWithSpace = !selfText.empty() && selfText.back() == ' ';
 		}
@@ -983,7 +1011,11 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			} else {
 				style = richText.getFontStyleConfig();
 			}
-			richText.addSpan( text, style );
+			CSSBaselineAlignValue baselineAlign;
+			if ( node->getParent()->isWidget() )
+				baselineAlign = getEffectiveInlineBaselineAlign(
+					node->getParent()->asType<UIWidget>(), container );
+			richText.addSpan( text, style, Rectf::Zero, Rectf::Zero, 0, baselineAlign );
 			return;
 		}
 
@@ -1031,7 +1063,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 				if ( !spanText.empty() ) {
 					richText.addSpan( spanText, span->getFontStyleConfig(), margin, padding,
-									  spanLineHeight );
+									  spanLineHeight,
+									  getEffectiveInlineBaselineAlign( span, container ) );
 					span->setLayoutCharCount( spanText.length() );
 					if ( shouldCollapse )
 						lastSpanEndsWithSpace = spanText.back() == ' ';
@@ -1041,7 +1074,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			} else if ( margin.Left > 0 || margin.Top > 0 || padding.Left > 0 || padding.Top > 0 ) {
 				Rectf leftOnly( margin.Left, margin.Top, 0, 0 );
 				Rectf padLeftOnly( padding.Left, padding.Top, 0, 0 );
-				richText.addSpan( "", span->getFontStyleConfig(), leftOnly, padLeftOnly );
+				richText.addSpan( "", span->getFontStyleConfig(), leftOnly, padLeftOnly, 0,
+								  getEffectiveInlineBaselineAlign( span, container ) );
 			}
 
 			Node* spanChild = span->getFirstChild();
@@ -1057,7 +1091,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 								  padding.Bottom > 0 ) ) {
 				Rectf rightOnly( 0, 0, margin.Right, margin.Bottom );
 				Rectf padRightOnly( 0, 0, padding.Right, padding.Bottom );
-				richText.addSpan( "", span->getFontStyleConfig(), rightOnly, padRightOnly );
+				richText.addSpan( "", span->getFontStyleConfig(), rightOnly, padRightOnly, 0,
+								  getEffectiveInlineBaselineAlign( span, container ) );
 			}
 
 			if ( shouldCollapse && span->isInlineBlock() )
@@ -1142,7 +1177,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				Sizef customSize( w + margin.Left + margin.Right,
 								  size.getHeight() + margin.Top + margin.Bottom );
 				richText.addCustomSize( customSize, floatType, clearType,
-										getCustomBlockBaseline( widget, size, margin ) );
+										getCustomBlockBaseline( widget, size, margin ),
+										getWidgetBaselineAlign( widget ) );
 
 				if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 					 widget->asType<UITextSpan>()->isInlineBlock() &&
@@ -1250,7 +1286,10 @@ Float UIRichText::getMaxIntrinsicWidth() const {
 Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 	switch ( Msg->getMsg() ) {
 		case NodeMessage::LayoutAttributeChange: {
-			if ( Msg->getSender() != this && !mPacking ) {
+			bool packing = isPacking();
+			if ( packing )
+				return 1;
+			if ( Msg->getSender() != this ) {
 				invalidateIntrinsicSize();
 				notifyLayoutAttrChangeParent();
 			}

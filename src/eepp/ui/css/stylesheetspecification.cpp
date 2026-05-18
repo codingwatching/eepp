@@ -496,6 +496,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 		.setType( PropertyType::String );
 	registerProperty( "target", "_self" ).setType( PropertyType::String );
 	registerProperty( "unicode-range", "" ).setType( PropertyType::String );
+	registerProperty( "alignment-baseline", "baseline" ).setType( PropertyType::String );
 
 	// Shorthands
 	registerShorthand( "margin", { "margin-top", "margin-right", "margin-bottom", "margin-left" },
@@ -566,6 +567,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerShorthand( "font",
 					   { "font-style", "font-weight", "font-size", "line-height", "font-family" },
 					   "font" );
+	registerShorthand( "vertical-align", { "alignment-baseline" }, "vertical-align" );
 }
 
 void StyleSheetSpecification::registerNodeSelector( const std::string& name,
@@ -844,6 +846,18 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 			properties.emplace_back( StyleSheetProperty( prop, value ) );
 		}
 		return properties;
+	};
+
+	mShorthandParsers["vertical-align"] =
+		[]( const ShorthandDefinition* shorthand,
+			std::string value ) -> std::vector<StyleSheetProperty> {
+		value = String::trim( value );
+		if ( value.empty() )
+			return {};
+		const std::vector<std::string>& propNames = shorthand->getProperties();
+		if ( propNames.empty() )
+			return {};
+		return { StyleSheetProperty( propNames[0], value ) };
 	};
 
 	mShorthandParsers["vector2"] = []( const ShorthandDefinition* shorthand,

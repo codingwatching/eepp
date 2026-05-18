@@ -203,18 +203,73 @@ UTEST( RichText, BaselineAlignment ) {
 	const auto& largeSpan = lines[0].spans[0];
 	const auto& smallSpan = lines[0].spans[1];
 
-	// Large span should be at the top of the line (offset 0 relative to ascent difference)
-	// Small span should be pushed down
 	Float largeAscent = font->getAscent( 30 );
+	Float smallAscent = font->getAscent( 12 );
 
-	// Expected offsets
-	Float expectedLargeY = largeAscent - 30;
-	Float expectedSmallY = largeAscent - 12;
+	Float expectedLargeY = 0;
+	Float expectedSmallY = largeAscent - smallAscent;
 
 	EXPECT_NEAR( largeSpan.position.y, expectedLargeY, 0.001f );
 	EXPECT_NEAR( smallSpan.position.y, expectedSmallY, 0.001f );
 
 	EXPECT_GT( smallSpan.position.y, largeSpan.position.y );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, VerticalAlignCustomBlocks ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Vertical Align",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	RichText baselineRt;
+	baselineRt.getFontStyleConfig().Font = font;
+	baselineRt.getFontStyleConfig().CharacterSize = 20;
+	baselineRt.addSpan( "A", nullptr, 20 );
+	baselineRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f );
+	baselineRt.getSize();
+	ASSERT_EQ( baselineRt.getLines().front().spans.size(), (size_t)2 );
+	Float baselineY = baselineRt.getLines().front().spans[1].position.y;
+
+	CSSBaselineAlignValue middleAlign;
+	middleAlign.type = CSSBaselineAlignment::Middle;
+	RichText middleRt;
+	middleRt.getFontStyleConfig().Font = font;
+	middleRt.getFontStyleConfig().CharacterSize = 20;
+	middleRt.addSpan( "A", nullptr, 20 );
+	middleRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, middleAlign );
+	middleRt.getSize();
+	ASSERT_EQ( middleRt.getLines().front().spans.size(), (size_t)2 );
+	EXPECT_GT( middleRt.getLines().front().spans[1].position.y, baselineY );
+
+	CSSBaselineAlignValue lengthAlign;
+	lengthAlign.type = CSSBaselineAlignment::Length;
+	lengthAlign.value = 4.f;
+	RichText lengthRt;
+	lengthRt.getFontStyleConfig().Font = font;
+	lengthRt.getFontStyleConfig().CharacterSize = 20;
+	lengthRt.addSpan( "A", nullptr, 20 );
+	lengthRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, lengthAlign );
+	lengthRt.getSize();
+	ASSERT_EQ( lengthRt.getLines().front().spans.size(), (size_t)2 );
+	EXPECT_NEAR( lengthRt.getLines().front().spans[1].position.y, baselineY - 4.f, 0.001f );
+
+	CSSBaselineAlignValue percentAlign;
+	percentAlign.type = CSSBaselineAlignment::Percentage;
+	percentAlign.value = 50.f;
+	RichText percentRt;
+	percentRt.getFontStyleConfig().Font = font;
+	percentRt.getFontStyleConfig().CharacterSize = 20;
+	percentRt.addSpan( "A", nullptr, 20 );
+	percentRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, percentAlign );
+	percentRt.getSize();
+	ASSERT_EQ( percentRt.getLines().front().spans.size(), (size_t)2 );
+	EXPECT_NEAR( percentRt.getLines().front().spans[1].position.y, baselineY - 10.f, 0.001f );
 
 	Engine::destroySingleton();
 }
@@ -241,10 +296,9 @@ UTEST( RichText, CustomBlockBaselineAlignment ) {
 	ASSERT_EQ( lines.size(), (size_t)1 );
 	ASSERT_EQ( lines[0].spans.size(), (size_t)3 );
 
-	const auto& smallSpan = lines[0].spans[1];
 	const auto& customSpan = lines[0].spans[2];
 
-	EXPECT_NEAR( customSpan.position.y, smallSpan.position.y, 0.001f );
+	EXPECT_NEAR( customSpan.position.y, font->getAscent( 30 ) - 12.f, 0.001f );
 	EXPECT_GT( customSpan.position.y, 0.f );
 
 	Engine::destroySingleton();

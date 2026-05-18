@@ -7,6 +7,80 @@
 
 namespace EE { namespace Graphics {
 
+static Float getSpanLineHeight( const RichText::SpanBlock& spanBlock ) {
+	const auto& text = spanBlock.text;
+	if ( !text || !text->getFontStyleConfig().Font )
+		return spanBlock.lineHeight;
+	const auto& fontStyle = text->getFontStyleConfig();
+	return spanBlock.lineHeight > 0 ? spanBlock.lineHeight
+									: fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+}
+
+static Float getTextBaseline( const RichText::SpanBlock& spanBlock ) {
+	const auto& text = spanBlock.text;
+	if ( !text || !text->getFontStyleConfig().Font )
+		return 0.f;
+	const auto& fontStyle = text->getFontStyleConfig();
+	Float fontLineSpacing = fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+	Float lineHeight = getSpanLineHeight( spanBlock );
+	Float leading = eemax( 0.f, lineHeight - fontLineSpacing ) * 0.5f;
+	return leading + fontStyle.Font->getAscent( fontStyle.CharacterSize );
+}
+
+static Float getFontXHeight( const FontStyleConfig& fontStyle ) {
+	if ( fontStyle.Font ) {
+		Glyph glyph = fontStyle.Font->getGlyph( 'x', fontStyle.CharacterSize, false, false );
+		Float xHeight = eemax( 0.f, -glyph.bounds.Top );
+		if ( xHeight > 0 )
+			return xHeight;
+	}
+	return fontStyle.CharacterSize * 0.5f;
+}
+
+static Float getParentAscent( const FontStyleConfig& fontStyle ) {
+	return fontStyle.Font ? fontStyle.Font->getAscent( fontStyle.CharacterSize )
+						  : static_cast<Float>( fontStyle.CharacterSize );
+}
+
+static Float getParentDescent( const FontStyleConfig& fontStyle ) {
+	if ( !fontStyle.Font )
+		return 0.f;
+	return eemax( 0.f, fontStyle.Font->getLineSpacing( fontStyle.CharacterSize ) -
+						   fontStyle.Font->getAscent( fontStyle.CharacterSize ) );
+}
+
+static Float getBaselineAlignedOffset( const RichText::RenderParagraph& line, const Sizef& size,
+									   Float naturalBaseline, Float ownLineHeight,
+									   const UI::CSSBaselineAlignValue& align,
+									   const FontStyleConfig& parentFontStyle ) {
+	Float baseline = line.maxAscent;
+	switch ( align.type ) {
+		case UI::CSSBaselineAlignment::Sub:
+			return baseline - naturalBaseline + parentFontStyle.CharacterSize * 0.2f;
+		case UI::CSSBaselineAlignment::Super:
+			return baseline - naturalBaseline - parentFontStyle.CharacterSize * 0.33f;
+		case UI::CSSBaselineAlignment::TextTop:
+			return baseline - getParentAscent( parentFontStyle );
+		case UI::CSSBaselineAlignment::TextBottom:
+			return baseline + getParentDescent( parentFontStyle ) - size.getHeight();
+		case UI::CSSBaselineAlignment::Middle:
+			return getParentAscent( parentFontStyle ) + getFontXHeight( parentFontStyle ) * 0.5f -
+				   size.getHeight() * 0.5f;
+		case UI::CSSBaselineAlignment::Top:
+			return 0.f;
+		case UI::CSSBaselineAlignment::Bottom:
+			return line.height - size.getHeight();
+		case UI::CSSBaselineAlignment::Length:
+			return baseline - naturalBaseline - align.value;
+		case UI::CSSBaselineAlignment::Percentage:
+			return baseline - naturalBaseline - ownLineHeight * align.value / 100.f;
+		case UI::CSSBaselineAlignment::Auto:
+		case UI::CSSBaselineAlignment::Baseline:
+		default:
+			return baseline - naturalBaseline;
+	}
+}
+
 RichText* RichText::New() {
 	return eeNew( RichText, () );
 }
@@ -302,14 +376,15 @@ Sizef RichText::getPixelsSize() {
 }
 
 void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-						const Rectf& padding, Float lineHeight ) {
+						const Rectf& padding, Float lineHeight,
+						const UI::CSSBaselineAlignValue& baselineAlign ) {
 	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
 	auto span = std::make_shared<Text>();
 	span->setString( text );
 	span->setStyleConfig( style );
-	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight } );
+	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight, baselineAlign } );
 	invalidateLayout();
 }
 
@@ -321,15 +396,16 @@ void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 }
 
 void RichText::addCustomSize( const Sizef& size, UI::CSSFloat floatType, UI::CSSClear clearType,
-							  Float baseline ) {
+							  Float baseline, const UI::CSSBaselineAlignValue& baselineAlign ) {
 	mBlocks.push_back( CustomBlock{ size, floatType, clearType,
-									baseline >= 0.f ? baseline : size.getHeight(), false } );
+									baseline >= 0.f ? baseline : size.getHeight(), false,
+									baselineAlign } );
 	invalidateLayout();
 }
 
 void RichText::addLineBreak() {
 	mBlocks.push_back(
-		CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, 0.f, true } );
+		CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, 0.f, true, {} } );
 	invalidateLayout();
 }
 
@@ -537,16 +613,13 @@ void RichText::updateLayout() {
 							span->getString().substr( startIdx, endIdx - startIdx ) );
 						renderSpanText->setStyleConfig( fontStyle );
 
-						Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-						Float height =
-							pText->lineHeight > 0
-								? pText->lineHeight
-								: fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+						Float height = getSpanLineHeight( *pText );
+						Float ascent = getTextBaseline( *pText );
 						Float spanWidth = renderSpanText->getTextWidth();
 
 						RenderSpan renderSpan{
 							SpanBlock{ renderSpanText, pText->margin, pText->padding,
-									   pText->lineHeight },
+									   pText->lineHeight, pText->baselineAlign },
 							{ curX, 0 },
 							Sizef( spanWidth, height ),
 							curCharIdx,
@@ -669,24 +742,38 @@ void RichText::updateLayout() {
 			}
 
 			Float maxLineHeight = 0;
+			Float minLineTop = 0;
 			for ( auto& span : line.spans ) {
 				if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-					auto& textBlock = pText->text;
-					Float offsetY = line.maxAscent - textBlock->getCharacterSize();
+					Float baseline = getTextBaseline( *pText );
+					Float offsetY = getBaselineAlignedOffset( line, span.size, baseline,
+															  getSpanLineHeight( *pText ),
+															  pText->baselineAlign, mDefaultStyle );
 					span.position.x += xOffset;
 					span.position.y = offsetY;
+					minLineTop = std::min( minLineTop, offsetY );
 					maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 				} else {
 					Float baseline = span.size.getHeight();
-					if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
+					UI::CSSBaselineAlignValue baselineAlign;
+					if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
 						baseline = pSize->baseline;
-					Float offsetY = line.maxAscent - baseline;
-					if ( offsetY < 0 )
-						offsetY = 0;
+						baselineAlign = pSize->baselineAlign;
+					}
+					Float offsetY =
+						getBaselineAlignedOffset( line, span.size, baseline, span.size.getHeight(),
+												  baselineAlign, mDefaultStyle );
 					span.position.x += xOffset;
 					span.position.y = offsetY;
+					minLineTop = std::min( minLineTop, offsetY );
 					maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 				}
+			}
+
+			if ( minLineTop < 0 ) {
+				for ( auto& span : line.spans )
+					span.position.y -= minLineTop;
+				maxLineHeight -= minLineTop;
 			}
 
 			line.height = std::max( line.height, maxLineHeight );
@@ -837,15 +924,13 @@ void RichText::updateLayout() {
 						span->getString().substr( startIdx, endIdx - startIdx ) );
 					renderSpanText->setStyleConfig( fontStyle );
 
-					Float ascent = fontStyle.Font->getAscent( fontStyle.CharacterSize );
-					Float height = pText->lineHeight > 0
-									   ? pText->lineHeight
-									   : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+					Float height = getSpanLineHeight( *pText );
+					Float ascent = getTextBaseline( *pText );
 					Float spanWidth = renderSpanText->getTextWidth();
 
 					RenderSpan renderSpan{
-						SpanBlock{ renderSpanText, pText->margin, pText->padding,
-								   pText->lineHeight },
+						SpanBlock{ renderSpanText, pText->margin, pText->padding, pText->lineHeight,
+								   pText->baselineAlign },
 						{ curX, 0 },
 						Sizef( spanWidth, height ),
 						curCharIdx,
@@ -1074,6 +1159,7 @@ void RichText::updateLayout() {
 		}
 
 		Float maxLineHeight = 0;
+		Float minLineTop = 0;
 		for ( auto& span : line.spans ) {
 			bool isFloat = false;
 			if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
@@ -1081,18 +1167,24 @@ void RichText::updateLayout() {
 					isFloat = true;
 			}
 			if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-				auto& textBlock = pText->text;
-				Float offsetY = line.maxAscent - textBlock->getCharacterSize();
+				Float baseline = getTextBaseline( *pText );
+				Float offsetY = getBaselineAlignedOffset( line, span.size, baseline,
+														  getSpanLineHeight( *pText ),
+														  pText->baselineAlign, mDefaultStyle );
 				span.position.x += xOffset;
 				span.position.y = offsetY;
+				minLineTop = std::min( minLineTop, offsetY );
 				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 			} else {
 				Float baseline = span.size.getHeight();
-				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
+				UI::CSSBaselineAlignValue baselineAlign;
+				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
 					baseline = pSize->baseline;
-				Float offsetY = line.maxAscent - baseline;
-				if ( offsetY < 0 )
-					offsetY = 0;
+					baselineAlign = pSize->baselineAlign;
+				}
+				Float offsetY =
+					getBaselineAlignedOffset( line, span.size, baseline, span.size.getHeight(),
+											  baselineAlign, mDefaultStyle );
 				// Float spans keep their edge-aligned x; only inline-flow spans shift.
 				if ( isFloat ) {
 					span.position.y = 0;
@@ -1101,8 +1193,20 @@ void RichText::updateLayout() {
 					span.position.x += xOffset;
 				}
 				span.position.y = offsetY;
+				minLineTop = std::min( minLineTop, offsetY );
 				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
 			}
+		}
+
+		if ( minLineTop < 0 ) {
+			for ( auto& span : line.spans ) {
+				bool isFloat = false;
+				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
+					isFloat = pSize->floatType != UI::CSSFloat::None;
+				if ( !isFloat )
+					span.position.y -= minLineTop;
+			}
+			maxLineHeight -= minLineTop;
 		}
 
 		line.height = std::max( line.height, maxLineHeight );

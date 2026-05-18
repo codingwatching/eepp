@@ -3,6 +3,7 @@
 
 #include <eepp/config.hpp>
 #include <string>
+#include <string_view>
 
 namespace EE { namespace UI {
 
@@ -77,6 +78,37 @@ struct EE_API CSSClearHelper {
 	static std::string toString( CSSClear val );
 
 	static CSSClear fromString( std::string_view val );
+};
+
+enum class CSSBaselineAlignment {
+	Baseline,
+	Sub,
+	Super,
+	TextTop,
+	TextBottom,
+	Middle,
+	Top,
+	Bottom,
+	Length,
+	Percentage,
+	Auto
+};
+
+struct EE_API CSSBaselineAlignValue {
+	CSSBaselineAlignment type{ CSSBaselineAlignment::Baseline };
+	Float value{ 0.f };
+
+	bool operator==( const CSSBaselineAlignValue& other ) const {
+		return type == other.type && value == other.value;
+	}
+
+	bool operator!=( const CSSBaselineAlignValue& other ) const { return !( *this == other ); }
+};
+
+struct EE_API CSSBaselineAlignmentHelper {
+	static std::string_view toString( const CSSBaselineAlignValue& val );
+
+	static CSSBaselineAlignValue fromKeyword( std::string_view val );
 };
 
 }} // namespace EE::UI

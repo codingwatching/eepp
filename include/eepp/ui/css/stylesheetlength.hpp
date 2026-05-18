@@ -5,6 +5,7 @@
 #include <eepp/math/size.hpp>
 #include <eepp/scene/scenenode.hpp>
 #include <string>
+#include <string_view>
 
 namespace EE { namespace Graphics {
 class Font;
@@ -40,13 +41,13 @@ class EE_API StyleSheetLength {
 		Ch,
 	};
 
-	static Unit unitFromString( std::string unitStr );
+	static Unit unitFromString( std::string_view unitStr );
 
 	static std::string unitToString( const Unit& unit );
 
-	static bool isLength( const std::string& unitStr );
+	static bool isLength( std::string_view unitStr );
 
-	static bool isPercentage( const std::string& val );
+	static bool isPercentage( std::string_view val );
 
 	static StyleSheetLength fromString( const std::string& str, const Float& defaultValue = 0,
 										bool pxAsDp = false );

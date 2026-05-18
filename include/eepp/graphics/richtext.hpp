@@ -35,7 +35,8 @@ class EE_API RichText : public Drawable {
 	void addSpan( const String& text, const FontStyleConfig& style );
 
 	void addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-				  const Rectf& padding, Float lineHeight = 0 );
+				  const Rectf& padding, Float lineHeight = 0,
+				  const UI::CSSBaselineAlignValue& baselineAlign = {} );
 
 	/**
 	 * @brief Adds a text span with individual style parameters.
@@ -87,6 +88,7 @@ class EE_API RichText : public Drawable {
 		UI::CSSClear clearType{ UI::CSSClear::None };
 		Float baseline{ 0 };
 		bool isLineBreak{ false };
+		UI::CSSBaselineAlignValue baselineAlign;
 	};
 
 	struct SpanBlock {
@@ -94,6 +96,7 @@ class EE_API RichText : public Drawable {
 		Rectf margin;
 		Rectf padding;
 		Float lineHeight{ 0 };
+		UI::CSSBaselineAlignValue baselineAlign;
 	};
 
 	using Block = std::variant<SpanBlock, std::shared_ptr<Drawable>, CustomBlock>;
@@ -109,7 +112,8 @@ class EE_API RichText : public Drawable {
 	 * @param size The physical dimensions of the spacer.
 	 */
 	void addCustomSize( const Sizef& size, UI::CSSFloat floatType = UI::CSSFloat::None,
-						UI::CSSClear clearType = UI::CSSClear::None, Float baseline = -1.f );
+						UI::CSSClear clearType = UI::CSSClear::None, Float baseline = -1.f,
+						const UI::CSSBaselineAlignValue& baselineAlign = {} );
 
 	/** @brief Adds a virtual line break that is not associated with a DOM text character. */
 	void addLineBreak();
