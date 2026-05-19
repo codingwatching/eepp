@@ -885,41 +885,65 @@ AutoCompletePlugin::processSignatureHelp( const LSPSignatureHelp& signatureHelp 
 	signatures.signatures.reserve( signatureHelp.signatures.size() );
 
 	TextDocument doc;
-	for ( const auto& sig : signatureHelp.signatures ) {
+
+	for ( size_t sigIdx = 0; sigIdx < signatureHelp.signatures.size(); sigIdx++ ) {
+		const auto& sig = signatureHelp.signatures[sigIdx];
+
 		String initialLabel( sig.label );
 		SignatureInformation nsig;
 		nsig.documentation = sig.documentation;
 
 		doc.reset();
 		doc.textInput( initialLabel );
+
 		std::vector<String> parameters;
-		parameters.reserve( sig.parameters.size() );
 		nsig.parameters.reserve( sig.parameters.size() );
 
-		int skippedSelections = 0;
+		if ( !mSignatureHelpMultiLine )
+			parameters.reserve( sig.parameters.size() );
+
+		Int32 skippedBeforeActiveParameter = 0;
+
 		for ( size_t i = 0; i < sig.parameters.size(); i++ ) {
-			auto start = String::utf8ToCodepointPosition( sig.label, sig.parameters[i].start );
-			auto end = String::utf8ToCodepointPosition( sig.label, sig.parameters[i].end );
+			const auto rawStart = sig.parameters[i].start;
+			const auto rawEnd = sig.parameters[i].end;
+
+			const bool isBeforeActiveParameter =
+				static_cast<Int32>( i ) < signatureHelp.activeParameter;
+
+			if ( rawStart < 0 || rawEnd < 0 || rawEnd < rawStart ||
+				 static_cast<size_t>( rawEnd ) > sig.label.size() ) {
+				if ( sigIdx == static_cast<size_t>( signatureHelp.activeSignature ) &&
+					 isBeforeActiveParameter ) {
+					skippedBeforeActiveParameter++;
+				}
+				continue;
+			}
+
+			auto start = String::utf8ToCodepointPosition( sig.label, rawStart );
+			auto end = String::utf8ToCodepointPosition( sig.label, rawEnd );
+
+			if ( start < 0 || end < 0 || end < start ) {
+				if ( sigIdx == static_cast<size_t>( signatureHelp.activeSignature ) &&
+					 isBeforeActiveParameter ) {
+					skippedBeforeActiveParameter++;
+				}
+				continue;
+			}
+
 			auto sel = TextRange::convertToLineColumn( initialLabel.view(), start, end );
 
 			nsig.parameters.emplace_back(
 				TextSelectionRange{ static_cast<Int64>( start ), static_cast<Int64>( end ) } );
 
-			size_t index = i - skippedSelections;
-
-			if ( i == 0 ) {
-				doc.setSelection( i, sel );
-			} else {
-				if ( !doc.addSelection( sel ).isValid() ) {
-					skippedSelections++;
-					continue;
-				}
-			}
-
-			parameters.emplace_back( doc.getSelectedText( index ) );
+			if ( !mSignatureHelpMultiLine )
+				parameters.emplace_back( doc.getText( sel ) );
 		}
 
-		auto selections( doc.getSelections() );
+		if ( sigIdx == static_cast<size_t>( signatureHelp.activeSignature ) ) {
+			signatures.activeParameter =
+				eemax<Int32>( 0, signatures.activeParameter - skippedBeforeActiveParameter );
+		}
 
 		if ( !mSignatureHelpMultiLine && 0 != doc.replaceAll( "\n", "" ) ) {
 			while ( 0 != doc.replaceAll( "  ", " " ) )
@@ -942,13 +966,35 @@ AutoCompletePlugin::processSignatureHelp( const LSPSignatureHelp& signatureHelp 
 		signatures.signatures.emplace_back( std::move( nsig ) );
 	}
 
+	if ( signatures.signatures.empty() ) {
+		signatures.activeSignature = 0;
+		signatures.activeParameter = 0;
+	} else {
+		signatures.activeSignature =
+			eemin<Int32>( eemax<Int32>( signatures.activeSignature, 0 ),
+						  static_cast<Int32>( signatures.signatures.size() ) - 1 );
+
+		const auto& activeSig = signatures.signatures[signatures.activeSignature];
+
+		if ( activeSig.parameters.empty() ) {
+			signatures.activeParameter = 0;
+		} else {
+			signatures.activeParameter =
+				eemin<Int32>( eemax<Int32>( signatures.activeParameter, 0 ),
+							  static_cast<Int32>( activeSig.parameters.size() ) - 1 );
+		}
+	}
+
 	editor->runOnMainThread( [this, editor, signatures = std::move( signatures )] {
 		mSignatureHelpVisible = true;
 		mSignatureHelp = signatures;
+
 		if ( mSignatureHelpSelected >= static_cast<Int32>( mSignatureHelp.signatures.size() ) )
 			mSignatureHelpSelected = -1;
+
 		if ( mSignatureHelp.signatures.empty() )
 			resetSignatureHelp();
+
 		editor->invalidateDraw();
 	} );
 

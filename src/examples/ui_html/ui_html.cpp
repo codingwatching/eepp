@@ -56,6 +56,9 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 							   "Gecko) Chrome/148.0.0.0 Safari/537.36" );
 
 	auto win = app.getWindow();
+	if ( !win->isOpen() )
+		return EXIT_FAILURE;
+
 	auto ui = app.getUI();
 
 	FontTrueType* remixIconFont = FontTrueType::New( "icon", "assets/fonts/remixicon.ttf" );

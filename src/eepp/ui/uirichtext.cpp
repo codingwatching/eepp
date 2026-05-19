@@ -2,6 +2,7 @@
 #include <eepp/graphics/primitives.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
+#include <eepp/system/scopedop.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/uicodeeditor.hpp>
 #include <eepp/ui/uilayouter.hpp>
@@ -180,6 +181,9 @@ bool UIHTMLBody::applyProperty( const StyleSheetProperty& attribute ) {
 void UIHTMLBody::updateLayout() {
 	UIRichText::updateLayout();
 
+	if ( mStyle->getProperty( PropertyId::MinHeight ) )
+		return;
+
 	if ( mChild && mChild->isWidget() ) {
 		Float maxH = 0;
 		Node* child = mChild;
@@ -200,7 +204,7 @@ void UIHTMLBody::updateLayout() {
 			child = child->getNextNode();
 		}
 		if ( maxH > 0 ) {
-			Float dpH = PixelDensity::pxToDp( maxH );
+			Float dpH = std::trunc( PixelDensity::pxToDp( maxH ) );
 			if ( dpH != getMinSize().getHeight() )
 				setMinHeight( dpH );
 		}
