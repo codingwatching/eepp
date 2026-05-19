@@ -122,6 +122,8 @@ Uint32 UITextView::getFontSize() const {
 
 UITextView* UITextView::setFontSize( const Uint32& characterSize ) {
 	if ( mTextCache.getCharacterSize() != characterSize ) {
+		if ( characterSize == 0 )
+			return this;
 		mFontStyleConfig.CharacterSize = characterSize;
 		mTextCache.setFontSize( characterSize );
 		recalculate();

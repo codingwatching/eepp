@@ -1321,7 +1321,8 @@ void Image::copyImage( Graphics::Image* image, const Uint32& x, const Uint32& y 
 
 void Image::resize( const Uint32& newWidth, const Uint32& newHeight, ResamplerFilter filter ) {
 	if ( newWidth == 0 || newHeight == 0 ) {
-		Log::warning( "Image::resize: Invalid resize %dx%d", newWidth, newHeight )	;
+		Log::warning( "Image::resize: Invalid resize %dx%d (from %dx%d)", newWidth, newHeight,
+					  mWidth, mHeight );
 		return;
 	}
 

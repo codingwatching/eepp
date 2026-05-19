@@ -2357,3 +2357,51 @@ UTEST( UIHTML, blockFlowFloat ) {
 	}
 	Engine::destroySingleton();
 }
+
+UTEST( FontTrueType, glyphScaleZeroDimensionsNoCrash ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Glyph Scale Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	for ( unsigned int size : { 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u } ) {
+		for ( Uint32 ch : { 'A', 'Z', 'a', 'z', '0', '9', '!', '@', '#', '$' } ) {
+			const Glyph& glyph = font->getGlyph( ch, size, false, false, 0.f );
+			(void)glyph;
+		}
+	}
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	themeManager->setDefaultFont( font );
+
+	sceneNode->loadLayoutFromString( R"html(
+		<vbox layout_width="match_parent" layout_height="match_parent">
+			<TextView id="tiny" text="Tiny text" font_size="1" />
+			<TextView id="small" text="Small text" font_size="3" />
+			<TextView id="normal" text="Normal text" font_size="14" />
+		</vbox>
+	)html" );
+
+	sceneNode->updateDirtyLayouts();
+
+	auto tiny = sceneNode->getRoot()->find( "tiny" );
+	auto small = sceneNode->getRoot()->find( "small" );
+	auto normal = sceneNode->getRoot()->find( "normal" );
+
+	ASSERT_TRUE( tiny != nullptr );
+	ASSERT_TRUE( small != nullptr );
+	ASSERT_TRUE( normal != nullptr );
+
+	EXPECT_GT( normal->getPixelsSize().getWidth(), 0 );
+	EXPECT_GT( normal->getPixelsSize().getHeight(), 0 );
+
+	Engine::destroySingleton();
+}

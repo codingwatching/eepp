@@ -227,11 +227,17 @@ void StyleSheetProperty::checkVars() {
 static void varToVal( VariableFunctionCache& varCache, const std::string& varDef ) {
 	FunctionString functionType = FunctionString::parse( varDef );
 	if ( !functionType.getParameters().empty() ) {
+		bool foundVar = false;
 		for ( auto& val : functionType.getParameters() ) {
 			if ( String::startsWith( val, "--" ) ) {
 				varCache.variableList.emplace_back( val );
+				foundVar = true;
 			} else if ( String::startsWith( val, "var(" ) ) {
 				varToVal( varCache, val );
+				foundVar = true;
+			} else if ( foundVar ) {
+				// This is a fallback value (comes after the variable name)
+				varCache.variableList.emplace_back( val );
 			}
 		}
 	}

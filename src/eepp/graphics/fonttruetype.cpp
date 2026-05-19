@@ -1461,7 +1461,7 @@ Glyph FontTrueType::loadGlyphByIndex( Uint32 index, unsigned int characterSize, 
 
 		page.texture->update( pixelPtr, w, h, x, y );
 
-		if ( scale < 1.f )
+		if ( scale < 1.f && pixelPtr != mPixelBuffer.data() )
 			eeSAFE_DELETE_ARRAY( pixelPtr );
 	}
 
