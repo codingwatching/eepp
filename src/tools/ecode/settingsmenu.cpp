@@ -782,6 +782,42 @@ UIMenu* SettingsMenu::createDocumentMenu() {
 
 	mGlobalMenu->addSeparator();
 
+	UIPopUpMenu* newTabPositionMenu = UIPopUpMenu::New();
+	mGlobalMenu
+		->addSubMenu( i18n( "new_tab_position", "New Tab Position" ), nullptr, newTabPositionMenu )
+		->setId( "new_tab_position" );
+
+	newTabPositionMenu->on( Event::OnMenuShow, [this, newTabPositionMenu]( const Event* ) {
+		if ( newTabPositionMenu->getCount() == 0 ) {
+			newTabPositionMenu
+				->addRadioButton( i18n( "new_tab_position_after_active", "After Active Tab" ) )
+				->setId( "after_active" );
+			newTabPositionMenu->addRadioButton( i18n( "new_tab_position_last", "Last" ) )
+				->setId( "last" );
+			newTabPositionMenu->addRadioButton( i18n( "new_tab_position_first", "First" ) )
+				->setId( "first" );
+			newTabPositionMenu
+				->addRadioButton( i18n( "new_tab_position_left_of_active", "Left of Active Tab" ) )
+				->setId( "left_of_active" );
+		}
+
+		newTabPositionMenu->getItemId( "after_active" )
+			->asType<UIMenuRadioButton>()
+			->setActive( mApp->getConfig().editor.newTabPosition == NewTabPosition::AfterActive );
+		newTabPositionMenu->getItemId( "last" )->asType<UIMenuRadioButton>()->setActive(
+			mApp->getConfig().editor.newTabPosition == NewTabPosition::Last );
+		newTabPositionMenu->getItemId( "first" )->asType<UIMenuRadioButton>()->setActive(
+			mApp->getConfig().editor.newTabPosition == NewTabPosition::First );
+		newTabPositionMenu->getItemId( "left_of_active" )
+			->asType<UIMenuRadioButton>()
+			->setActive( mApp->getConfig().editor.newTabPosition == NewTabPosition::LeftOfActive );
+	} );
+
+	newTabPositionMenu->on( Event::OnItemClicked, [this]( const Event* event ) {
+		const std::string& id( event->getNode()->getId() );
+		mApp->getConfig().editor.newTabPosition = NewTabPosition::fromString( id );
+	} );
+
 	mGlobalMenu->add( i18n( "line_breaking_column", "Line Breaking Column" ) )
 		->setId( "line_breaking_column" );
 

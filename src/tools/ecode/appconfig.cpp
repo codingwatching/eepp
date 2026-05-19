@@ -175,6 +175,8 @@ void AppConfig::load( const std::string& confPath, std::string& keybindingsPath,
 	doc.tabStops = ini.getValueB( "document", "tab_stops", true );
 	doc.lineEndings =
 		TextFormat::stringToLineEnding( ini.getValue( "document", "line_endings", "LF" ) );
+	editor.newTabPosition =
+		NewTabPosition::fromString( ini.getValue( "editor", "new_tab_position", "last" ) );
 	// Migrate old data
 	if ( ini.keyValueExists( "document", "windows_line_endings" ) &&
 		 !ini.keyValueExists( "document", "line_endings" ) &&
@@ -388,6 +390,7 @@ void AppConfig::save( const std::vector<std::string>& recentFiles,
 	ini.setValueB( "editor", "tab_switcher", editor.tabSwitcher );
 	ini.setValue( "editor", "tab_jump_mode",
 				  UITabWidget::tabJumpModeToString( editor.tabJumpMode ) );
+	ini.setValue( "editor", "new_tab_position", NewTabPosition::toString( editor.newTabPosition ) );
 	ini.setValueB( "editor", "single_click_tree_navigation", editor.singleClickNavigation );
 	ini.setValueB( "editor", "sync_project_tree_with_editor", editor.syncProjectTreeWithEditor );
 	ini.setValueB( "editor", "auto_close_xml_tags", editor.autoCloseXMLTags );

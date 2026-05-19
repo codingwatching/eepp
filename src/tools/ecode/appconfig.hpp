@@ -30,6 +30,35 @@ class PluginManager;
 
 enum class PanelPosition { Left, Right };
 
+class NewTabPosition {
+  public:
+	enum Position { AfterActive, Last, First, LeftOfActive };
+
+	static NewTabPosition::Position fromString( const std::string& position ) {
+		if ( "after_active" == position )
+			return Position::AfterActive;
+		if ( "first" == position )
+			return Position::First;
+		if ( "left_of_active" == position )
+			return Position::LeftOfActive;
+		return Position::Last;
+	}
+
+	static std::string toString( const Position& position ) {
+		switch ( position ) {
+			case Position::AfterActive:
+				return "after_active";
+			case Position::First:
+				return "first";
+			case Position::LeftOfActive:
+				return "left_of_active";
+			case Position::Last:
+			default:
+				return "last";
+		}
+	}
+};
+
 struct UIConfig {
 	StyleSheetLength fontSize{ 11, StyleSheetLength::Dp };
 	StyleSheetLength panelFontSize{ 11, StyleSheetLength::Dp };
@@ -90,6 +119,7 @@ struct CodeEditorConfig {
 	bool tabSwitcher{ false };
 	bool openDocumentsInMainSplit{ false };
 	UITabWidget::TabJumpMode tabJumpMode{ UITabWidget::TabJumpMode::Linear };
+	NewTabPosition::Position newTabPosition{ NewTabPosition::Last };
 
 	bool singleClickNavigation{ false };
 	bool syncProjectTreeWithEditor{ true };
@@ -297,8 +327,8 @@ class AppConfig {
 					  bool sessionSnapshot, PluginManager* );
 
 	void loadProject( std::string projectFolder, UICodeEditorSplitter* editorSplitter,
-					  const std::string& configPath, ProjectConfig& docConfig,
-					  ecode::App* app, bool sessionSnapshot, PluginManager* pluginManager );
+					  const std::string& configPath, ProjectConfig& docConfig, ecode::App* app,
+					  bool sessionSnapshot, PluginManager* pluginManager );
 
 	void addTabWidgetType( const std::string& type, TabWidgetCbs tabWidget ) {
 		Lock l( tabWidgetTypesMutex );
