@@ -11,7 +11,13 @@ class EE_API UIRichText : public UIHTMLWidget {
   public:
 	enum class IntrinsicMode { None, Min, Max };
 
-	enum class WhiteSpaceCollapse { Collapse, Preserve, PreserveBreaks, PreserveSpaces, BreakSpaces };
+	enum class WhiteSpaceCollapse {
+		Collapse,
+		Preserve,
+		PreserveBreaks,
+		PreserveSpaces,
+		BreakSpaces
+	};
 
 	static WhiteSpaceCollapse toWhiteSpaceCollapse( std::string val );
 
@@ -211,6 +217,16 @@ class EE_API UIHTMLBody : public UIRichText {
 	bool mPropagatedBackground{ false };
 
 	UIHTMLBody( const std::string& tag = "body" );
+};
+
+class EE_API UIHTMLHead : public UIWidget {
+  public:
+	static UIHTMLHead* New();
+	virtual Uint32 getType() const override;
+	bool isType( const Uint32& type ) const override;
+
+  protected:
+	UIHTMLHead();
 };
 
 class EE_API UILineBreak : public UIRichText {

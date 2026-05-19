@@ -211,6 +211,23 @@ void UIHTMLBody::updateLayout() {
 	}
 }
 
+UIHTMLHead* UIHTMLHead::New() {
+	return eeNew( UIHTMLHead, () );
+}
+
+UIHTMLHead::UIHTMLHead() : UIWidget() {
+	mVisible = false;
+	mEnabled = false;
+}
+
+Uint32 UIHTMLHead::getType() const {
+	return UI_TYPE_HTML_HEAD;
+}
+
+bool UIHTMLHead::isType( const Uint32& type ) const {
+	return UIHTMLHead::getType() == type ? true : UIWidget::isType( type );
+}
+
 UIRichText* UIRichText::NewHtml() {
 	auto* html = UIHTMLHtml::New( "html" );
 	html->setClipType( ClipType::None );
@@ -1027,6 +1044,10 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			return;
 
 		UIWidget* widget = node->asType<UIWidget>();
+
+		// Skip <head> - it must not participate in layout
+		if ( widget->isType( UI_TYPE_HTML_HEAD ) )
+			return;
 
 		bool handled = false;
 

@@ -30,6 +30,7 @@ using namespace EE::Window;
 using namespace EE::Scene;
 using namespace EE::UI;
 using namespace EE::UI::CSS;
+using namespace EE::UI::Tools;
 
 // Helper: create a basic scene for RichText tests
 static UI::UISceneNode* createRichTextScene() {
@@ -879,8 +880,7 @@ UTEST( UITextNode_BlockLayouter, OverFindHitsAnchorWhenMatchingText ) {
 
 	if ( !anchor->getHitBoxes().empty() ) {
 		const Rectf& firstHb = anchor->getHitBoxes()[0];
-		Vector2f hitPos = anchor->convertToWorldSpace(
-			{ firstHb.Left + 1, firstHb.Top + 1 } );
+		Vector2f hitPos = anchor->convertToWorldSpace( { firstHb.Left + 1, firstHb.Top + 1 } );
 		Node* hitNode = rt->overFind( hitPos );
 		EXPECT_EQ( hitNode, anchor );
 	}
@@ -914,8 +914,7 @@ UTEST( UITextNode_BlockLayouter, NestedSpanOverFindHitsInnerSpan ) {
 
 	if ( !inner->getHitBoxes().empty() ) {
 		const Rectf& firstHb = inner->getHitBoxes()[0];
-		Vector2f hitPos = inner->convertToWorldSpace(
-			{ firstHb.Left + 1, firstHb.Top + 1 } );
+		Vector2f hitPos = inner->convertToWorldSpace( { firstHb.Left + 1, firstHb.Top + 1 } );
 		Node* hitNode = rt->overFind( hitPos );
 		EXPECT_TRUE( hitNode == inner || hitNode->inParentTreeOf( inner ) );
 	}
@@ -993,6 +992,49 @@ UTEST( UITextNode_EdgeCases, DirectChildOfRichText ) {
 // ============================================================
 // Suite: UITextNode_RegressionTests
 // ============================================================
+
+UTEST( UITextNode_Regression, BackgroundPositioningBodyYWithLineHeight ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+<!doctype html>
+<html lang="en">
+  <head>
+    <style>
+      html {
+        color: #555;
+        line-height: 1.5;
+        font-size: 16px;
+      }
+      body {
+        padding: 0 10px 0 10px;
+        margin: 0;
+        border-top: 4px solid #b45f38;
+      }
+    </style>
+  <body id="body">
+    <header class="site-header">
+      <nav class="site-nav">
+        <a class="menu-link" href="/">Home</a>
+      </nav>
+    </header>
+  </body>
+</html>
+)xml";
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( xml ) );
+	sceneNode->update( Time::Zero );
+
+	auto* body = sceneNode->find<UIWidget>( "body" );
+	ASSERT_TRUE( body != nullptr );
+
+	// Body must be at Y=0 - the <head> element should NOT participate in layout
+	// and should NOT create an empty line with line-height applied.
+	EXPECT_NEAR( body->getPixelsPosition().y, 0.f, 1.f );
+
+	destroyRichTextScene( sceneNode );
+}
 
 UTEST( UITextNode_Regression, WhitespaceCollapseDoesNotCreateSpuriousNodes ) {
 	auto sceneNode = createRichTextScene();

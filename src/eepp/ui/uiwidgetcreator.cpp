@@ -236,7 +236,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		};
 		registeredWidget["aside"] = [] { return UIRichText::NewWithTag( "aside" ); };
 		registeredWidget["html"] = UIRichText::NewHtml;
-		registeredWidget["head"] = [] { return UIWidget::NewWithTag( "head" ); };
+		registeredWidget["head"] = UIHTMLHead::New;
 		registeredWidget["body"] = UIRichText::NewBody;
 		registeredWidget["form"] = [] { return UIHTMLForm::New(); };
 		registeredWidget["table"] = UIHTMLTable::New;
