@@ -13,7 +13,7 @@ namespace EE { namespace System {
 namespace {
 
 template <typename T> inline T _round( T r ) {
-	return ( r > 0.0f ) ? eefloor( r + 0.5f ) : eeceil( r - 0.5f );
+	return ( r > 0.0f ) ? std::floor( r + 0.5f ) : std::ceil( r - 0.5f );
 }
 
 } // namespace
@@ -504,21 +504,29 @@ Color Color::fromString( std::string str ) {
 		return Color::Transparent;
 
 	if ( str[0] == '#' ) {
-		str = str.substr( 1 );
+		str.erase( 0, 1 );
 
 		size = str.size();
 
-		if ( 0 == size )
+		if ( size != 3 && size != 4 && size != 6 && size != 8 )
 			return Color::Transparent;
 
-		if ( size < 6 ) {
-			for ( std::size_t i = size; i < 6; i++ )
-				str += str[size - 1];
+		// Expand shorthand CSS notation
+		if ( size == 3 || size == 4 ) {
+			std::string expanded;
+			expanded.reserve( size * 2 );
 
-			size = 6;
+			for ( char c : str ) {
+				expanded += c;
+				expanded += c;
+			}
+
+			str = expanded;
+			size = str.size();
 		}
 
-		if ( 6 == size )
+		// Add opaque alpha if omitted
+		if ( size == 6 )
 			str += "FF";
 
 		return Color( std::strtoul( str.c_str(), NULL, 16 ) );
@@ -715,8 +723,7 @@ Color Color::fromString( std::string str ) {
 	return Color::Transparent;
 }
 
-template <typename StringType>
-bool Color::isColorStringT( StringType str, bool searchColorNames ) {
+template <typename StringType> bool Color::isColorStringT( StringType str, bool searchColorNames ) {
 	if ( str.empty() )
 		return false;
 
@@ -831,12 +838,18 @@ bool Color::validHexColorString( String::View hexColor ) {
 }
 
 bool Color::validHexColorString( std::string_view hexColor ) {
-	if ( hexColor.size() < 2 || hexColor[0] != '#' )
+	if ( hexColor.empty() || hexColor[0] != '#' )
+		return false;
+
+	const size_t len = hexColor.size() - 1;
+
+	if ( len != 3 && len != 4 && len != 6 && len != 8 )
 		return false;
 
 	for ( size_t i = 1; i < hexColor.size(); i++ ) {
-		if ( !( String::isNumber( hexColor[i] ) || ( hexColor[i] >= 'a' && hexColor[i] <= 'f' ) ||
-				( hexColor[i] >= 'A' && hexColor[i] <= 'F' ) ) ) {
+		char c = hexColor[i];
+
+		if ( !( String::isNumber( c ) || ( c >= 'a' && c <= 'f' ) || ( c >= 'A' && c <= 'F' ) ) ) {
 			return false;
 		}
 	}

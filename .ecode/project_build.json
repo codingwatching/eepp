@@ -377,7 +377,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "-d1 file:///home/downloads/files/svn/eepp/bin/unit_tests/assets/html/blog_main_incorrect_widths.html",
+        "args": "-c system --hn-dark",
         "command": "${project_root}/bin/eepp-ui-html-debug",
         "name": "eepp-ui-html-debug",
         "working_dir": "${project_root}/bin"

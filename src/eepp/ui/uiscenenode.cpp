@@ -1,4 +1,3 @@
-#include "eepp/ui/uirichtext.hpp"
 #include <algorithm>
 #include <eepp/core/string.hpp>
 #include <eepp/graphics/fontmanager.hpp>
@@ -35,9 +34,6 @@
 using namespace EE::Network;
 
 namespace EE { namespace UI {
-
-static constexpr std::string_view VOIDTAG_REGEX =
-	"(<(?:img|br|hr|input|meta|link)\\b[^>]*?)(?<!/)>";
 
 UISceneNode* UISceneNode::New( EE::Window::Window* window ) {
 	return eeNew( UISceneNode, ( window ) );
@@ -543,26 +539,14 @@ UIWidget* UISceneNode::loadLayoutFromFile( const std::string& layoutPath, Node* 
 
 UIWidget* UISceneNode::loadLayoutFromString( const char* layoutString, Node* parent,
 											 const Uint32& marker ) {
-	RegEx voidTagsRegex( VOIDTAG_REGEX );
-
 	pugi::xml_document doc;
-	pugi::xml_parse_result result;
-	std::string fixedLayout;
-	bool needsReplacements = voidTagsRegex.matches( layoutString );
-
-	if ( needsReplacements ) {
-		fixedLayout = voidTagsRegex.gsub( layoutString, "%1 />" );
-		result =
-			doc.load_string( fixedLayout.c_str(), pugi::parse_default | pugi::parse_ws_pcdata );
-	} else {
-		result = doc.load_string( layoutString, pugi::parse_default | pugi::parse_ws_pcdata );
-	}
+	pugi::xml_parse_result result =
+		doc.load_string( layoutString, pugi::parse_default | pugi::parse_ws_pcdata );
 
 	if ( result ) {
 		return loadLayoutNodes( doc.first_child(), NULL != parent ? parent : this, marker );
 	} else {
-		Log::error( "Couldn't load UI Layout from string: %s",
-					needsReplacements ? fixedLayout.c_str() : layoutString );
+		Log::error( "Couldn't load UI Layout from string: %s", layoutString );
 		Log::error( "Error description: %s", result.description() );
 		Log::error( "Error offset: %d", result.offset );
 		Log::error( "Error context: %s", getErrorContext( result.offset, layoutString ) );
@@ -578,28 +562,15 @@ UIWidget* UISceneNode::loadLayoutFromString( const std::string& layoutString, No
 
 UIWidget* UISceneNode::loadLayoutFromMemory( const void* buffer, Int32 bufferSize, Node* parent,
 											 const Uint32& marker ) {
-	RegEx voidTagsRegex( VOIDTAG_REGEX );
-
 	pugi::xml_document doc;
-	pugi::xml_parse_result result;
 	std::string_view layoutString( static_cast<const char*>( buffer ), bufferSize );
-	std::string fixedLayout;
-	bool needsReplacements =
-		voidTagsRegex.matches( static_cast<const char*>( buffer ), 0, nullptr, bufferSize );
-
-	if ( needsReplacements ) {
-		fixedLayout = voidTagsRegex.gsub( layoutString.data(), "%1 />" );
-		result = doc.load_buffer( fixedLayout.c_str(), fixedLayout.size(),
-								  pugi::parse_default | pugi::parse_ws_pcdata );
-	} else {
-		result = doc.load_buffer( buffer, bufferSize, pugi::parse_default | pugi::parse_ws_pcdata );
-	}
+	pugi::xml_parse_result result =
+		doc.load_buffer( buffer, bufferSize, pugi::parse_default | pugi::parse_ws_pcdata );
 
 	if ( result ) {
 		return loadLayoutNodes( doc.first_child(), NULL != parent ? parent : this, marker );
 	} else {
-		Log::error( "Couldn't load UI Layout from memory: %s",
-					needsReplacements ? fixedLayout.c_str() : layoutString.data() );
+		Log::error( "Couldn't load UI Layout from memory: %s", layoutString.data() );
 		Log::error( "Error description: %s", result.description() );
 		Log::error( "Error offset: %d", result.offset );
 		Log::error( "Error context: %s",
@@ -620,32 +591,17 @@ UIWidget* UISceneNode::loadLayoutFromStream( IOStream& stream, Node* parent,
 	TScopedBuffer<char> scopedBuffer( bufferSize );
 	stream.read( scopedBuffer.get(), scopedBuffer.length() );
 
-	RegEx voidTagsRegex( VOIDTAG_REGEX );
-
 	pugi::xml_document doc;
-	pugi::xml_parse_result result;
 	std::string_view layoutString( scopedBuffer.get(), scopedBuffer.length() );
-	std::string fixedLayout;
-	bool needsReplacements =
-		voidTagsRegex.matches( scopedBuffer.get(), 0, nullptr, scopedBuffer.length() );
 	std::string_view contents;
-
-	if ( needsReplacements ) {
-		fixedLayout = voidTagsRegex.gsub( layoutString.data(), "%1 />" );
-		result = doc.load_buffer( fixedLayout.c_str(), fixedLayout.size(),
-								  pugi::parse_default | pugi::parse_ws_pcdata );
-		contents = fixedLayout;
-	} else {
-		result = doc.load_buffer( scopedBuffer.get(), scopedBuffer.length(),
-								  pugi::parse_default | pugi::parse_ws_pcdata );
-		contents = std::string_view( scopedBuffer.get(), scopedBuffer.length() );
-	}
+	pugi::xml_parse_result result = doc.load_buffer( scopedBuffer.get(), scopedBuffer.length(),
+													 pugi::parse_default | pugi::parse_ws_pcdata );
+	contents = std::string_view( scopedBuffer.get(), scopedBuffer.length() );
 
 	if ( result ) {
 		return loadLayoutNodes( doc.first_child(), NULL != parent ? parent : this, marker );
 	} else {
-		Log::error( "Couldn't load UI Layout from stream: %s",
-					needsReplacements ? fixedLayout.c_str() : layoutString.data() );
+		Log::error( "Couldn't load UI Layout from stream: %s", layoutString.data() );
 		Log::error( "Error description: %s", result.description() );
 		Log::error( "Error offset: %d", result.offset );
 		Log::error( "Error context: %s", getErrorContext( result.offset, contents ) );
@@ -1531,6 +1487,8 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 
 			font = fm->getByName( fontFamily );
 
+			// Remove the font style part (ex: `Arial#bold` to `Arial`)
+			// We need this for SystemFontResolver::genericFamilyFromName
 			if ( fontStyle )
 				fontFamily.resize( size );
 
@@ -1548,41 +1506,43 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 				font = fm->getByName( fontFamily );
 			}
 
-			return font != nullptr;
-		},
-		',' );
+			if ( font == nullptr && SystemFontResolver::isEnabled() ) {
+				FontWeight weight =
+					( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
+				FontDesc desc = SystemFontResolver::instance()->resolveFromNamesList(
+					std::string{ names }, weight, fontStyle & Text::Italic );
+				if ( !desc.path.empty() ) {
+					std::string family = desc.family;
+					if ( fontStyle )
+						family += "#" + Text::styleFlagToString( fontStyle );
 
-	if ( font == nullptr && SystemFontResolver::isEnabled() ) {
-		FontWeight weight = ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
-		FontDesc desc = SystemFontResolver::instance()->resolveFromNamesList(
-			std::string{ names }, weight, fontStyle & Text::Italic );
-		if ( !desc.path.empty() ) {
-			std::string family = desc.family;
-			if ( fontStyle )
-				family += "#" + Text::styleFlagToString( fontStyle );
+					if ( ( font = fm->getByName( family ) ) )
+						return true;
 
-			if ( ( font = fm->getByName( family ) ) )
-				return font;
-
-			FontTrueType* ttf = FontTrueType::New( family, desc.path, desc.faceIndex );
-			if ( ttf && ttf->loaded() ) {
-				font = ttf;
-				Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
-				if ( weightStyle ) {
-					Font* regular = fm->getByName( desc.family );
-					if ( regular && regular != font && regular->getType() == FontType::TTF ) {
-						auto* regularFT = static_cast<FontTrueType*>( regular );
-						if ( weightStyle == Text::Bold )
-							regularFT->setBoldFont( ttf );
-						else if ( weightStyle == Text::Italic )
-							regularFT->setItalicFont( ttf );
-						else
-							regularFT->setBoldItalicFont( ttf );
+					FontTrueType* ttf = FontTrueType::New( family, desc.path, desc.faceIndex );
+					if ( ttf && ttf->loaded() ) {
+						font = ttf;
+						Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
+						if ( weightStyle ) {
+							Font* regular = fm->getByName( desc.family );
+							if ( regular && regular != font &&
+								 regular->getType() == FontType::TTF ) {
+								auto* regularFT = static_cast<FontTrueType*>( regular );
+								if ( weightStyle == Text::Bold )
+									regularFT->setBoldFont( ttf );
+								else if ( weightStyle == Text::Italic )
+									regularFT->setItalicFont( ttf );
+								else
+									regularFT->setBoldItalicFont( ttf );
+							}
+						}
 					}
 				}
 			}
-		}
-	}
+
+			return font != nullptr;
+		},
+		',' );
 
 	return font;
 }

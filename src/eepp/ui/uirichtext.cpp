@@ -679,6 +679,14 @@ Float UIRichText::getLineHeightPx() const {
 		mLineHeightPxCache = 0;
 		return 0;
 	}
+
+	// Temporal hack until we support calc
+	if ( mLineHeightEq.find( "calc(" ) != std::string::npos ||
+		 mLineHeightEq.find( "var(" ) != std::string::npos ) {
+		mLineHeightPxCache = 0;
+		return 0;
+	}
+
 	bool isUnitless = !mLineHeightEq.empty();
 	for ( char c : mLineHeightEq ) {
 		if ( c != '-' && c != '+' && c != '.' && !String::isNumber( c, false ) ) {

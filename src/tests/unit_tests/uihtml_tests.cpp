@@ -1118,7 +1118,7 @@ UTEST( UIHTMLBody, maxWidthResizingBug ) {
 
 	std::string htmlContent;
 	FileSystem::fileGet( "assets/html/dwarmstrong/dwarmstrong.html", htmlContent );
-	sceneNode->loadLayoutFromString( htmlContent );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( htmlContent ) );
 
 	sceneNode->getRoot()->setSize( 1024, 768 );
 	sceneNode->updateDirtyLayouts();
