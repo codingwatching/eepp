@@ -900,8 +900,6 @@ void UITabWidgetSplitter::unserializeNode( const nlohmann::json& j, UITabWidget*
 	if ( j["type"] == "tabwidget" ) {
 		Int64 currentPage = j.value( "current_page", (Int64)0 );
 		const auto& filesArr = j["files"];
-		size_t totalToLoad = filesArr.size();
-		size_t loaded = 0;
 		for ( const auto& file : filesArr ) {
 			if ( !file.contains( "type" ) )
 				continue;
@@ -916,7 +914,6 @@ void UITabWidgetSplitter::unserializeNode( const nlohmann::json& j, UITabWidget*
 				if ( result.icon )
 					tab->setIcon( result.icon );
 			}
-			loaded++;
 		}
 		if ( curTabWidget->getTabCount() > 0 ) {
 			curTabWidget->setTabSelected(

@@ -1887,7 +1887,7 @@ solution "eepp"
 		kind "ConsoleApp"
 		targetdir("./bin/unit_tests")
 		links { "eterm-static", "languages-syntax-highlighting-static" }
-		includedirs { "src/modules/eterm/include/" }
+		includedirs { "src/modules/eterm/include/", "src/thirdparty" }
 		language "C++"
 		files { "src/tests/unit_tests/*.cpp" }
 		build_link_configuration( "eepp-unit_tests", true )
