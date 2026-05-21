@@ -1805,7 +1805,7 @@ void RichText::addSpan( const String& text, const FontStyleConfig& style, const 
 	box.contributesInlineSpacing = false;
 	if ( !text.empty() || margin != Rectf::Zero || padding != Rectf::Zero || lineHeight > 0 ) {
 		InlineItem textItem;
-		auto& run = textItem.data.emplace<InlineItem::TextRun>();
+		auto& run = textItem.asTextRun();
 		run.text = span;
 		run.source = source;
 		run.margin = margin;
@@ -1900,7 +1900,7 @@ void RichText::addInlineText( const String& text, const FontStyleConfig& style, 
 		return;
 
 	InlineItem textItem;
-	auto& run = textItem.data.emplace<InlineItem::TextRun>();
+	auto& run = textItem.asTextRun();
 	run.text = std::make_shared<Text>();
 	run.text->setString( text );
 	run.text->setStyleConfig( style );
