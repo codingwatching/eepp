@@ -1883,6 +1883,14 @@ solution "eepp"
 		includedirs { "src/thirdparty" }
 		build_link_configuration( "eepp-ui-perf-test", true )
 
+	project "eepp-benchmarks"
+		kind "ConsoleApp"
+		targetdir("./bin/benchmarks")
+		language "C++"
+		files { "src/benchmarks/*.cpp" }
+		includedirs { "src/thirdparty" }
+		build_link_configuration( "eepp-benchmarks", true )
+
 	project "eepp-unit_tests"
 		kind "ConsoleApp"
 		targetdir("./bin/unit_tests")

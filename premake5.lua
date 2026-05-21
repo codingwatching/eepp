@@ -1754,6 +1754,20 @@ workspace "eepp"
 		incdirs { "src/thirdparty" }
 		build_link_configuration( "eepp-ui-perf-test", true )
 
+	project "eepp-benchmarks"
+		kind "ConsoleApp"
+		targetdir(_MAIN_SCRIPT_DIR .. "/bin/benchmarks")
+		language "C++"
+		files { "src/benchmarks/*.cpp" }
+		incdirs { "src/thirdparty" }
+		build_link_configuration( "eepp-benchmarks", true )
+		if table.contains(backends, "SDL2") then
+			defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_2" }
+		end
+		if table.contains(backends, "SDL3") then
+			defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_3" }
+		end
+
 	project "eepp-unit_tests"
 		kind "ConsoleApp"
 		targetdir(_MAIN_SCRIPT_DIR .. "/bin/unit_tests")

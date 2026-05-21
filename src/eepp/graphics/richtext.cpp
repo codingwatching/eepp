@@ -1277,6 +1277,31 @@ class RichTextInlineLayouter {
 		return result;
 	}
 
+	// Resolve a render span to its source InlineItem leaf node.  The fast
+	// path uses the sequential _leafIndex assigned during buildLayoutRuns:
+	// that index directly addresses the leaves vector built by collectLeaves
+	// because both walk the InlineItem tree in the same depth-first order.
+	// The fallback via path-based linear search handles legacy spans that
+	// lack a leaf index.
+	static const InlineLeafRef* resolveLeaf( const RichText::RenderSpan& span,
+											 const SmallVector<InlineLeafRef, 32>& leaves,
+											 RichText::InlineFragment::Type type,
+											 size_t& resolvedLeafIndex, size_t& leafIndex ) {
+		if ( span._leafIndex >= 0 && static_cast<size_t>( span._leafIndex ) < leaves.size() ) {
+			resolvedLeafIndex = static_cast<size_t>( span._leafIndex );
+			const auto& leaf = leaves[resolvedLeafIndex];
+			if ( leaf.type == type )
+				return &leaf;
+		}
+		const InlineLeafRef* leaf =
+			findLeafByPath( leaves, span.inlinePath, type, resolvedLeafIndex );
+		if ( leaf == nullptr && span.inlinePath.empty() ) {
+			resolvedLeafIndex = leafIndex;
+			leaf = findNextLeaf( leaves, resolvedLeafIndex, type );
+		}
+		return leaf;
+	}
+
 	static std::vector<RichText::InlineFragment>
 	rebuildFragments( const std::vector<RichText::InlineItem>& inlineItems,
 					  const std::vector<RichText::RenderParagraph>& lines ) {
@@ -1307,7 +1332,7 @@ class RichTextInlineLayouter {
 					isLastInlineLeafInBox( *ancestor.box, ancestor.path, leaf.path );
 				auto it =
 					std::find_if( boxFragments.begin(), boxFragments.end(), [&]( const auto& f ) {
-						return f.lineIndex == lineIndex && sameInlinePath( f.path, ancestor.path );
+						return f.lineIndex == lineIndex && f.box == ancestor.box;
 					} );
 				if ( it == boxFragments.end() ) {
 					InlineBoxFragmentAccumulator acc;
@@ -1344,14 +1369,9 @@ class RichTextInlineLayouter {
 						continue;
 
 					size_t resolvedLeafIndex = 0;
-					const InlineLeafRef* leaf = findLeafByPath(
-						leaves, span.inlinePath, RichText::InlineFragment::Type::TextRun,
-						resolvedLeafIndex );
-					if ( leaf == nullptr && span.inlinePath.empty() ) {
-						resolvedLeafIndex = leafIndex;
-						leaf = findNextLeaf( leaves, resolvedLeafIndex,
-											 RichText::InlineFragment::Type::TextRun );
-					}
+					const InlineLeafRef* leaf =
+						resolveLeaf( span, leaves, RichText::InlineFragment::Type::TextRun,
+									 resolvedLeafIndex, leafIndex );
 					if ( leaf == nullptr )
 						continue;
 
@@ -1389,14 +1409,9 @@ class RichTextInlineLayouter {
 						continue;
 
 					size_t resolvedLeafIndex = 0;
-					const InlineLeafRef* leaf = findLeafByPath(
-						leaves, span.inlinePath, RichText::InlineFragment::Type::AtomicBox,
-						resolvedLeafIndex );
-					if ( leaf == nullptr && span.inlinePath.empty() ) {
-						resolvedLeafIndex = leafIndex;
-						leaf = findNextLeaf( leaves, resolvedLeafIndex,
-											 RichText::InlineFragment::Type::AtomicBox );
-					}
+					const InlineLeafRef* leaf =
+						resolveLeaf( span, leaves, RichText::InlineFragment::Type::AtomicBox,
+									 resolvedLeafIndex, leafIndex );
 					if ( leaf == nullptr )
 						continue;
 
@@ -1439,13 +1454,14 @@ class RichTextInlineLayouter {
 	buildLayoutRuns( const std::vector<RichText::InlineItem>& inlineItems ) {
 		SmallVector<InlineLayoutRun, 32> runs;
 		RichText::RenderSpan::InlinePath path;
-		appendLayoutRuns( inlineItems, path, runs );
+		Int64 nextLeafIndex = 0;
+		appendLayoutRuns( inlineItems, path, runs, nextLeafIndex );
 		return runs;
 	}
 
 	static void appendLayoutRuns( const std::vector<RichText::InlineItem>& items,
 								  RichText::RenderSpan::InlinePath& path,
-								  SmallVector<InlineLayoutRun, 32>& runs ) {
+								  SmallVector<InlineLayoutRun, 32>& runs, Int64& nextLeafIndex ) {
 		for ( size_t i = 0; i < items.size(); ++i ) {
 			path.push_back( i );
 			const auto& item = items[i];
@@ -1454,11 +1470,11 @@ class RichTextInlineLayouter {
 				if ( box.children.empty() )
 					appendEmptyBoxLayoutRun( path, runs );
 				else
-					appendLayoutRuns( box.children, path, runs );
+					appendLayoutRuns( box.children, path, runs, nextLeafIndex );
 			} else if ( item.isTextRun() ) {
-				appendTextLayoutRun( item.asTextRun(), path, runs );
+				appendTextLayoutRun( item.asTextRun(), path, runs, nextLeafIndex );
 			} else {
-				appendAtomicLayoutRun( item.asAtomicBox(), path, runs );
+				appendAtomicLayoutRun( item.asAtomicBox(), path, runs, nextLeafIndex );
 			}
 			path.pop_back();
 		}
@@ -1474,7 +1490,8 @@ class RichTextInlineLayouter {
 
 	static void appendTextLayoutRun( const RichText::InlineItem::TextRun& textRun,
 									 const RichText::RenderSpan::InlinePath& path,
-									 SmallVector<InlineLayoutRun, 32>& runs ) {
+									 SmallVector<InlineLayoutRun, 32>& runs,
+									 Int64& nextLeafIndex ) {
 		InlineLayoutRun run;
 		run.payload.type = RichText::RenderSpan::Type::Text;
 		run.payload.text = textRun.text;
@@ -1484,12 +1501,14 @@ class RichTextInlineLayouter {
 		run.payload.baselineAlign = textRun.baselineAlign;
 		run.payload.suppressBackground = textRun.suppressBackground;
 		run.payload.inlinePath = path;
+		run.payload._leafIndex = nextLeafIndex++;
 		runs.push_back( std::move( run ) );
 	}
 
 	static void appendAtomicLayoutRun( const RichText::InlineItem::AtomicBox& box,
 									   const RichText::RenderSpan::InlinePath& path,
-									   SmallVector<InlineLayoutRun, 32>& runs ) {
+									   SmallVector<InlineLayoutRun, 32>& runs,
+									   Int64& nextLeafIndex ) {
 		InlineLayoutRun run;
 		run.payload.type = box.drawable ? RichText::RenderSpan::Type::Drawable
 										: RichText::RenderSpan::Type::AtomicBox;
@@ -1501,6 +1520,7 @@ class RichTextInlineLayouter {
 		run.payload.isLineBreak = box.isLineBreak;
 		run.payload.baselineAlign = box.baselineAlign;
 		run.payload.inlinePath = path;
+		run.payload._leafIndex = nextLeafIndex++;
 		runs.push_back( std::move( run ) );
 	}
 
@@ -1603,6 +1623,7 @@ class RichTextInlineLayouter {
 		renderSpan.baselineAlign = payload.baselineAlign;
 		renderSpan.suppressBackground = payload.suppressBackground;
 		renderSpan.inlinePath = payload.inlinePath;
+		renderSpan._leafIndex = payload._leafIndex;
 		renderSpan.position = { curX, 0 };
 		renderSpan.size = Sizef( spanWidth, height );
 		renderSpan.startCharIndex = curCharIdx;

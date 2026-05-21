@@ -190,6 +190,7 @@ class EE_API RichText : public Drawable {
 		Sizef size;
 		Int64 startCharIndex{ 0 };
 		Int64 endCharIndex{ 0 };
+		Int64 _leafIndex{ -1 }; // O(1) lookup index, assigned during layout
 	};
 
 	/** @brief Structure representing a rendered paragraph (line). */
