@@ -215,6 +215,8 @@ class EE_API UINodeDrawable : public Drawable {
 
 	UIBackgroundDrawable& getBackgroundDrawable();
 
+	bool hasDrawableLayers() const;
+
 	bool isSmooth() const;
 
 	void setSmooth( bool smooth );

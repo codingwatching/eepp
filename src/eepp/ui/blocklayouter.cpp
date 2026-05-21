@@ -1,3 +1,4 @@
+#include <eepp/core/containers.hpp>
 #include <eepp/graphics/richtext.hpp>
 #include <eepp/ui/blocklayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
@@ -148,7 +149,9 @@ void BlockLayouter::updateLayout() {
 
 void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 	const auto& lines = rt->getLines();
+	const auto& fragments = rt->getInlineFragments();
 	Node* child = mContainer->getFirstChild();
+	const bool hasStructuredFragments = !fragments.empty();
 
 	size_t currentLine = 0;
 	size_t currentSpan = 0;
@@ -159,10 +162,8 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			while ( currentSpan < line.spans.size() ) {
 				const auto& span = line.spans[currentSpan];
 				currentSpan++;
-				if ( auto custom = std::get_if<RichText::CustomBlock>( &span.block ) ) {
-					if ( !custom->isLineBreak )
-						return &span;
-				}
+				if ( span.type != RichText::RenderSpan::Type::Text && !span.isLineBreak )
+					return &span;
 			}
 			currentSpan = 0;
 			currentLine++;
@@ -171,6 +172,96 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 	};
 
 	Int64 curCharIdx = 0;
+	const Rectf contentOffset = mContainer->getPixelsContentOffset();
+
+	for ( auto& bucket : mTextNodeFragments )
+		bucket.second.clear();
+	for ( auto& bucket : mWidgetFragments )
+		bucket.second.clear();
+	mTextNodeFragments.clear();
+	mWidgetFragments.clear();
+	mTextNodeFragments.reserve( fragments.size() );
+	mWidgetFragments.reserve( fragments.size() );
+	for ( const auto& fragment : fragments ) {
+		if ( fragment.source.ptr == nullptr )
+			continue;
+
+		auto* bucket = fragment.source.type == RichText::InlineSourceType::TextNode
+						   ? &mTextNodeFragments[fragment.source.ptr]
+					   : fragment.source.type == RichText::InlineSourceType::Widget
+						   ? &mWidgetFragments[fragment.source.ptr]
+						   : nullptr;
+		if ( bucket == nullptr )
+			continue;
+
+		switch ( fragment.type ) {
+			case RichText::InlineFragment::Type::TextRun:
+				bucket->textRuns.push_back( &fragment );
+				break;
+			case RichText::InlineFragment::Type::Box:
+				bucket->boxes.push_back( &fragment );
+				break;
+			case RichText::InlineFragment::Type::AtomicBox:
+				bucket->atomicBoxes.push_back( &fragment );
+				break;
+		}
+	}
+
+	auto toContainerBounds = [&]( const Rectf& bounds ) {
+		return Rectf( contentOffset.Left + bounds.Left, contentOffset.Top + bounds.Top,
+					  contentOffset.Left + bounds.Right, contentOffset.Top + bounds.Bottom );
+	};
+
+	auto hasValidBounds = []( const Rectf& bounds ) {
+		return bounds.Left <= bounds.Right && bounds.Top <= bounds.Bottom;
+	};
+
+	auto expandBounds = [&]( Rectf& bounds, bool& valid, const Rectf& rect ) {
+		if ( !valid ) {
+			bounds = rect;
+			valid = true;
+		} else {
+			bounds.expand( rect );
+		}
+	};
+
+	auto getTextNodeFragmentBounds = [&]( UITextNode* textNode, Rectf& outBounds ) {
+		auto it = mTextNodeFragments.find( textNode );
+		if ( it == mTextNodeFragments.end() )
+			return false;
+
+		bool valid = false;
+		for ( const auto* fragment : it->second.textRuns )
+			expandBounds( outBounds, valid, toContainerBounds( fragment->bounds ) );
+		return valid;
+	};
+
+	auto getWidgetFragmentBounds = [&]( UIWidget* widget, Rectf& outBounds,
+										SpanHitBoxes* hitBoxes ) {
+		auto it = mWidgetFragments.find( widget );
+		if ( it == mWidgetFragments.end() )
+			return false;
+
+		bool valid = false;
+		for ( const auto* fragment : it->second.boxes ) {
+			Rectf hb = toContainerBounds( fragment->bounds );
+			if ( hitBoxes )
+				hitBoxes->push_back( hb );
+			expandBounds( outBounds, valid, hb );
+		}
+		return valid;
+	};
+
+	auto getAtomicWidgetFragmentBounds = [&]( UIWidget* widget, Rectf& outBounds ) {
+		auto it = mWidgetFragments.find( widget );
+		if ( it == mWidgetFragments.end() )
+			return false;
+
+		bool valid = false;
+		for ( const auto* fragment : it->second.atomicBoxes )
+			expandBounds( outBounds, valid, toContainerBounds( fragment->bounds ) );
+		return valid;
+	};
 
 	auto processNode = [&]( Node* node, auto& processNodeRef ) -> Rectf {
 		constexpr Float maxF = std::numeric_limits<Float>::max();
@@ -197,30 +288,34 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 					p = p->getParent();
 				}
 
-				for ( const auto& line : lines ) {
-					bool passedText = false;
-					for ( const auto& rspan : line.spans ) {
-						if ( rspan.startCharIndex >= startChar && rspan.endCharIndex <= endChar ) {
-							Rectf hb( mContainer->getPixelsContentOffset().Left + rspan.position.x,
-									  mContainer->getPixelsContentOffset().Top + line.y +
-										  rspan.position.y,
-									  mContainer->getPixelsContentOffset().Left + rspan.position.x +
-										  rspan.size.getWidth(),
-									  mContainer->getPixelsContentOffset().Top + line.y +
-										  rspan.position.y + rspan.size.getHeight() );
-							textBounds.expand( hb );
-						} else if ( rspan.startCharIndex >= endChar ) {
-							passedText = true;
-							break;
+				bool hasFragments = getTextNodeFragmentBounds( tn, textBounds );
+				if ( !hasFragments && !hasStructuredFragments ) {
+					for ( const auto& line : lines ) {
+						bool passedText = false;
+						for ( const auto& rspan : line.spans ) {
+							if ( rspan.startCharIndex >= startChar &&
+								 rspan.endCharIndex <= endChar ) {
+								Rectf hb( contentOffset.Left + rspan.position.x,
+										  contentOffset.Top + line.y + rspan.position.y,
+										  contentOffset.Left + rspan.position.x +
+											  rspan.size.getWidth(),
+										  contentOffset.Top + line.y + rspan.position.y +
+											  rspan.size.getHeight() );
+								textBounds.expand( hb );
+							} else if ( rspan.startCharIndex >= endChar ) {
+								passedText = true;
+								break;
+							}
 						}
+						if ( passedText )
+							break;
 					}
-					if ( passedText )
-						break;
 				}
 
-				if ( textBounds.Left <= textBounds.Right && textBounds.Top <= textBounds.Bottom ) {
+				if ( hasValidBounds( textBounds ) ) {
 					tn->setPixelsPosition( textBounds.getPosition() - offset );
 					tn->setPixelsSize( textBounds.getSize() );
+					return textBounds;
 				}
 			}
 
@@ -257,18 +352,18 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 			auto& hitBoxes = textSpan->getHitBoxes();
 			hitBoxes.clear();
 
-			if ( startChar < endChar ) {
+			bool hasWidgetFragments = getWidgetFragmentBounds( widget, bounds, &hitBoxes );
+
+			if ( !hasWidgetFragments && !hasStructuredFragments && startChar < endChar ) {
 				for ( const auto& line : lines ) {
 					bool passedText = false;
 					for ( const auto& rspan : line.spans ) {
 						if ( rspan.startCharIndex >= startChar && rspan.endCharIndex <= endChar ) {
-							Rectf hb( mContainer->getPixelsContentOffset().Left + rspan.position.x,
-									  mContainer->getPixelsContentOffset().Top + line.y +
-										  rspan.position.y,
-									  mContainer->getPixelsContentOffset().Left + rspan.position.x +
-										  rspan.size.getWidth(),
-									  mContainer->getPixelsContentOffset().Top + line.y +
-										  rspan.position.y + rspan.size.getHeight() );
+							Rectf hb( contentOffset.Left + rspan.position.x,
+									  contentOffset.Top + line.y + rspan.position.y,
+									  contentOffset.Left + rspan.position.x + rspan.size.getWidth(),
+									  contentOffset.Top + line.y + rspan.position.y +
+										  rspan.size.getHeight() );
 
 							hitBoxes.push_back( hb );
 							bounds.expand( hb );
@@ -303,7 +398,7 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 				}
 			}
 
-			if ( bounds.Left <= bounds.Right && bounds.Top <= bounds.Bottom ) {
+			if ( hasValidBounds( bounds ) ) {
 				Vector2f boundsPos = bounds.getPosition();
 
 				widget->setPixelsPosition( boundsPos - offset );
@@ -338,16 +433,36 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 					  0 } );
 			} else {
 				curCharIdx += 1;
-				const auto* span = getNextCustomSpan();
-				if ( span ) {
+				Rectf atomicBounds( maxF, maxF, lowF, lowF );
+				if ( getAtomicWidgetFragmentBounds( widget, atomicBounds ) ) {
+					Rectf margin = widget->getLayoutPixelsMargin();
+					Vector2f targetPos( atomicBounds.Left + margin.Left,
+										atomicBounds.Top + margin.Top );
+
+					widget->setPixelsPosition( targetPos - offset );
+					if ( widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
+						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
+						Float contentWidth = eemax(
+							0.f, mContainer->getPixelsSize().getWidth() - contentOffset.Left -
+									 contentOffset.Right - margin.Left - margin.Right );
+						if ( widget->getPixelsSize().getWidth() == 0 && contentWidth > 0 ) {
+							widget->setPixelsSize( contentWidth,
+												   widget->getPixelsSize().getHeight() );
+							mResizedCount++;
+						}
+					}
+					bounds = Rectf( targetPos, atomicBounds.getSize() );
+				} else if ( !hasStructuredFragments ) {
+					const auto* span = getNextCustomSpan();
+					if ( span == nullptr )
+						return bounds;
+
 					size_t lineIdx = currentSpan > 0 ? currentLine : currentLine - 1;
 					Float lineY = lines[lineIdx].y;
 					Rectf margin = widget->getLayoutPixelsMargin();
 
-					Vector2f targetPos( mContainer->getPixelsContentOffset().Left +
-											span->position.x + margin.Left,
-										mContainer->getPixelsContentOffset().Top + lineY +
-											span->position.y + margin.Top );
+					Vector2f targetPos( contentOffset.Left + span->position.x + margin.Left,
+										contentOffset.Top + lineY + span->position.y + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
 					if ( widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&

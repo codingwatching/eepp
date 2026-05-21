@@ -1,6 +1,7 @@
 #include "compareimages.hpp"
 #include "utest.hpp"
 
+#include <algorithm>
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
 #include <eepp/graphics/primitives.hpp>
@@ -11,14 +12,18 @@
 #include <eepp/system/sys.hpp>
 #include <eepp/ui/tools/htmlformatter.hpp>
 #include <eepp/ui/uiapplication.hpp>
+#include <eepp/ui/uibackgrounddrawable.hpp>
+#include <eepp/ui/uiborderdrawable.hpp>
 #include <eepp/ui/uihtmltable.hpp>
 #include <eepp/ui/uilinearlayout.hpp>
+#include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
+#include <limits>
 
 using namespace EE;
 using namespace EE::Graphics;
@@ -217,7 +222,7 @@ UTEST( RichText, BaselineAlignment ) {
 	Engine::destroySingleton();
 }
 
-UTEST( RichText, VerticalAlignCustomBlocks ) {
+UTEST( RichText, VerticalAlignAtomicBoxes ) {
 	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Vertical Align",
 													  WindowStyle::Default, WindowBackend::Default,
 													  32, {}, 1, false, true ) );
@@ -231,42 +236,46 @@ UTEST( RichText, VerticalAlignCustomBlocks ) {
 	baselineRt.getFontStyleConfig().Font = font;
 	baselineRt.getFontStyleConfig().CharacterSize = 20;
 	baselineRt.addSpan( "A", nullptr, 20 );
-	baselineRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f );
+	baselineRt.addCustomSize( Sizef( 20, 20 ), RichText::InlineFloat::None,
+							  RichText::InlineClear::None, 10.f );
 	baselineRt.getSize();
 	ASSERT_EQ( baselineRt.getLines().front().spans.size(), (size_t)2 );
 	Float baselineY = baselineRt.getLines().front().spans[1].position.y;
 
-	CSSBaselineAlignValue middleAlign;
-	middleAlign.type = CSSBaselineAlignment::Middle;
+	RichText::BaselineAlignValue middleAlign;
+	middleAlign.type = RichText::BaselineAlignment::Middle;
 	RichText middleRt;
 	middleRt.getFontStyleConfig().Font = font;
 	middleRt.getFontStyleConfig().CharacterSize = 20;
 	middleRt.addSpan( "A", nullptr, 20 );
-	middleRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, middleAlign );
+	middleRt.addCustomSize( Sizef( 20, 20 ), RichText::InlineFloat::None,
+							RichText::InlineClear::None, 10.f, middleAlign );
 	middleRt.getSize();
 	ASSERT_EQ( middleRt.getLines().front().spans.size(), (size_t)2 );
 	EXPECT_GT( middleRt.getLines().front().spans[1].position.y, baselineY );
 
-	CSSBaselineAlignValue lengthAlign;
-	lengthAlign.type = CSSBaselineAlignment::Length;
+	RichText::BaselineAlignValue lengthAlign;
+	lengthAlign.type = RichText::BaselineAlignment::Length;
 	lengthAlign.value = 4.f;
 	RichText lengthRt;
 	lengthRt.getFontStyleConfig().Font = font;
 	lengthRt.getFontStyleConfig().CharacterSize = 20;
 	lengthRt.addSpan( "A", nullptr, 20 );
-	lengthRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, lengthAlign );
+	lengthRt.addCustomSize( Sizef( 20, 20 ), RichText::InlineFloat::None,
+							RichText::InlineClear::None, 10.f, lengthAlign );
 	lengthRt.getSize();
 	ASSERT_EQ( lengthRt.getLines().front().spans.size(), (size_t)2 );
 	EXPECT_NEAR( lengthRt.getLines().front().spans[1].position.y, baselineY - 4.f, 0.001f );
 
-	CSSBaselineAlignValue percentAlign;
-	percentAlign.type = CSSBaselineAlignment::Percentage;
+	RichText::BaselineAlignValue percentAlign;
+	percentAlign.type = RichText::BaselineAlignment::Percentage;
 	percentAlign.value = 50.f;
 	RichText percentRt;
 	percentRt.getFontStyleConfig().Font = font;
 	percentRt.getFontStyleConfig().CharacterSize = 20;
 	percentRt.addSpan( "A", nullptr, 20 );
-	percentRt.addCustomSize( Sizef( 20, 20 ), CSSFloat::None, CSSClear::None, 10.f, percentAlign );
+	percentRt.addCustomSize( Sizef( 20, 20 ), RichText::InlineFloat::None,
+							 RichText::InlineClear::None, 10.f, percentAlign );
 	percentRt.getSize();
 	ASSERT_EQ( percentRt.getLines().front().spans.size(), (size_t)2 );
 	EXPECT_NEAR( percentRt.getLines().front().spans[1].position.y, baselineY - 10.f, 0.001f );
@@ -274,7 +283,400 @@ UTEST( RichText, VerticalAlignCustomBlocks ) {
 	Engine::destroySingleton();
 }
 
-UTEST( RichText, CustomBlockBaselineAlignment ) {
+UTEST( RichText, InlineTextUsesActiveInlineBoxAlignment ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Inline Alignment",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText::BaselineAlignValue bottomAlign;
+	bottomAlign.type = RichText::BaselineAlignment::Bottom;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addSpan( "A", style );
+	richText.pushInlineBox( Rectf::Zero, Rectf::Zero, 0, bottomAlign );
+	richText.pushInlineBox( Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.addInlineText( "x", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.popInlineBox();
+	richText.popInlineBox();
+	richText.addSpan( "B", style );
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines[0].spans.size(), (size_t)3 );
+	ASSERT_EQ( lines[0].spans[1].type, RichText::RenderSpan::Type::Text );
+	EXPECT_EQ( lines[0].spans[1].baselineAlign.type, RichText::BaselineAlignment::Baseline );
+
+	bool foundTextFragment = false;
+	for ( const auto& fragment : richText.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::TextRun &&
+			 fragment.itemPath.size() == 3 ) {
+			foundTextFragment = true;
+			EXPECT_EQ( fragment.baselineAlign.type, RichText::BaselineAlignment::Bottom );
+		}
+	}
+	EXPECT_TRUE( foundTextFragment );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, InlineAncestorLineHeightContributesToLineHeight ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Inline Box Metrics",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText baseline;
+	baseline.setFontStyleConfig( style );
+	baseline.addSpan( "A", style );
+	baseline.updateLayout();
+	ASSERT_EQ( baseline.getLines().size(), (size_t)1 );
+	Float baselineHeight = baseline.getLines().front().height;
+
+	RichText lineHeightBox;
+	lineHeightBox.setFontStyleConfig( style );
+	lineHeightBox.pushInlineBox( Rectf::Zero, Rectf::Zero, baselineHeight + 20.f, {} );
+	lineHeightBox.addInlineText( "A", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	lineHeightBox.popInlineBox();
+	lineHeightBox.updateLayout();
+
+	ASSERT_EQ( lineHeightBox.getLines().size(), (size_t)1 );
+	EXPECT_GE( lineHeightBox.getLines().front().height, baselineHeight + 20.f );
+
+	const RichText::InlineFragment* boxFragment = nullptr;
+	const RichText::InlineFragment* textFragment = nullptr;
+	for ( const auto& fragment : lineHeightBox.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box )
+			boxFragment = &fragment;
+		else if ( fragment.type == RichText::InlineFragment::Type::TextRun )
+			textFragment = &fragment;
+	}
+	ASSERT_TRUE( boxFragment != nullptr );
+	ASSERT_TRUE( textFragment != nullptr );
+	EXPECT_GE( boxFragment->bounds.getHeight(), baselineHeight + 20.f );
+	EXPECT_LT( boxFragment->bounds.Top, textFragment->bounds.Top );
+	EXPECT_GT( boxFragment->bounds.Bottom, textFragment->bounds.Bottom );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, FloatAwareInlineLayoutUsesTreeOrder ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Float Inline Tree Order",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addInlineAtomicBox( Sizef( 30, 20 ), RichText::InlineFloat::Left,
+								 RichText::InlineClear::None, 20, false, {} );
+	richText.addInlineText( "A", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)2 );
+	EXPECT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::AtomicBox );
+
+	ASSERT_EQ( lines.front().spans[1].type, RichText::RenderSpan::Type::Text );
+	ASSERT_TRUE( lines.front().spans[1].text != nullptr );
+	EXPECT_STRINGEQ( lines.front().spans[1].text->getString(), "A" );
+	EXPECT_GE( lines.front().spans[1].position.x, 30.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, RenderSpanPayloadSupportsDrawableAndAtomicSelection ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText RenderSpan Blocks",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	class TestDrawable : public Drawable {
+	  public:
+		TestDrawable() : Drawable( Drawable::CUSTOM ) {}
+
+		Sizef getSize() override { return Sizef( 8, 6 ); }
+		Sizef getPixelsSize() override { return Sizef( 8, 6 ); }
+		void draw() override { drawCount++; }
+		void draw( const Vector2f& ) override { drawCount++; }
+		void draw( const Vector2f&, const Sizef& ) override { drawCount++; }
+		bool isStateful() override { return false; }
+
+		int drawCount{ 0 };
+	};
+
+	auto drawable = std::make_shared<TestDrawable>();
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addInlineText( "A", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.addDrawable( drawable );
+	richText.addInlineAtomicBox( Sizef( 5, 4 ), RichText::InlineFloat::None,
+								 RichText::InlineClear::None, 4, false, {} );
+	richText.addInlineText( "B", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)4 );
+	EXPECT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::Text );
+	EXPECT_EQ( lines.front().spans[1].type, RichText::RenderSpan::Type::Drawable );
+	EXPECT_EQ( lines.front().spans[2].type, RichText::RenderSpan::Type::AtomicBox );
+	EXPECT_EQ( lines.front().spans[3].type, RichText::RenderSpan::Type::Text );
+
+	EXPECT_EQ( richText.getCharacterCount(), 4 );
+	richText.setSelection( { 0, richText.getCharacterCount() } );
+	EXPECT_STRINGEQ( richText.getSelectionString(), "A  B" );
+
+	richText.draw( 0, 0 );
+	EXPECT_EQ( drawable->drawCount, 1 );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, InlineBoxHorizontalEdgesContributeToAdvance ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Inline Box Edges",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addSpan( "A", style );
+	richText.pushInlineBox( Rectf( 5, 0, 7, 0 ), Rectf( 11, 0, 13, 0 ), 0, {} );
+	richText.addInlineText( "B", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.popInlineBox();
+	richText.addSpan( "C", style );
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)3 );
+
+	const auto& a = lines.front().spans[0];
+	const auto& b = lines.front().spans[1];
+	const auto& c = lines.front().spans[2];
+	EXPECT_NEAR( b.position.x, a.position.x + a.size.getWidth() + 16.f, 0.001f );
+	EXPECT_NEAR( c.position.x, b.position.x + b.size.getWidth() + 20.f, 0.001f );
+	EXPECT_NEAR( lines.front().width,
+				 a.size.getWidth() + b.size.getWidth() + c.size.getWidth() + 36.f, 0.001f );
+	EXPECT_NEAR( richText.getMaxIntrinsicWidth(), lines.front().width, 0.001f );
+
+	RichText atomicRichText;
+	atomicRichText.setFontStyleConfig( style );
+	atomicRichText.addSpan( "A", style );
+	atomicRichText.pushInlineBox( Rectf( 3, 0, 5, 0 ), Rectf( 7, 0, 11, 0 ), 0, {} );
+	atomicRichText.addInlineAtomicBox( Sizef( 17, 9 ), RichText::InlineFloat::None,
+									   RichText::InlineClear::None, 8, false, {} );
+	atomicRichText.popInlineBox();
+	atomicRichText.addSpan( "C", style );
+	atomicRichText.updateLayout();
+
+	const auto& atomicLines = atomicRichText.getLines();
+	ASSERT_EQ( atomicLines.size(), (size_t)1 );
+	ASSERT_EQ( atomicLines.front().spans.size(), (size_t)3 );
+	const auto& atomicA = atomicLines.front().spans[0];
+	const auto& atomicBox = atomicLines.front().spans[1];
+	const auto& atomicC = atomicLines.front().spans[2];
+	EXPECT_NEAR( atomicBox.position.x, atomicA.position.x + atomicA.size.getWidth() + 10.f,
+				 0.001f );
+	EXPECT_NEAR( atomicC.position.x, atomicBox.position.x + atomicBox.size.getWidth() + 16.f,
+				 0.001f );
+	EXPECT_NEAR( atomicRichText.getMaxIntrinsicWidth(), atomicLines.front().width, 0.001f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, HitTestingSnapsAcrossInlineBoxSpacing ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Inline Box Hit Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addSpan( "A", style );
+	richText.pushInlineBox( Rectf::Zero, Rectf( 20, 0, 20, 0 ), 0, {} );
+	richText.addInlineText( "B", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.popInlineBox();
+	richText.addSpan( "C", style );
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)3 );
+
+	const auto& a = lines.front().spans[0];
+	const auto& b = lines.front().spans[1];
+	const auto& c = lines.front().spans[2];
+	const Int64 beforeInlineText = b.startCharIndex;
+	const Int64 afterInlineText = b.endCharIndex;
+	const Int32 lineY = static_cast<Int32>( lines.front().y + b.position.y + 1 );
+
+	EXPECT_EQ( richText.findCharacterFromPos(
+				   { static_cast<Int32>( a.position.x + a.size.getWidth() + 5 ), lineY } ),
+			   beforeInlineText );
+	EXPECT_EQ( richText.findCharacterFromPos(
+				   { static_cast<Int32>( b.position.x + b.size.getWidth() + 5 ), lineY } ),
+			   afterInlineText );
+	EXPECT_EQ( c.startCharIndex, afterInlineText );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, SelectionRectsUseInlineFragments ) {
+	Engine::instance()->createWindow(
+		WindowSettings( 800, 600, "RichText Inline Fragment Selection", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.addSpan( "A", style );
+	richText.pushInlineBox( Rectf::Zero, Rectf( 20, 0, 20, 0 ), 0, {} );
+	richText.addInlineText( "B", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.popInlineBox();
+	richText.addSpan( "C", style );
+	richText.updateLayout();
+
+	const RichText::InlineFragment* selectedFragment = nullptr;
+	for ( const auto& fragment : richText.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::TextRun && fragment.text &&
+			 fragment.text->getString() == "B" ) {
+			selectedFragment = &fragment;
+			break;
+		}
+	}
+	ASSERT_TRUE( selectedFragment != nullptr );
+	EXPECT_LT( selectedFragment->startCharIndex, selectedFragment->endCharIndex );
+
+	richText.setSelection( { selectedFragment->startCharIndex, selectedFragment->endCharIndex } );
+	auto rects = richText.getSelectionRects();
+	ASSERT_EQ( rects.size(), (size_t)1 );
+	EXPECT_NEAR( rects[0].Left, selectedFragment->bounds.Left, 0.001f );
+	EXPECT_NEAR( rects[0].Top, selectedFragment->bounds.Top, 0.001f );
+	EXPECT_NEAR( rects[0].Right, selectedFragment->bounds.Right, 0.001f );
+	EXPECT_NEAR( rects[0].Bottom, selectedFragment->bounds.Bottom, 0.001f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, InlineParentTextDecorationReachesFragments ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Inline Decoration",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 20;
+	style.FontColor = Color::White;
+
+	RichText richText;
+	richText.setFontStyleConfig( style );
+	richText.pushInlineBox( Rectf::Zero, Rectf::Zero, 0, {}, Color::Transparent, 0,
+							Color::Transparent, Text::Underlined );
+	richText.pushInlineBox( Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.addInlineText( "child", style, Rectf::Zero, Rectf::Zero, 0, {} );
+	richText.popInlineBox();
+	richText.popInlineBox();
+	richText.updateLayout();
+
+	const auto& lines = richText.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::Text );
+	ASSERT_TRUE( lines.front().spans[0].text != nullptr );
+	EXPECT_TRUE( ( lines.front().spans[0].text->getStyle() & Text::Underlined ) != 0 );
+
+	const RichText::InlineFragment* textFragment = nullptr;
+	const RichText::InlineFragment* outerFragment = nullptr;
+	for ( const auto& fragment : richText.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::TextRun )
+			textFragment = &fragment;
+		else if ( fragment.type == RichText::InlineFragment::Type::Box &&
+				  fragment.itemPath.size() == 1 )
+			outerFragment = &fragment;
+	}
+	ASSERT_TRUE( textFragment != nullptr );
+	ASSERT_TRUE( outerFragment != nullptr );
+	EXPECT_TRUE( ( textFragment->textDecoration & Text::Underlined ) != 0 );
+	EXPECT_TRUE( ( outerFragment->textDecoration & Text::Underlined ) != 0 );
+
+	Engine::destroySingleton();
+}
+
+UTEST( RichText, AtomicInlineBoxBaselineAlignment ) {
 	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Custom Block Baseline",
 													  WindowStyle::Default, WindowBackend::Default,
 													  32, {}, 1, false, true ) );
@@ -288,7 +690,8 @@ UTEST( RichText, CustomBlockBaselineAlignment ) {
 	richText.getFontStyleConfig().Font = font;
 	richText.addSpan( "Large", nullptr, 30 );
 	richText.addSpan( "Small", nullptr, 12 );
-	richText.addCustomSize( Sizef( 24, 30 ), UI::CSSFloat::None, UI::CSSClear::None, 12.f );
+	richText.addCustomSize( Sizef( 24, 30 ), RichText::InlineFloat::None,
+							RichText::InlineClear::None, 12.f );
 
 	richText.getSize();
 
@@ -456,24 +859,27 @@ UTEST( UIRichText, IntegrationAndLayoutVerification ) {
 	sceneNode->update( Time::Zero );
 
 	auto graphicsRt = rt->getRichText();
-	const auto& blocks = graphicsRt.getBlocks();
+	const auto& lines = graphicsRt.getLines();
 
-	ASSERT_EQ( blocks.size(), (size_t)4 );
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)4 );
 
-	// Check Text block
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[1] ) );
-	auto text1 = std::get<RichText::SpanBlock>( blocks[1] ).text;
+	// Check Text span
+	ASSERT_EQ( lines.front().spans[1].type, RichText::RenderSpan::Type::Text );
+	auto text1 = lines.front().spans[1].text;
+	ASSERT_TRUE( text1 != nullptr );
 	EXPECT_TRUE( text1->getFillColor() == Color::fromString( "#FF0000" ) );
 
-	// Check CustomSize block
-	EXPECT_TRUE( std::holds_alternative<RichText::CustomBlock>( blocks[2] ) );
-	EXPECT_EQ( std::get<RichText::CustomBlock>( blocks[2] ).size.getWidth(),
-			   PixelDensity::dpToPx( 50 ) );
+	// Check atomic widget span
+	ASSERT_EQ( lines.front().spans[2].type, RichText::RenderSpan::Type::AtomicBox );
+	EXPECT_EQ( lines.front().spans[2].size.getWidth(), PixelDensity::dpToPx( 50 ) );
 
 	UI::UIWidget* placeholder = rt->find<UI::UIWidget>( "placeholder" );
 	ASSERT_TRUE( placeholder != nullptr );
 
-	auto text0 = std::get<RichText::SpanBlock>( blocks[0] ).text;
+	ASSERT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::Text );
+	auto text0 = lines.front().spans[0].text;
+	ASSERT_TRUE( text0 != nullptr );
 	Vector2f pos = placeholder->getPixelsPosition();
 	Float expectedX = text0->getTextWidth() + text1->getTextWidth();
 	EXPECT_NEAR( pos.x, expectedX, 2.0f );
@@ -481,7 +887,7 @@ UTEST( UIRichText, IntegrationAndLayoutVerification ) {
 	destroyRichTextScene( sceneNode );
 }
 
-UTEST( RichText, VirtualLineBreakSeparatesCustomBlocks ) {
+UTEST( RichText, VirtualLineBreakSeparatesAtomicBoxes ) {
 	RichText rt;
 	rt.addCustomSize( { 10, 5 } );
 	rt.addLineBreak();
@@ -550,18 +956,16 @@ UTEST( UIRichText, NestedWidgetsIntegration ) {
 	sceneNode->draw();
 
 	auto graphicsRt = rt->getRichText();
-	const auto& blocks = graphicsRt.getBlocks();
+	const auto& lines = graphicsRt.getLines();
+	ASSERT_EQ( lines.size(), (size_t)1 );
+	ASSERT_EQ( lines.front().spans.size(), (size_t)4 );
 
-	ASSERT_EQ( blocks.size(), (size_t)4 );
+	EXPECT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::Text );
+	EXPECT_EQ( lines.front().spans[1].type, RichText::RenderSpan::Type::Text );
+	EXPECT_EQ( lines.front().spans[2].type, RichText::RenderSpan::Type::AtomicBox );
+	EXPECT_EQ( lines.front().spans[3].type, RichText::RenderSpan::Type::Text );
 
-	// Check block types
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[0] ) );
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[1] ) );
-	EXPECT_TRUE( std::holds_alternative<RichText::CustomBlock>( blocks[2] ) );
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[3] ) );
-
-	EXPECT_EQ( std::get<RichText::CustomBlock>( blocks[2] ).size.getWidth(),
-			   PixelDensity::dpToPx( 50 ) );
+	EXPECT_EQ( lines.front().spans[2].size.getWidth(), PixelDensity::dpToPx( 50 ) );
 
 	UI::UIWidget* strongNode = rt->find<UI::UIWidget>( "strong" );
 	ASSERT_TRUE( strongNode != nullptr );
@@ -569,8 +973,10 @@ UTEST( UIRichText, NestedWidgetsIntegration ) {
 	UI::UIWidget* placeholder = rt->find<UI::UIWidget>( "placeholder" );
 	ASSERT_TRUE( placeholder != nullptr );
 
-	auto text0 = std::get<RichText::SpanBlock>( blocks[0] ).text;
-	auto text1 = std::get<RichText::SpanBlock>( blocks[1] ).text;
+	auto text0 = lines.front().spans[0].text;
+	auto text1 = lines.front().spans[1].text;
+	ASSERT_TRUE( text0 != nullptr );
+	ASSERT_TRUE( text1 != nullptr );
 
 	Vector2f pos = placeholder->getScreenPos();
 	Float expectedX = text0->getTextWidth() + text1->getTextWidth();
@@ -579,6 +985,356 @@ UTEST( UIRichText, NestedWidgetsIntegration ) {
 
 	// Determine if strong got its bounds correctly
 	EXPECT_GT( strongNode->getPixelsSize().getWidth(), 0 );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineTreePreservesNestedInlineBoxes ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content">
+	        Hello <span id="outer">before <a id="link" href="#">link</a> after</span> tail
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	sceneNode->update( Time::Zero );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	auto graphicsRt = rt->getRichText();
+	const auto& inlineItems = graphicsRt.getInlineItems();
+	ASSERT_GE( inlineItems.size(), (size_t)3 );
+	ASSERT_TRUE( inlineItems[1].isBox() );
+
+	const auto& outer = inlineItems[1].asBox();
+	ASSERT_EQ( outer.children.size(), (size_t)3 );
+	EXPECT_TRUE( outer.children[0].isTextRun() );
+	ASSERT_TRUE( outer.children[1].isBox() );
+	EXPECT_TRUE( outer.children[2].isTextRun() );
+
+	const auto& link = outer.children[1].asBox();
+	ASSERT_EQ( link.children.size(), (size_t)1 );
+	EXPECT_TRUE( link.children[0].isTextRun() );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineTreeVerticalAlignStaysOnParentBox ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content">
+	        A<span id="outer" vertical-align="bottom"><a id="link" href="#">link</a></span>B
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	sceneNode->update( Time::Zero );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	auto graphicsRt = rt->getRichText();
+	const auto& inlineItems = graphicsRt.getInlineItems();
+	ASSERT_GE( inlineItems.size(), (size_t)3 );
+	ASSERT_TRUE( inlineItems[1].isBox() );
+
+	const auto& outer = inlineItems[1].asBox();
+	EXPECT_EQ( outer.baselineAlign.type, RichText::BaselineAlignment::Bottom );
+	ASSERT_EQ( outer.children.size(), (size_t)1 );
+	ASSERT_TRUE( outer.children[0].isBox() );
+
+	const auto& link = outer.children[0].asBox();
+	EXPECT_EQ( link.baselineAlign.type, RichText::BaselineAlignment::Baseline );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineParentCreatesFragmentsAcrossWrappedLines ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="90dp" layout_height="wrap_content" font-size="18dp">
+	        x <span id="outer" vertical-align="bottom" background-color="#00ff00">alpha beta gamma delta epsilon zeta</span> y
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	sceneNode->update( Time::Zero );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+	UI::UITextSpan* outerSpan = sceneNode->find<UI::UITextSpan>( "outer" );
+	ASSERT_TRUE( outerSpan != nullptr );
+
+	auto graphicsRt = rt->getRichText();
+	const auto& inlineItems = graphicsRt.getInlineItems();
+	ASSERT_GE( inlineItems.size(), (size_t)2 );
+
+	RichText::RenderSpan::InlinePath outerPath;
+	for ( size_t i = 0; i < inlineItems.size(); ++i ) {
+		if ( inlineItems[i].isBox() &&
+			 inlineItems[i].asBox().baselineAlign.type == RichText::BaselineAlignment::Bottom ) {
+			outerPath = { i };
+			break;
+		}
+	}
+	ASSERT_FALSE( outerPath.empty() );
+
+	size_t outerFragmentCount = 0;
+	size_t firstLine = std::numeric_limits<size_t>::max();
+	size_t lastLine = 0;
+	SmallVector<Rectf, 4> outerFragmentBounds;
+	SmallVector<const RichText::InlineFragment*, 4> outerFragments;
+	for ( const auto& fragment : graphicsRt.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box &&
+			 fragment.itemPath == outerPath ) {
+			outerFragmentCount++;
+			firstLine = std::min( firstLine, fragment.lineIndex );
+			lastLine = std::max( lastLine, fragment.lineIndex );
+			outerFragments.push_back( &fragment );
+			Rectf fragmentBounds = fragment.bounds;
+			fragmentBounds.move(
+				{ rt->getPixelsContentOffset().Left, rt->getPixelsContentOffset().Top } );
+			fragmentBounds.move( -outerSpan->getPixelsPosition() );
+			outerFragmentBounds.push_back( fragmentBounds );
+			EXPECT_GT( fragment.bounds.getWidth(), 0 );
+			EXPECT_GT( fragment.bounds.getHeight(), 0 );
+			EXPECT_EQ( fragment.baselineAlign.type, RichText::BaselineAlignment::Bottom );
+			EXPECT_EQ( fragment.backgroundColor.getValue(),
+					   Color::fromString( "#00ff00" ).getValue() );
+		}
+	}
+
+	EXPECT_GE( outerFragmentCount, (size_t)2 );
+	EXPECT_LT( firstLine, lastLine );
+	ASSERT_FALSE( outerFragments.empty() );
+	for ( const auto* fragment : outerFragments ) {
+		if ( fragment->lineIndex == firstLine )
+			EXPECT_TRUE( fragment->startsInlineBox );
+		else
+			EXPECT_FALSE( fragment->startsInlineBox );
+		if ( fragment->lineIndex == lastLine )
+			EXPECT_TRUE( fragment->endsInlineBox );
+		else
+			EXPECT_FALSE( fragment->endsInlineBox );
+	}
+	ASSERT_EQ( outerSpan->getHitBoxes().size(), outerFragmentBounds.size() );
+	for ( size_t i = 0; i < outerFragmentBounds.size(); ++i ) {
+		EXPECT_NEAR( outerSpan->getHitBoxes()[i].Left, outerFragmentBounds[i].Left, 0.001f );
+		EXPECT_NEAR( outerSpan->getHitBoxes()[i].Top, outerFragmentBounds[i].Top, 0.001f );
+		EXPECT_NEAR( outerSpan->getHitBoxes()[i].Right, outerFragmentBounds[i].Right, 0.001f );
+		EXPECT_NEAR( outerSpan->getHitBoxes()[i].Bottom, outerFragmentBounds[i].Bottom, 0.001f );
+	}
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineParentLineHeightFromCssContributesToFragments ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content" font-size="18dp">
+	        A<span id="outer" line-height="48dp">line</span>B
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	sceneNode->update( Time::Zero );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+	UI::UITextSpan* outerSpan = sceneNode->find<UI::UITextSpan>( "outer" );
+	ASSERT_TRUE( outerSpan != nullptr );
+
+	auto graphicsRt = rt->getRichText();
+	ASSERT_EQ( graphicsRt.getLines().size(), (size_t)1 );
+	EXPECT_GE( graphicsRt.getLines().front().height, PixelDensity::dpToPx( 48 ) );
+
+	const RichText::InlineFragment* boxFragment = nullptr;
+	const RichText::InlineFragment* textFragment = nullptr;
+	for ( const auto& fragment : graphicsRt.getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box &&
+			 fragment.source.type == RichText::InlineSourceType::Widget &&
+			 fragment.source.ptr == outerSpan ) {
+			boxFragment = &fragment;
+		} else if ( fragment.type == RichText::InlineFragment::Type::TextRun &&
+					fragment.itemPath.size() > 1 ) {
+			textFragment = &fragment;
+		}
+	}
+
+	ASSERT_TRUE( boxFragment != nullptr );
+	ASSERT_TRUE( textFragment != nullptr );
+	EXPECT_GE( boxFragment->bounds.getHeight(), PixelDensity::dpToPx( 48 ) );
+	EXPECT_LT( boxFragment->bounds.Top, textFragment->bounds.Top );
+	EXPECT_GT( boxFragment->bounds.Bottom, textFragment->bounds.Bottom );
+	EXPECT_GE( outerSpan->getPixelsSize().getHeight(), PixelDensity::dpToPx( 48 ) );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineParentBorderIsPreservedInFragments ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content" font-size="18dp">
+	        A<span id="outer" padding="3dp" background-color="#00ff00">boxed</span>B
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+	UI::UITextSpan* outerSpan = sceneNode->find<UI::UITextSpan>( "outer" );
+	ASSERT_TRUE( outerSpan != nullptr );
+	outerSpan->setBorderWidth( 2 );
+	outerSpan->getBorder()->setColor( Color::White );
+	outerSpan->getBorder()->setColorTop( Color::Red );
+	outerSpan->getBorder()->setColorRight( Color::Red );
+	outerSpan->getBorder()->setColorBottom( Color::Red );
+	outerSpan->getBorder()->setColorLeft( Color::Red );
+
+	UIRichText::rebuildRichText( rt, *rt->getRichTextPtr() );
+	rt->getRichTextPtr()->updateLayout();
+
+	auto graphicsRt = rt->getRichText();
+	const auto& fragments = graphicsRt.getInlineFragments();
+
+	const RichText::InlineFragment* boxFragment = nullptr;
+	for ( const auto& fragment : fragments ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box &&
+			 fragment.source.type == RichText::InlineSourceType::Widget &&
+			 fragment.source.ptr == outerSpan ) {
+			boxFragment = &fragment;
+		}
+	}
+
+	ASSERT_TRUE( boxFragment != nullptr );
+	const RichText::InlineFragment* textFragment = nullptr;
+	for ( const auto& fragment : fragments ) {
+		if ( fragment.type == RichText::InlineFragment::Type::TextRun &&
+			 fragment.itemPath.size() > boxFragment->itemPath.size() &&
+			 std::equal( boxFragment->itemPath.begin(), boxFragment->itemPath.end(),
+						 fragment.itemPath.begin() ) ) {
+			textFragment = &fragment;
+			break;
+		}
+	}
+	ASSERT_TRUE( textFragment != nullptr );
+	EXPECT_GT( boxFragment->borderWidth, 0 );
+	EXPECT_EQ( boxFragment->borderColor.getValue(), Color::fromString( "#ff0000" ).getValue() );
+	EXPECT_EQ( boxFragment->backgroundColor.getValue(), Color::fromString( "#00ff00" ).getValue() );
+	EXPECT_LT( boxFragment->paintBounds.Left, textFragment->bounds.Left );
+	EXPECT_GT( boxFragment->paintBounds.Right, textFragment->bounds.Right );
+	EXPECT_LT( boxFragment->paintBounds.Top, textFragment->bounds.Top );
+	EXPECT_GT( boxFragment->paintBounds.Bottom, textFragment->bounds.Bottom );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineParentFontBackgroundColorIgnoresEmptyBackgroundDrawable ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content" font-size="18dp">
+	        A<span id="outer">boxed</span>B
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+	UI::UITextSpan* outerSpan = sceneNode->find<UI::UITextSpan>( "outer" );
+	ASSERT_TRUE( outerSpan != nullptr );
+
+	const Color backgroundColor = Color::fromString( "#00ff00" );
+	outerSpan->setFontBackgroundColor( backgroundColor );
+	outerSpan->setBorderWidth( 2 );
+	ASSERT_TRUE( outerSpan->hasBackground() );
+	ASSERT_EQ( outerSpan->getBackground()->getBackgroundColor().getValue(),
+			   Color::Transparent.getValue() );
+
+	UIRichText::rebuildRichText( rt, *rt->getRichTextPtr() );
+	rt->getRichTextPtr()->updateLayout();
+
+	const RichText::InlineFragment* boxFragment = nullptr;
+	for ( const auto& fragment : rt->getRichText().getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box &&
+			 fragment.source.type == RichText::InlineSourceType::Widget &&
+			 fragment.source.ptr == outerSpan ) {
+			boxFragment = &fragment;
+			break;
+		}
+	}
+
+	ASSERT_TRUE( boxFragment != nullptr );
+	EXPECT_EQ( boxFragment->backgroundColor.getValue(), backgroundColor.getValue() );
+	EXPECT_TRUE( boxFragment->backgroundDrawable == nullptr );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, InlineParentFontBackgroundColorUsesBorderRadiusDrawable ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+	    <RichText id="rt" layout_width="300dp" layout_height="wrap_content" font-size="18dp">
+	        A<span id="outer">boxed</span>B
+	    </RichText>
+    )xml";
+
+	sceneNode->loadLayoutFromString( xml );
+
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+	UI::UITextSpan* outerSpan = sceneNode->find<UI::UITextSpan>( "outer" );
+	ASSERT_TRUE( outerSpan != nullptr );
+
+	const Color backgroundColor = Color::fromString( "#b45f38" );
+	outerSpan->setFontBackgroundColor( backgroundColor );
+	outerSpan->setTopLeftRadius( "2px" );
+	outerSpan->setTopRightRadius( "2px" );
+	outerSpan->setBottomLeftRadius( "2px" );
+	outerSpan->setBottomRightRadius( "2px" );
+
+	UIRichText::rebuildRichText( rt, *rt->getRichTextPtr() );
+	rt->getRichTextPtr()->updateLayout();
+
+	const RichText::InlineFragment* boxFragment = nullptr;
+	for ( const auto& fragment : rt->getRichText().getInlineFragments() ) {
+		if ( fragment.type == RichText::InlineFragment::Type::Box &&
+			 fragment.source.type == RichText::InlineSourceType::Widget &&
+			 fragment.source.ptr == outerSpan ) {
+			boxFragment = &fragment;
+			break;
+		}
+	}
+
+	ASSERT_TRUE( boxFragment != nullptr );
+	ASSERT_TRUE( boxFragment->backgroundDrawable != nullptr );
+	EXPECT_TRUE( boxFragment->backgroundDrawableUsesFragmentColor );
+	EXPECT_EQ( boxFragment->backgroundColor.getValue(), backgroundColor.getValue() );
+	EXPECT_EQ( boxFragment->backgroundDrawable->getDrawableType(), Drawable::UIBACKGROUNDDRAWABLE );
+
+	auto* background = static_cast<UIBackgroundDrawable*>( boxFragment->backgroundDrawable );
+	EXPECT_TRUE( background->hasRadius() );
+	EXPECT_NEAR( background->getRadiuses().topLeft.x, 2.f, 0.001f );
+	EXPECT_NEAR( background->getRadiuses().topRight.x, 2.f, 0.001f );
+	EXPECT_NEAR( background->getRadiuses().bottomLeft.x, 2.f, 0.001f );
+	EXPECT_NEAR( background->getRadiuses().bottomRight.x, 2.f, 0.001f );
 
 	destroyRichTextScene( sceneNode );
 }
@@ -600,20 +1356,23 @@ UTEST( UIRichText, DefaultStyleInheritance ) {
 	sceneNode->update( Time::Zero );
 
 	auto graphicsRt = rt->getRichText();
-	const auto& blocks = graphicsRt.getBlocks();
+	const auto& lines = graphicsRt.getLines();
 
-	// blocks[0] should be "Default size" with parent's size and color
-	// blocks[1] should be "Small" with overridden size and color
-	ASSERT_TRUE( blocks.size() >= 2 );
+	// spans[0] should be "Default size" with parent's size and color
+	// spans[1] should be "Small" with overridden size and color
+	ASSERT_FALSE( lines.empty() );
+	ASSERT_TRUE( lines.front().spans.size() >= 2 );
 
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[0] ) );
-	auto text0 = std::get<RichText::SpanBlock>( blocks[0] ).text;
+	ASSERT_EQ( lines.front().spans[0].type, RichText::RenderSpan::Type::Text );
+	auto text0 = lines.front().spans[0].text;
+	ASSERT_TRUE( text0 != nullptr );
 	EXPECT_EQ( text0->getCharacterSize(), rt->getFontSize() );
 	EXPECT_EQ( text0->getFillColor().getValue(), rt->getFontColor().getValue() );
 	EXPECT_EQ( text0->getFillColor().getValue(), Color::fromString( "#FF0000" ).getValue() );
 
-	EXPECT_TRUE( std::holds_alternative<RichText::SpanBlock>( blocks[1] ) );
-	auto text1 = std::get<RichText::SpanBlock>( blocks[1] ).text;
+	ASSERT_EQ( lines.front().spans[1].type, RichText::RenderSpan::Type::Text );
+	auto text1 = lines.front().spans[1].text;
+	ASSERT_TRUE( text1 != nullptr );
 	EXPECT_EQ( text1->getCharacterSize(), (unsigned int)PixelDensity::dpToPxI( 16 ) );
 	EXPECT_EQ( text1->getFillColor().getValue(), Color::fromString( "#00FF00" ).getValue() );
 

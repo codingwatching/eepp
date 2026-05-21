@@ -1,4 +1,4 @@
-#include <eepp/core/overloaded.hpp>
+#include <algorithm>
 #include <eepp/graphics/font.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/linewrap.hpp>
@@ -7,23 +7,20 @@
 
 namespace EE { namespace Graphics {
 
-static Float getSpanLineHeight( const RichText::SpanBlock& spanBlock ) {
-	const auto& text = spanBlock.text;
+static Float getTextRunLineHeight( const std::shared_ptr<Text>& text, Float lineHeight ) {
 	if ( !text || !text->getFontStyleConfig().Font )
-		return spanBlock.lineHeight;
+		return lineHeight;
 	const auto& fontStyle = text->getFontStyleConfig();
-	return spanBlock.lineHeight > 0 ? spanBlock.lineHeight
-									: fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+	return lineHeight > 0 ? lineHeight : fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
 }
 
-static Float getTextBaseline( const RichText::SpanBlock& spanBlock ) {
-	const auto& text = spanBlock.text;
+static Float getTextBaseline( const std::shared_ptr<Text>& text, Float lineHeight ) {
 	if ( !text || !text->getFontStyleConfig().Font )
 		return 0.f;
 	const auto& fontStyle = text->getFontStyleConfig();
 	Float fontLineSpacing = fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
-	Float lineHeight = getSpanLineHeight( spanBlock );
-	Float leading = eemax( 0.f, lineHeight - fontLineSpacing ) * 0.5f;
+	Float usedLineHeight = getTextRunLineHeight( text, lineHeight );
+	Float leading = eemax( 0.f, usedLineHeight - fontLineSpacing ) * 0.5f;
 	return leading + fontStyle.Font->getAscent( fontStyle.CharacterSize );
 }
 
@@ -51,31 +48,31 @@ static Float getParentDescent( const FontStyleConfig& fontStyle ) {
 
 static Float getBaselineAlignedOffset( const RichText::RenderParagraph& line, const Sizef& size,
 									   Float naturalBaseline, Float ownLineHeight,
-									   const UI::CSSBaselineAlignValue& align,
+									   const RichText::BaselineAlignValue& align,
 									   const FontStyleConfig& parentFontStyle ) {
 	Float baseline = line.maxAscent;
 	switch ( align.type ) {
-		case UI::CSSBaselineAlignment::Sub:
+		case RichText::BaselineAlignment::Sub:
 			return baseline - naturalBaseline + parentFontStyle.CharacterSize * 0.2f;
-		case UI::CSSBaselineAlignment::Super:
+		case RichText::BaselineAlignment::Super:
 			return baseline - naturalBaseline - parentFontStyle.CharacterSize * 0.33f;
-		case UI::CSSBaselineAlignment::TextTop:
+		case RichText::BaselineAlignment::TextTop:
 			return baseline - getParentAscent( parentFontStyle );
-		case UI::CSSBaselineAlignment::TextBottom:
+		case RichText::BaselineAlignment::TextBottom:
 			return baseline + getParentDescent( parentFontStyle ) - size.getHeight();
-		case UI::CSSBaselineAlignment::Middle:
+		case RichText::BaselineAlignment::Middle:
 			return getParentAscent( parentFontStyle ) + getFontXHeight( parentFontStyle ) * 0.5f -
 				   size.getHeight() * 0.5f;
-		case UI::CSSBaselineAlignment::Top:
+		case RichText::BaselineAlignment::Top:
 			return 0.f;
-		case UI::CSSBaselineAlignment::Bottom:
+		case RichText::BaselineAlignment::Bottom:
 			return line.height - size.getHeight();
-		case UI::CSSBaselineAlignment::Length:
+		case RichText::BaselineAlignment::Length:
 			return baseline - naturalBaseline - align.value;
-		case UI::CSSBaselineAlignment::Percentage:
+		case RichText::BaselineAlignment::Percentage:
 			return baseline - naturalBaseline - ownLineHeight * align.value / 100.f;
-		case UI::CSSBaselineAlignment::Auto:
-		case UI::CSSBaselineAlignment::Baseline:
+		case RichText::BaselineAlignment::Auto:
+		case RichText::BaselineAlignment::Baseline:
 		default:
 			return baseline - naturalBaseline;
 	}
@@ -121,6 +118,43 @@ void RichText::draw( const Float& X, const Float& Y, const Vector2f& scale, cons
 		}
 	}
 
+	for ( const auto& fragment : mInlineFragments ) {
+		if ( fragment.type != InlineFragment::Type::Box )
+			continue;
+		const Rectf& localPaintBounds =
+			fragment.paintBounds != Rectf::Zero ? fragment.paintBounds : fragment.bounds;
+		Rectf rect( localPaintBounds.getPosition() * scale + Vector2f( X, Y ),
+					localPaintBounds.getSize() * scale );
+		if ( fragment.backgroundDrawable != nullptr ) {
+			if ( fragment.backgroundDrawableUsesFragmentColor &&
+				 fragment.backgroundColor != Color::Transparent ) {
+				const Color oldColor = fragment.backgroundDrawable->getColor();
+				fragment.backgroundDrawable->setColor( fragment.backgroundColor );
+				fragment.backgroundDrawable->draw( rect.getPosition(), rect.getSize() );
+				fragment.backgroundDrawable->setColor( oldColor );
+			} else {
+				fragment.backgroundDrawable->draw( rect.getPosition(), rect.getSize() );
+			}
+		} else if ( fragment.backgroundColor != Color::Transparent ) {
+			Primitives p;
+			p.setColor( fragment.backgroundColor );
+			p.drawRectangle( rect, rotation, Vector2f::One );
+		}
+		if ( fragment.borderDrawable != nullptr ) {
+			fragment.borderDrawable->draw( rect.getPosition(), rect.getSize() );
+		} else if ( fragment.borderWidth > 0 && fragment.borderColor != Color::Transparent ) {
+			Primitives p;
+			p.setColor( fragment.borderColor );
+			const Float bw = fragment.borderWidth * scale.x;
+			p.drawRectangle( Rectf( rect.Left, rect.Top, rect.Right, rect.Top + bw ) );
+			p.drawRectangle( Rectf( rect.Left, rect.Bottom - bw, rect.Right, rect.Bottom ) );
+			if ( fragment.startsInlineBox )
+				p.drawRectangle( Rectf( rect.Left, rect.Top, rect.Left + bw, rect.Bottom ) );
+			if ( fragment.endsInlineBox )
+				p.drawRectangle( Rectf( rect.Right - bw, rect.Top, rect.Right, rect.Bottom ) );
+		}
+	}
+
 	for ( auto& line : mLines ) {
 		for ( auto& span : line.spans ) {
 			// span.position is local to the line (x) + baseline offset (y) line.Y is the line
@@ -128,72 +162,59 @@ void RichText::draw( const Float& X, const Float& Y, const Vector2f& scale, cons
 
 			Vector2f pos = span.position;
 
-			std::visit(
-				Overloaded{
+			if ( span.type == RenderSpan::Type::Text && span.text ) {
+				const std::shared_ptr<Text>& text = span.text;
+				Color oldBgColor = text->getFontStyleConfig().BackgroundColor;
 
-					[&]( const SpanBlock& spanBlock ) {
-						const std::shared_ptr<Text>& text = spanBlock.text;
-						Color oldBgColor = text->getFontStyleConfig().BackgroundColor;
+				if ( oldBgColor != Color::Transparent && !span.suppressBackground ) {
+					Primitives p;
+					p.setColor( oldBgColor );
+					Rectf bgRect(
+						Vector2f( std::trunc( X + pos.x - span.padding.Left ),
+								  std::trunc( Y + line.y + pos.y - span.padding.Top ) ),
+						Sizef( span.size.getWidth() + span.padding.Left + span.padding.Right,
+							   span.size.getHeight() + span.padding.Top + span.padding.Bottom ) );
+					p.drawRectangle( bgRect, rotation, scale );
+				}
 
-						if ( oldBgColor != Color::Transparent ) {
-							Primitives p;
-							p.setColor( oldBgColor );
-							Rectf bgRect(
-								Vector2f(
-									std::trunc( X + pos.x - spanBlock.padding.Left ),
-									std::trunc( Y + line.y + pos.y - spanBlock.padding.Top ) ),
-								Sizef( span.size.getWidth() + spanBlock.padding.Left +
-										   spanBlock.padding.Right,
-									   span.size.getHeight() + spanBlock.padding.Top +
-										   spanBlock.padding.Bottom ) );
-							p.drawRectangle( bgRect, rotation, scale );
-						}
+				if ( oldBgColor != Color::Transparent )
+					text->setBackgroundColor( Color::Transparent );
 
-						if ( oldBgColor != Color::Transparent )
-							text->setBackgroundColor( Color::Transparent );
+				bool selectionApplied = false;
+				if ( mSelectionColor != Color::Transparent ) {
+					TextSelectionRange spanSel = {
+						std::clamp( mSelection.start, span.startCharIndex, span.endCharIndex ) -
+							span.startCharIndex,
+						std::clamp( mSelection.end, span.startCharIndex, span.endCharIndex ) -
+							span.startCharIndex };
 
-						bool selectionApplied = false;
-						if ( mSelectionColor != Color::Transparent ) {
-							TextSelectionRange spanSel = {
-								std::clamp( mSelection.start, span.startCharIndex,
-											span.endCharIndex ) -
-									span.startCharIndex,
-								std::clamp( mSelection.end, span.startCharIndex,
-											span.endCharIndex ) -
-									span.startCharIndex };
+					if ( spanSel.start != spanSel.end ) {
+						text->setFillColor( mSelectionColor,
+											(Uint32)std::min( spanSel.start, spanSel.end ),
+											(Uint32)std::max( spanSel.start, spanSel.end ) - 1 );
+						selectionApplied = true;
+					}
+				}
 
-							if ( spanSel.start != spanSel.end ) {
-								text->setFillColor(
-									mSelectionColor, (Uint32)std::min( spanSel.start, spanSel.end ),
-									(Uint32)std::max( spanSel.start, spanSel.end ) - 1 );
-								selectionApplied = true;
-							}
-						}
+				if ( rotation == 0 && scale == Vector2f::One ) {
+					text->draw( std::trunc( X + pos.x ), std::trunc( Y + line.y + pos.y ),
+								Vector2f::One, 0, effect );
+				} else {
+					text->draw( std::trunc( X + pos.x * scale.x ),
+								std::trunc( Y + ( line.y + pos.y ) * scale.y ), scale, rotation,
+								effect, rotationCenter, scaleCenter );
+				}
 
-						if ( rotation == 0 && scale == Vector2f::One ) {
-							text->draw( std::trunc( X + pos.x ), std::trunc( Y + line.y + pos.y ),
-										Vector2f::One, 0, effect );
-						} else {
-							text->draw( std::trunc( X + pos.x * scale.x ),
-										std::trunc( Y + ( line.y + pos.y ) * scale.y ), scale,
-										rotation, effect, rotationCenter, scaleCenter );
-						}
+				if ( oldBgColor != Color::Transparent )
+					text->setBackgroundColor( oldBgColor );
 
-						if ( oldBgColor != Color::Transparent )
-							text->setBackgroundColor( oldBgColor );
-
-						if ( selectionApplied )
-							text->invalidateColors();
-					},
-					[&]( const std::shared_ptr<Drawable>& drawable ) {
-						if ( drawable ) {
-							drawable->draw( Vector2f( std::trunc( X + pos.x ),
-													  std::trunc( Y + line.y + pos.y ) ),
-											span.size );
-						}
-					},
-					[]( const CustomBlock& ) {} },
-				span.block );
+				if ( selectionApplied )
+					text->invalidateColors();
+			} else if ( span.type == RenderSpan::Type::Drawable && span.drawable ) {
+				span.drawable->draw(
+					Vector2f( std::trunc( X + pos.x ), std::trunc( Y + line.y + pos.y ) ),
+					span.size );
+			}
 		}
 	}
 }
@@ -236,11 +257,21 @@ Int64 RichText::findCharacterFromPos( const Vector2i& pos ) const {
 
 	for ( const auto& line : mLines ) {
 		if ( pos.y >= line.y && pos.y < line.y + line.height ) {
+			const RenderSpan* previousSpan = nullptr;
 			for ( const auto& span : line.spans ) {
+				if ( pos.x < span.position.x ) {
+					if ( previousSpan == nullptr )
+						return span.startCharIndex;
+
+					Float previousEnd = previousSpan->position.x + previousSpan->size.getWidth();
+					Float gapMidpoint = previousEnd + ( span.position.x - previousEnd ) * 0.5f;
+					return pos.x < gapMidpoint ? previousSpan->endCharIndex : span.startCharIndex;
+				}
+
 				if ( pos.x >= span.position.x && pos.x < span.position.x + span.size.getWidth() ) {
-					if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
+					if ( span.type == RenderSpan::Type::Text && span.text ) {
 						return span.startCharIndex +
-							   pText->text->findCharacterFromPos( Vector2i(
+							   span.text->findCharacterFromPos( Vector2i(
 								   pos.x - span.position.x, pos.y - line.y - span.position.y ) );
 					} else {
 						return ( pos.x < span.position.x + span.size.getWidth() * 0.5f )
@@ -248,6 +279,7 @@ Int64 RichText::findCharacterFromPos( const Vector2i& pos ) const {
 								   : span.endCharIndex;
 					}
 				}
+				previousSpan = &span;
 			}
 			// If we are in the line but past the last span
 			if ( !line.spans.empty() ) {
@@ -277,8 +309,8 @@ Vector2f RichText::findCharacterPos( Int64 index ) const {
 	for ( const auto& line : mLines ) {
 		for ( const auto& span : line.spans ) {
 			if ( index >= span.startCharIndex && index < span.endCharIndex ) {
-				if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-					Vector2f p = pText->text->findCharacterPos( index - span.startCharIndex );
+				if ( span.type == RenderSpan::Type::Text && span.text ) {
+					Vector2f p = span.text->findCharacterPos( index - span.startCharIndex );
 					return { span.position.x + p.x, line.y + span.position.y + p.y };
 				} else {
 					return { span.position.x, line.y + span.position.y };
@@ -302,14 +334,39 @@ SmallVector<Rectf> RichText::getSelectionRects() const {
 	Int64 start = std::min( mSelection.start, mSelection.end );
 	Int64 end = std::max( mSelection.start, mSelection.end );
 
+	if ( !mInlineFragments.empty() ) {
+		for ( const auto& fragment : mInlineFragments ) {
+			if ( fragment.type == InlineFragment::Type::Box )
+				continue;
+
+			Int64 fragmentStart = std::max( start, fragment.startCharIndex );
+			Int64 fragmentEnd = std::min( end, fragment.endCharIndex );
+			if ( fragmentStart >= fragmentEnd )
+				continue;
+
+			if ( fragment.type == InlineFragment::Type::TextRun && fragment.text ) {
+				auto spanRects =
+					fragment.text->getSelectionRects( { fragmentStart - fragment.startCharIndex,
+														fragmentEnd - fragment.startCharIndex } );
+				for ( auto& rect : spanRects ) {
+					rect.move( fragment.bounds.getPosition() );
+					rects.push_back( rect );
+				}
+			} else {
+				rects.push_back( fragment.bounds );
+			}
+		}
+		return rects;
+	}
+
 	for ( const auto& line : mLines ) {
 		for ( const auto& span : line.spans ) {
 			Int64 spanStart = std::max( start, span.startCharIndex );
 			Int64 spanEnd = std::min( end, span.endCharIndex );
 
 			if ( spanStart < spanEnd ) {
-				if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-					auto spanRects = pText->text->getSelectionRects(
+				if ( span.type == RenderSpan::Type::Text && span.text ) {
+					auto spanRects = span.text->getSelectionRects(
 						{ spanStart - span.startCharIndex, spanEnd - span.startCharIndex } );
 					for ( auto& rect : spanRects ) {
 						rect.move( { span.position.x, line.y + span.position.y } );
@@ -348,9 +405,9 @@ String RichText::getSelectionString() const {
 			Int64 spanEnd = std::min( end, span.endCharIndex );
 
 			if ( spanStart < spanEnd ) {
-				if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-					res += pText->text->getString().substr( spanStart - span.startCharIndex,
-															spanEnd - spanStart );
+				if ( span.type == RenderSpan::Type::Text && span.text ) {
+					res += span.text->getString().substr( spanStart - span.startCharIndex,
+														  spanEnd - spanStart );
 				} else {
 					// It's a drawable or custom size, it takes 1 "character" index.
 					res += ' ';
@@ -375,37 +432,1504 @@ Sizef RichText::getPixelsSize() {
 	return getSize();
 }
 
+namespace {
+
+// Navigate the inline tree along a path of indices and return the target vector.
+static std::vector<RichText::InlineItem>*
+resolveInlinePath( std::vector<RichText::InlineItem>& root,
+				   const RichText::RenderSpan::InlinePath& path ) {
+	std::vector<RichText::InlineItem>* target = &root;
+	for ( size_t idx : path ) {
+		if ( idx < target->size() && ( *target )[idx].isBox() )
+			target = &( *target )[idx].asBox().children;
+		else
+			break;
+	}
+	return target;
+}
+
+static void invalidateInlineItemText( std::vector<RichText::InlineItem>& items ) {
+	for ( auto& item : items ) {
+		if ( item.isTextRun() ) {
+			if ( item.asTextRun().text )
+				item.asTextRun().text->invalidate();
+		} else if ( item.isBox() ) {
+			invalidateInlineItemText( item.asBox().children );
+		}
+	}
+}
+
+struct InlineAncestorRef {
+	RichText::RenderSpan::InlinePath path;
+	const RichText::InlineItem::Box* box{ nullptr };
+};
+
+struct InlineLeafRef {
+	RichText::InlineFragment::Type type{ RichText::InlineFragment::Type::TextRun };
+	RichText::RenderSpan::InlinePath path;
+	SmallVector<InlineAncestorRef, 4> ancestors;
+	std::shared_ptr<Text> text;
+	RichText::InlineSource source;
+	bool isLineBreak{ false };
+	RichText::BaselineAlignValue baselineAlign;
+};
+
+struct InlineBoxFragmentAccumulator {
+	RichText::RenderSpan::InlinePath path;
+	size_t lineIndex{ 0 };
+	Rectf bounds;
+	Rectf contentBounds;
+	bool valid{ false };
+	bool contentValid{ false };
+	const RichText::InlineItem::Box* box{ nullptr };
+	size_t firstLeafIndex{ 0 };
+	size_t lastLeafIndex{ 0 };
+	bool startsInlineBox{ false };
+	bool endsInlineBox{ false };
+};
+
+struct InlineVerticalEdges {
+	Float top{ 0.f };
+	Float bottom{ 0.f };
+};
+
+struct InlineLayoutRun {
+	RichText::RenderSpan payload;
+};
+
+static bool sameInlinePath( const RichText::RenderSpan::InlinePath& lhs,
+							const RichText::RenderSpan::InlinePath& rhs ) {
+	return lhs == rhs;
+}
+
+static void expandInlineBounds( Rectf& target, bool& valid, const Rectf& rect ) {
+	if ( !valid ) {
+		target = rect;
+		valid = true;
+	} else {
+		target.expand( rect );
+	}
+}
+
+static Rectf expandInlineBoundsForLineHeight( const Rectf& bounds,
+											  const RichText::InlineItem::Box& box ) {
+	if ( !box.participatesInLineMetrics || box.lineHeight <= bounds.getHeight() )
+		return bounds;
+
+	Rectf out = bounds;
+	Float extra = box.lineHeight - bounds.getHeight();
+	Float top = extra * 0.5f;
+	out.Top -= top;
+	out.Bottom += extra - top;
+	return out;
+}
+
+static bool isDefaultBaselineAlign( const RichText::BaselineAlignValue& align ) {
+	return align.type == RichText::BaselineAlignment::Baseline ||
+		   align.type == RichText::BaselineAlignment::Auto;
+}
+
+static const RichText::InlineItem::Box*
+resolveInlineBox( const std::vector<RichText::InlineItem>& root,
+				  const RichText::RenderSpan::InlinePath& path, size_t pathSize ) {
+	const std::vector<RichText::InlineItem>* target = &root;
+	const RichText::InlineItem::Box* box = nullptr;
+	for ( size_t i = 0; i < pathSize; ++i ) {
+		size_t idx = path[i];
+		if ( idx >= target->size() || !( *target )[idx].isBox() )
+			return nullptr;
+		box = &( *target )[idx].asBox();
+		target = &box->children;
+	}
+	return box;
+}
+
+static RichText::BaselineAlignValue
+effectiveInlineBaselineAlign( const std::vector<RichText::InlineItem>& root,
+							  const RichText::RenderSpan::InlinePath& inlinePath,
+							  const RichText::BaselineAlignValue& requested ) {
+	if ( !isDefaultBaselineAlign( requested ) )
+		return requested;
+
+	for ( size_t pathSize = inlinePath.size(); pathSize > 0; --pathSize ) {
+		const auto* box = resolveInlineBox( root, inlinePath, pathSize );
+		if ( box != nullptr && !isDefaultBaselineAlign( box->baselineAlign ) )
+			return box->baselineAlign;
+	}
+
+	return requested;
+}
+
+static InlineVerticalEdges
+inlineAncestorLineHeightEdges( const std::vector<RichText::InlineItem>& inlineItems,
+							   const RichText::RenderSpan::InlinePath& inlinePath,
+							   Float leafHeight ) {
+	InlineVerticalEdges edges;
+	if ( inlinePath.empty() )
+		return edges;
+
+	Float usedLineHeight = leafHeight;
+	for ( size_t pathSize = 1; pathSize < inlinePath.size(); ++pathSize ) {
+		const auto* box = resolveInlineBox( inlineItems, inlinePath, pathSize );
+		if ( box == nullptr )
+			continue;
+		if ( box->participatesInLineMetrics && box->lineHeight > usedLineHeight )
+			usedLineHeight = box->lineHeight;
+	}
+
+	Float extra = eemax( 0.f, usedLineHeight - leafHeight );
+	edges.top = extra * 0.5f;
+	edges.bottom = extra - edges.top;
+	return edges;
+}
+
+static bool findFirstInlineLeafPath( const std::vector<RichText::InlineItem>& items,
+									 RichText::RenderSpan::InlinePath& path,
+									 RichText::RenderSpan::InlinePath& leafPath ) {
+	for ( size_t i = 0; i < items.size(); ++i ) {
+		path.push_back( i );
+		const auto& item = items[i];
+		if ( item.isBox() ) {
+			if ( findFirstInlineLeafPath( item.asBox().children, path, leafPath ) )
+				return true;
+		} else if ( item.isTextRun() ||
+					( item.isAtomicBox() && !item.asAtomicBox().isLineBreak ) ) {
+			leafPath = path;
+			return true;
+		}
+		path.pop_back();
+	}
+	return false;
+}
+
+static bool findLastInlineLeafPath( const std::vector<RichText::InlineItem>& items,
+									RichText::RenderSpan::InlinePath& path,
+									RichText::RenderSpan::InlinePath& leafPath ) {
+	for ( size_t i = items.size(); i > 0; --i ) {
+		path.push_back( i - 1 );
+		const auto& item = items[i - 1];
+		if ( item.isBox() ) {
+			if ( findLastInlineLeafPath( item.asBox().children, path, leafPath ) )
+				return true;
+		} else if ( item.isTextRun() ||
+					( item.isAtomicBox() && !item.asAtomicBox().isLineBreak ) ) {
+			leafPath = path;
+			return true;
+		}
+		path.pop_back();
+	}
+	return false;
+}
+
+static bool isFirstInlineLeafInBox( const RichText::InlineItem::Box& box,
+									const RichText::RenderSpan::InlinePath& boxPath,
+									const RichText::RenderSpan::InlinePath& leafPath ) {
+	RichText::RenderSpan::InlinePath path = boxPath;
+	RichText::RenderSpan::InlinePath firstLeafPath;
+	return findFirstInlineLeafPath( box.children, path, firstLeafPath ) &&
+		   sameInlinePath( firstLeafPath, leafPath );
+}
+
+static bool isLastInlineLeafInBox( const RichText::InlineItem::Box& box,
+								   const RichText::RenderSpan::InlinePath& boxPath,
+								   const RichText::RenderSpan::InlinePath& leafPath ) {
+	RichText::RenderSpan::InlinePath path = boxPath;
+	RichText::RenderSpan::InlinePath lastLeafPath;
+	return findLastInlineLeafPath( box.children, path, lastLeafPath ) &&
+		   sameInlinePath( lastLeafPath, leafPath );
+}
+
+static Float inlineAncestorStartSpacing( const std::vector<RichText::InlineItem>& inlineItems,
+										 const RichText::RenderSpan::InlinePath& inlinePath ) {
+	Float spacing = 0.f;
+	for ( size_t pathSize = 1; pathSize < inlinePath.size(); ++pathSize ) {
+		const auto* box = resolveInlineBox( inlineItems, inlinePath, pathSize );
+		if ( box == nullptr || !box->contributesInlineSpacing )
+			continue;
+
+		RichText::RenderSpan::InlinePath boxPath( inlinePath.begin(),
+												  inlinePath.begin() + pathSize );
+		if ( isFirstInlineLeafInBox( *box, boxPath, inlinePath ) )
+			spacing += box->margin.Left + box->padding.Left + box->borderWidth;
+	}
+	return spacing;
+}
+
+static Float inlineAncestorEndSpacing( const std::vector<RichText::InlineItem>& inlineItems,
+									   const RichText::RenderSpan::InlinePath& inlinePath ) {
+	Float spacing = 0.f;
+	for ( size_t pathSize = inlinePath.size(); pathSize > 0; --pathSize ) {
+		const auto* box = resolveInlineBox( inlineItems, inlinePath, pathSize );
+		if ( box == nullptr || !box->contributesInlineSpacing )
+			continue;
+
+		RichText::RenderSpan::InlinePath boxPath( inlinePath.begin(),
+												  inlinePath.begin() + pathSize );
+		if ( isLastInlineLeafInBox( *box, boxPath, inlinePath ) )
+			spacing += box->margin.Right + box->padding.Right + box->borderWidth;
+	}
+	return spacing;
+}
+
+static Uint32 inlineAncestorTextDecoration( const std::vector<RichText::InlineItem>& inlineItems,
+											const RichText::RenderSpan::InlinePath& inlinePath ) {
+	Uint32 textDecoration = 0;
+	for ( size_t pathSize = 1; pathSize < inlinePath.size(); ++pathSize ) {
+		const auto* box = resolveInlineBox( inlineItems, inlinePath, pathSize );
+		if ( box != nullptr )
+			textDecoration |= box->textDecoration;
+	}
+	return textDecoration;
+}
+
+class RichTextInlineLayouter {
+  public:
+	struct LayoutResult {
+		std::vector<RichText::RenderParagraph> lines;
+		Sizef size;
+		Int64 totalCharacterCount{ 0 };
+	};
+
+	static bool needsFloatAwareLayout( const std::vector<RichText::InlineItem>& inlineItems ) {
+		for ( const auto& run : buildLayoutRuns( inlineItems ) ) {
+			const auto& payload = run.payload;
+			if ( payload.type != RichText::RenderSpan::Type::Text ) {
+				if ( payload.floatType != RichText::InlineFloat::None ||
+					 payload.clearType != RichText::InlineClear::None )
+					return true;
+			}
+		}
+		return false;
+	}
+
+	static Float getMinIntrinsicWidth( const std::vector<RichText::InlineItem>& inlineItems ) {
+		Float minW = 0;
+		for ( const auto& run : buildLayoutRuns( inlineItems ) ) {
+			const auto& payload = run.payload;
+			if ( payload.type == RichText::RenderSpan::Type::Text ) {
+				auto& span = payload.text;
+				if ( !span || span->getString().empty() )
+					continue;
+				const String& s = span->getString();
+				size_t start = 0;
+				size_t end = 0;
+				while ( start < s.size() ) {
+					while ( start < s.size() && ( s[start] == ' ' || s[start] == '\t' ||
+												  s[start] == '\n' || s[start] == '\r' ) )
+						start++;
+					end = start;
+					while ( end < s.size() && !( s[end] == ' ' || s[end] == '\t' ||
+												 s[end] == '\n' || s[end] == '\r' ) )
+						end++;
+					if ( start < end ) {
+						minW = std::max(
+							minW,
+							Text::getTextWidth( s.substr( start, end - start ),
+												span->getFontStyleConfig() ) +
+								payload.margin.Left + payload.margin.Right + payload.padding.Left +
+								payload.padding.Right +
+								inlineAncestorStartSpacing( inlineItems, payload.inlinePath ) +
+								inlineAncestorEndSpacing( inlineItems, payload.inlinePath ) );
+					}
+					start = end;
+				}
+			} else if ( payload.type == RichText::RenderSpan::Type::Drawable ) {
+				if ( payload.drawable )
+					minW = std::max( minW, payload.drawable->getPixelsSize().getWidth() );
+			} else {
+				minW = std::max( minW,
+								 payload.size.getWidth() +
+									 inlineAncestorStartSpacing( inlineItems, payload.inlinePath ) +
+									 inlineAncestorEndSpacing( inlineItems, payload.inlinePath ) );
+			}
+		}
+		return minW;
+	}
+
+	static Float getMaxIntrinsicWidth( const std::vector<RichText::InlineItem>& inlineItems ) {
+		Float maxW = 0;
+		Float curX = 0;
+		for ( const auto& run : buildLayoutRuns( inlineItems ) ) {
+			const auto& payload = run.payload;
+			if ( payload.type == RichText::RenderSpan::Type::Text ) {
+				auto& span = payload.text;
+				if ( !span || span->getString().empty() )
+					continue;
+
+				const String& s = span->getString();
+				size_t start = 0;
+				size_t end = 0;
+				curX += payload.margin.Left + payload.padding.Left +
+						inlineAncestorStartSpacing( inlineItems, payload.inlinePath );
+				while ( ( end = s.find( '\n', start ) ) != String::InvalidPos ) {
+					curX +=
+						Text::getTextWidth( s.substr( start, end - start ),
+											span->getFontStyleConfig(), 4, span->getTextHints() );
+					maxW = std::max(
+						maxW, curX + payload.margin.Right + payload.padding.Right +
+								  inlineAncestorEndSpacing( inlineItems, payload.inlinePath ) );
+					curX = 0;
+					start = end + 1;
+				}
+				curX += Text::getTextWidth( s.substr( start ), span->getFontStyleConfig(), 4,
+											span->getTextHints() ) +
+						payload.margin.Right + payload.padding.Right +
+						inlineAncestorEndSpacing( inlineItems, payload.inlinePath );
+			} else if ( payload.type == RichText::RenderSpan::Type::Drawable ) {
+				if ( payload.drawable )
+					curX += payload.drawable->getPixelsSize().getWidth();
+			} else if ( !payload.isLineBreak ) {
+				curX += inlineAncestorStartSpacing( inlineItems, payload.inlinePath ) +
+						payload.size.getWidth() +
+						inlineAncestorEndSpacing( inlineItems, payload.inlinePath );
+			}
+		}
+		maxW = std::max( maxW, curX );
+		return maxW;
+	}
+
+	static void alignLineSpans( RichText::RenderParagraph& line, Float xOffset,
+								const FontStyleConfig& defaultStyle, Float forcedLineHeight,
+								bool preserveFloatPositions,
+								const std::vector<RichText::InlineItem>& inlineItems ) {
+		recomputeLineMetrics( line, forcedLineHeight, preserveFloatPositions, inlineItems );
+
+		Float maxLineHeight = 0;
+		Float minLineTop = 0;
+		for ( auto& span : line.spans ) {
+			bool isFloat = span.floatType != RichText::InlineFloat::None;
+
+			if ( span.type == RichText::RenderSpan::Type::Text ) {
+				Float baseline = getTextBaseline( span.text, span.lineHeight );
+				RichText::BaselineAlignValue baselineAlign = effectiveInlineBaselineAlign(
+					inlineItems, span.inlinePath, span.baselineAlign );
+				Float offsetY = getBaselineAlignedOffset(
+					line, span.size, baseline, getTextRunLineHeight( span.text, span.lineHeight ),
+					baselineAlign, defaultStyle );
+				span.position.x += xOffset;
+				span.position.y = offsetY;
+				minLineTop = std::min( minLineTop, offsetY );
+				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
+			} else {
+				Float baseline = span.baseline;
+				RichText::BaselineAlignValue baselineAlign = effectiveInlineBaselineAlign(
+					inlineItems, span.inlinePath, span.baselineAlign );
+				Float offsetY = getBaselineAlignedOffset(
+					line, span.size, baseline, span.size.getHeight(), baselineAlign, defaultStyle );
+				if ( preserveFloatPositions && isFloat ) {
+					span.position.y = 0;
+					continue;
+				}
+				span.position.x += xOffset;
+				span.position.y = offsetY;
+				minLineTop = std::min( minLineTop, offsetY );
+				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
+			}
+		}
+
+		if ( minLineTop < 0 ) {
+			for ( auto& span : line.spans ) {
+				bool isFloat = span.floatType != RichText::InlineFloat::None;
+				if ( !preserveFloatPositions || !isFloat )
+					span.position.y -= minLineTop;
+			}
+			maxLineHeight -= minLineTop;
+		}
+
+		line.height = std::max( line.height, maxLineHeight );
+		if ( forcedLineHeight > 0 )
+			line.height = std::max( line.height, forcedLineHeight );
+	}
+
+	static LayoutResult layoutNoFloats( const std::vector<RichText::InlineItem>& inlineItems,
+										Float maxLayoutWidth, Float textIndent, Uint32 align,
+										Float forcedLineHeight,
+										const FontStyleConfig& defaultStyle ) {
+		LayoutResult result;
+		result.lines.push_back( RichText::RenderParagraph() );
+
+		SmallVector<InlineLayoutRun, 32> runs = buildLayoutRuns( inlineItems );
+		Float curX = textIndent;
+		Float maxWidth = 0;
+		Int64 curCharIdx = 0;
+
+		for ( const auto& run : runs ) {
+			const auto& payload = run.payload;
+			if ( payload.type == RichText::RenderSpan::Type::Text ) {
+				auto& span = payload.text;
+				if ( !span )
+					continue;
+
+				if ( span->getString().empty() ) {
+					Float startSpacing = inlineStartSpacing( payload, inlineItems );
+					Float endSpacing = inlineEndSpacing( payload, inlineItems );
+					if ( startSpacing <= 0 && endSpacing <= 0 )
+						continue;
+					addInlineSpacingToCurrentLine( result, curX, startSpacing + endSpacing );
+					continue;
+				}
+
+				auto& fontStyle = span->getFontStyleConfig();
+				if ( !fontStyle.Font )
+					continue;
+
+				addInlineSpacingToCurrentLine( result, curX,
+											   inlineStartSpacing( payload, inlineItems ) );
+
+				LineWrapInfoEx wrapInfo = computeTextWraps( payload, fontStyle, maxLayoutWidth,
+															maxLayoutWidth > 0, curX );
+
+				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
+					size_t startIdx = wrapInfo.wraps[i];
+					size_t endIdx = wrapInfo.wraps[i + 1];
+					bool isNewline =
+						( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
+
+					if ( !isNewline ) {
+						appendTextRenderSpan( result.lines.back(), payload, fontStyle, startIdx,
+											  endIdx, curX, curCharIdx, inlineItems );
+					}
+
+					if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
+						addInlineSpacingToCurrentLine( result, curX,
+													   inlineEndSpacing( payload, inlineItems ) );
+						if ( maxLayoutWidth > 0 && curX > maxLayoutWidth ) {
+							maxWidth = std::max( maxWidth, curX );
+							result.lines.push_back( RichText::RenderParagraph() );
+							curX = 0;
+							continue;
+						}
+					}
+
+					if ( i < wrapInfo.wraps.size() - 2 || isNewline ) {
+						if ( isNewline ) {
+							curCharIdx++;
+							if ( i == wrapInfo.wraps.size() - 2 ) {
+								addInlineSpacingToCurrentLine(
+									result, curX, inlineEndSpacing( payload, inlineItems ) );
+							}
+						}
+						maxWidth = std::max( maxWidth, curX );
+						result.lines.push_back( RichText::RenderParagraph() );
+						curX = 0;
+					}
+				}
+			} else {
+				AtomicBlockMetrics metrics = getAtomicBlockMetrics( payload );
+
+				if ( metrics.isLineBreak ) {
+					maxWidth = std::max( maxWidth, curX );
+					if ( !result.lines.back().spans.empty() )
+						result.lines.push_back( RichText::RenderParagraph() );
+					curX = 0;
+					continue;
+				}
+
+				Float startSpacing = 0.f;
+				Float endSpacing = 0.f;
+				if ( payload.type == RichText::RenderSpan::Type::AtomicBox ) {
+					startSpacing = inlineStartSpacing( payload, inlineItems );
+					endSpacing = inlineEndSpacing( payload, inlineItems );
+				}
+				bool hadLineContentBeforeSpacing = !result.lines.back().spans.empty();
+				addInlineSpacingToCurrentLine( result, curX, startSpacing );
+
+				if ( maxLayoutWidth > 0 &&
+					 ( curX + metrics.size.getWidth() >= maxLayoutWidth ||
+					   curX >= maxLayoutWidth ) &&
+					 curX > 0 && hadLineContentBeforeSpacing ) {
+					maxWidth = std::max( maxWidth, curX );
+					result.lines.push_back( RichText::RenderParagraph() );
+					curX = 0;
+					addInlineSpacingToCurrentLine( result, curX, startSpacing );
+				}
+
+				appendAtomicRenderSpan( result.lines.back(), payload, metrics, curX, curCharIdx );
+				addInlineSpacingToCurrentLine( result, curX, endSpacing );
+
+				if ( maxLayoutWidth > 0 && curX >= maxLayoutWidth ) {
+					maxWidth = std::max( maxWidth, curX );
+					result.lines.push_back( RichText::RenderParagraph() );
+					curX = 0;
+				}
+			}
+		}
+
+		maxWidth = std::max( maxWidth, curX );
+
+		if ( !result.lines.empty() && result.lines.back().spans.empty() &&
+			 result.lines.size() > 1 ) {
+			result.lines.pop_back();
+		}
+
+		Float curY = 0;
+		for ( auto& line : result.lines ) {
+			line.y = curY;
+			Float xOffset = horizontalAlignmentOffset( line, maxLayoutWidth, align );
+			alignLineSpans( line, xOffset, defaultStyle, forcedLineHeight, false, inlineItems );
+			curY += line.height;
+		}
+
+		result.size = Sizef( maxWidth, curY );
+		result.totalCharacterCount = curCharIdx;
+		return result;
+	}
+
+	static LayoutResult layoutWithFloats( const std::vector<RichText::InlineItem>& inlineItems,
+										  Float maxLayoutWidth, Float textIndent, Uint32 align,
+										  Float forcedLineHeight,
+										  const FontStyleConfig& defaultStyle ) {
+		LayoutResult result;
+		result.lines.push_back( RichText::RenderParagraph() );
+
+		Float curX = textIndent;
+		Float maxWidth = 0;
+		Int64 curCharIdx = 0;
+		SmallVector<Rectf, 4> leftFloats;
+		SmallVector<Rectf, 4> rightFloats;
+		Float curY = 0;
+		SmallVector<InlineLayoutRun, 32> runs = buildLayoutRuns( inlineItems );
+
+		auto floatLeftEdge = [&]( Float y ) -> Float {
+			Float l = 0;
+			for ( auto& f : leftFloats ) {
+				if ( y >= f.Top && y < f.Bottom )
+					l = std::max( l, f.Right );
+			}
+			return l;
+		};
+
+		auto floatRightEdge = [&]( Float y ) -> Float {
+			Float r = maxLayoutWidth > 0 ? maxLayoutWidth : 1e9f;
+			for ( auto& f : rightFloats ) {
+				if ( y >= f.Top && y < f.Bottom )
+					r = std::min( r, f.Left );
+			}
+			return r;
+		};
+
+		auto effectiveMaxWidthAt = [&]( Float y ) -> Float {
+			return floatRightEdge( y ) - floatLeftEdge( y );
+		};
+
+		auto activeFloatBottom = [&]( Float y ) -> Float {
+			Float bottom = y;
+			for ( const auto& f : leftFloats ) {
+				if ( y >= f.Top && y < f.Bottom )
+					bottom = std::max( bottom, f.Bottom );
+			}
+			for ( const auto& f : rightFloats ) {
+				if ( y >= f.Top && y < f.Bottom )
+					bottom = std::max( bottom, f.Bottom );
+			}
+			return bottom;
+		};
+
+		auto clearFloats = [&]( RichText::InlineClear clearType ) -> bool {
+			bool advanced = false;
+			if ( clearType == RichText::InlineClear::Left ||
+				 clearType == RichText::InlineClear::Both ) {
+				for ( auto& f : leftFloats ) {
+					if ( f.Bottom > curY ) {
+						curY = f.Bottom;
+						advanced = true;
+					}
+				}
+			}
+			if ( clearType == RichText::InlineClear::Right ||
+				 clearType == RichText::InlineClear::Both ) {
+				for ( auto& f : rightFloats ) {
+					if ( f.Bottom > curY ) {
+						curY = f.Bottom;
+						advanced = true;
+					}
+				}
+			}
+			return advanced;
+		};
+
+		for ( const auto& run : runs ) {
+			const auto& payload = run.payload;
+			if ( payload.type == RichText::RenderSpan::Type::Text ) {
+				auto& span = payload.text;
+				if ( !span )
+					continue;
+
+				if ( span->getString().empty() ) {
+					Float startSpacing = inlineStartSpacing( payload, inlineItems );
+					Float endSpacing = inlineEndSpacing( payload, inlineItems );
+					if ( startSpacing <= 0 && endSpacing <= 0 )
+						continue;
+					addInlineSpacingToCurrentLine( result, curX, startSpacing + endSpacing );
+					continue;
+				}
+
+				auto& fontStyle = span->getFontStyleConfig();
+				if ( !fontStyle.Font )
+					continue;
+
+				addInlineSpacingToCurrentLine( result, curX,
+											   inlineStartSpacing( payload, inlineItems ) );
+
+				Float le = floatLeftEdge( curY );
+				if ( curX < le )
+					curX = le;
+
+				Float effW = effectiveMaxWidthAt( curY );
+				if ( maxLayoutWidth > 0 && maxLayoutWidth < effW )
+					effW = maxLayoutWidth;
+
+				LineWrapInfoEx wrapInfo =
+					computeTextWraps( payload, fontStyle, effW, effW > 0, curX );
+
+				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
+					size_t startIdx = wrapInfo.wraps[i];
+					size_t endIdx = wrapInfo.wraps[i + 1];
+					bool isNewline =
+						( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
+
+					if ( !isNewline ) {
+						appendTextRenderSpan( result.lines.back(), payload, fontStyle, startIdx,
+											  endIdx, curX, curCharIdx, inlineItems );
+					}
+
+					if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
+						addInlineSpacingToCurrentLine( result, curX,
+													   inlineEndSpacing( payload, inlineItems ) );
+						if ( effW > 0 && effW < 1e9f && curX > effW ) {
+							maxWidth = std::max( maxWidth, curX );
+							result.lines.push_back( RichText::RenderParagraph() );
+							curX = 0;
+							continue;
+						}
+					}
+
+					if ( i < wrapInfo.wraps.size() - 2 || isNewline ) {
+						if ( isNewline ) {
+							curCharIdx++;
+							if ( i == wrapInfo.wraps.size() - 2 ) {
+								addInlineSpacingToCurrentLine(
+									result, curX, inlineEndSpacing( payload, inlineItems ) );
+							}
+						}
+						maxWidth = std::max( maxWidth, curX );
+						result.lines.push_back( RichText::RenderParagraph() );
+						curX = 0;
+					}
+				}
+			} else {
+				AtomicBlockMetrics metrics = getAtomicBlockMetrics( payload );
+
+				if ( metrics.isLineBreak ) {
+					maxWidth = std::max( maxWidth, curX );
+					if ( !result.lines.back().spans.empty() ) {
+						curY += result.lines.back().height;
+						result.lines.push_back( RichText::RenderParagraph() );
+						result.lines.back().y = curY;
+					}
+					curX = 0;
+					continue;
+				}
+
+				if ( metrics.clearType != RichText::InlineClear::None ) {
+					if ( clearFloats( metrics.clearType ) ) {
+						maxWidth = std::max( maxWidth, curX );
+						result.lines.push_back( RichText::RenderParagraph() );
+						result.lines.back().y = curY;
+						curX = 0;
+					}
+				}
+
+				Float le = floatLeftEdge( curY );
+
+				if ( metrics.floatType != RichText::InlineFloat::None ) {
+					Float posX;
+					if ( metrics.floatType == RichText::InlineFloat::Left ) {
+						posX = le;
+						Float availW = floatRightEdge( curY );
+						if ( availW > 0 && availW < 1e9f &&
+							 posX + metrics.size.getWidth() > availW + 0.01f ) {
+							Float maxBottom = curY;
+							for ( auto& f : leftFloats )
+								maxBottom = std::max( maxBottom, f.Bottom );
+							for ( auto& f : rightFloats )
+								maxBottom = std::max( maxBottom, f.Bottom );
+							if ( maxBottom > curY ) {
+								maxWidth = std::max( maxWidth, curX );
+								result.lines.push_back( RichText::RenderParagraph() );
+								curX = 0;
+								curY = maxBottom;
+								result.lines.back().y = curY;
+								posX = floatLeftEdge( curY );
+							}
+						}
+					} else {
+						Float re = floatRightEdge( curY );
+						posX = re - metrics.size.getWidth();
+						if ( metrics.size.getWidth() > re - le + 0.01f ) {
+							Float maxBottom = curY;
+							for ( auto& f : leftFloats )
+								maxBottom = std::max( maxBottom, f.Bottom );
+							for ( auto& f : rightFloats )
+								maxBottom = std::max( maxBottom, f.Bottom );
+							if ( maxBottom > curY ) {
+								maxWidth = std::max( maxWidth, curX );
+								result.lines.push_back( RichText::RenderParagraph() );
+								curX = 0;
+								curY = maxBottom;
+								result.lines.back().y = curY;
+								re = floatRightEdge( curY );
+								le = floatLeftEdge( curY );
+								posX = re - metrics.size.getWidth();
+							}
+						}
+						if ( posX < le )
+							posX = le;
+					}
+
+					appendPositionedAtomicRenderSpan( result.lines.back(), payload, metrics.size,
+													  { posX, 0 }, curCharIdx );
+
+					Rectf fr( posX, curY, posX + metrics.size.getWidth(),
+							  curY + metrics.size.getHeight() );
+					if ( metrics.floatType == RichText::InlineFloat::Left )
+						leftFloats.push_back( fr );
+					else
+						rightFloats.push_back( fr );
+				} else {
+					if ( curX < le )
+						curX = le;
+
+					Float startSpacing = 0.f;
+					Float endSpacing = 0.f;
+					if ( payload.type == RichText::RenderSpan::Type::AtomicBox ) {
+						startSpacing = inlineStartSpacing( payload, inlineItems );
+						endSpacing = inlineEndSpacing( payload, inlineItems );
+					}
+					bool hadLineContentBeforeSpacing = !result.lines.back().spans.empty();
+					addInlineSpacingToCurrentLine( result, curX, startSpacing );
+
+					Float effW = effectiveMaxWidthAt( curY );
+
+					if ( effW > 0 && effW < 1e9f && metrics.size.getWidth() > effW + 0.01f ) {
+						Float maxBottom = activeFloatBottom( curY );
+						if ( maxBottom > curY ) {
+							maxWidth = std::max( maxWidth, curX );
+							if ( !result.lines.back().spans.empty() )
+								result.lines.push_back( RichText::RenderParagraph() );
+							curX = 0;
+							curY = maxBottom;
+							result.lines.back().y = curY;
+							le = floatLeftEdge( curY );
+							effW = effectiveMaxWidthAt( curY );
+						}
+					}
+
+					if ( effW > 0 && effW < 1e9f &&
+						 ( curX + metrics.size.getWidth() >= effW || curX >= effW ) && curX > 0 &&
+						 hadLineContentBeforeSpacing ) {
+						maxWidth = std::max( maxWidth, curX );
+						result.lines.push_back( RichText::RenderParagraph() );
+						curX = 0;
+						if ( hadLineContentBeforeSpacing )
+							addInlineSpacingToCurrentLine( result, curX, startSpacing );
+					}
+
+					appendAtomicRenderSpan( result.lines.back(), payload, metrics, curX,
+											curCharIdx );
+					addInlineSpacingToCurrentLine( result, curX, endSpacing );
+
+					if ( effW > 0 && effW < 1e9f && curX >= effW ) {
+						maxWidth = std::max( maxWidth, curX );
+						result.lines.push_back( RichText::RenderParagraph() );
+						curX = 0;
+					}
+				}
+			}
+		}
+
+		maxWidth = std::max( maxWidth, curX );
+
+		if ( !result.lines.empty() && result.lines.back().spans.empty() &&
+			 result.lines.size() > 1 ) {
+			result.lines.pop_back();
+		}
+
+		Float accumY = 0;
+		for ( auto& line : result.lines ) {
+			if ( line.y > accumY )
+				accumY = line.y;
+			line.y = accumY;
+
+			Float xOffset = horizontalAlignmentOffset( line, maxLayoutWidth, align );
+			alignLineSpans( line, xOffset, defaultStyle, forcedLineHeight, true, inlineItems );
+			accumY += line.height;
+		}
+
+		Float floatBoundsBottom = 0;
+		for ( const auto& f : leftFloats )
+			floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
+		for ( const auto& f : rightFloats )
+			floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
+
+		result.size = Sizef( maxWidth, std::max( accumY, floatBoundsBottom ) );
+		result.totalCharacterCount = curCharIdx;
+		return result;
+	}
+
+	static std::vector<RichText::InlineFragment>
+	rebuildFragments( const std::vector<RichText::InlineItem>& inlineItems,
+					  const std::vector<RichText::RenderParagraph>& lines ) {
+		if ( inlineItems.empty() || lines.empty() )
+			return {};
+
+		SmallVector<InlineLeafRef, 32> leaves;
+		RichText::RenderSpan::InlinePath path;
+		SmallVector<InlineAncestorRef, 4> ancestors;
+		collectLeaves( inlineItems, path, ancestors, leaves );
+		if ( leaves.empty() )
+			return {};
+
+		std::vector<RichText::InlineFragment> fragments;
+		fragments.reserve( leaves.size() );
+		SmallVector<InlineBoxFragmentAccumulator, 16> boxFragments;
+
+		auto addBoxFragments = [&]( const InlineLeafRef& leaf, size_t leafIndex, size_t lineIndex,
+									const Rectf& bounds, bool startsLeafFragment,
+									bool endsLeafFragment ) {
+			for ( const auto& ancestor : leaf.ancestors ) {
+				Rectf ancestorBounds = expandInlineBoundsForLineHeight( bounds, *ancestor.box );
+				bool startsInlineBox =
+					startsLeafFragment &&
+					isFirstInlineLeafInBox( *ancestor.box, ancestor.path, leaf.path );
+				bool endsInlineBox =
+					endsLeafFragment &&
+					isLastInlineLeafInBox( *ancestor.box, ancestor.path, leaf.path );
+				auto it =
+					std::find_if( boxFragments.begin(), boxFragments.end(), [&]( const auto& f ) {
+						return f.lineIndex == lineIndex && sameInlinePath( f.path, ancestor.path );
+					} );
+				if ( it == boxFragments.end() ) {
+					InlineBoxFragmentAccumulator acc;
+					acc.path = ancestor.path;
+					acc.lineIndex = lineIndex;
+					acc.box = ancestor.box;
+					acc.firstLeafIndex = leafIndex;
+					acc.lastLeafIndex = leafIndex;
+					acc.startsInlineBox = startsInlineBox;
+					acc.endsInlineBox = endsInlineBox;
+					expandInlineBounds( acc.bounds, acc.valid, ancestorBounds );
+					expandInlineBounds( acc.contentBounds, acc.contentValid, bounds );
+					boxFragments.push_back( std::move( acc ) );
+				} else {
+					it->firstLeafIndex = std::min( it->firstLeafIndex, leafIndex );
+					it->lastLeafIndex = std::max( it->lastLeafIndex, leafIndex );
+					it->startsInlineBox = it->startsInlineBox || startsInlineBox;
+					it->endsInlineBox = it->endsInlineBox || endsInlineBox;
+					expandInlineBounds( it->bounds, it->valid, ancestorBounds );
+					expandInlineBounds( it->contentBounds, it->contentValid, bounds );
+				}
+			}
+		};
+
+		size_t leafIndex = 0;
+		SmallVector<size_t, 32> leafTextOffsets( leaves.size(), 0 );
+		for ( size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex ) {
+			const auto& line = lines[lineIndex];
+			for ( const auto& span : line.spans ) {
+				Rectf bounds( { span.position.x, line.y + span.position.y }, span.size );
+				if ( span.type == RichText::RenderSpan::Type::Text ) {
+					Int64 spanChars = span.endCharIndex - span.startCharIndex;
+					if ( spanChars <= 0 )
+						continue;
+
+					size_t resolvedLeafIndex = 0;
+					const InlineLeafRef* leaf = findLeafByPath(
+						leaves, span.inlinePath, RichText::InlineFragment::Type::TextRun,
+						resolvedLeafIndex );
+					if ( leaf == nullptr && span.inlinePath.empty() ) {
+						resolvedLeafIndex = leafIndex;
+						leaf = findNextLeaf( leaves, resolvedLeafIndex,
+											 RichText::InlineFragment::Type::TextRun );
+					}
+					if ( leaf == nullptr )
+						continue;
+
+					RichText::InlineFragment fragment;
+					fragment.type = RichText::InlineFragment::Type::TextRun;
+					fragment.itemPath = leaf->path;
+					fragment.lineIndex = lineIndex;
+					fragment.bounds = bounds;
+					fragment.startCharIndex = span.startCharIndex;
+					fragment.endCharIndex = span.endCharIndex;
+					fragment.text = span.text;
+					fragment.baselineAlign =
+						effectiveInlineBaselineAlign( inlineItems, leaf->path, span.baselineAlign );
+					fragment.source = leaf->source;
+					fragment.textDecoration =
+						( ( span.text ? span.text->getStyle() : 0 ) |
+						  inlineAncestorTextDecoration( inlineItems, leaf->path ) ) &
+						( Text::Underlined | Text::StrikeThrough );
+					fragments.push_back( std::move( fragment ) );
+
+					size_t sourceChars = leaf->text ? leaf->text->getString().size() : 0;
+					bool startsLeafFragment = leafTextOffsets[resolvedLeafIndex] == 0;
+					leafTextOffsets[resolvedLeafIndex] += static_cast<size_t>( spanChars );
+					bool endsLeafFragment =
+						sourceChars == 0 || leafTextOffsets[resolvedLeafIndex] >= sourceChars;
+					if ( sourceChars == 0 || leafTextOffsets[resolvedLeafIndex] >= sourceChars ) {
+						leafIndex = std::max( leafIndex, resolvedLeafIndex + 1 );
+					} else {
+						leafIndex = std::max( leafIndex, resolvedLeafIndex );
+					}
+					addBoxFragments( *leaf, resolvedLeafIndex, lineIndex, bounds,
+									 startsLeafFragment, endsLeafFragment );
+				} else {
+					if ( span.isLineBreak )
+						continue;
+
+					size_t resolvedLeafIndex = 0;
+					const InlineLeafRef* leaf = findLeafByPath(
+						leaves, span.inlinePath, RichText::InlineFragment::Type::AtomicBox,
+						resolvedLeafIndex );
+					if ( leaf == nullptr && span.inlinePath.empty() ) {
+						resolvedLeafIndex = leafIndex;
+						leaf = findNextLeaf( leaves, resolvedLeafIndex,
+											 RichText::InlineFragment::Type::AtomicBox );
+					}
+					if ( leaf == nullptr )
+						continue;
+
+					RichText::InlineFragment fragment;
+					fragment.type = RichText::InlineFragment::Type::AtomicBox;
+					fragment.itemPath = leaf->path;
+					fragment.lineIndex = lineIndex;
+					fragment.bounds = bounds;
+					fragment.startCharIndex = span.startCharIndex;
+					fragment.endCharIndex = span.endCharIndex;
+					fragment.baselineAlign = effectiveInlineBaselineAlign(
+						inlineItems, leaf->path,
+						span.baselineAlign.type == RichText::BaselineAlignment::Baseline
+							? leaf->baselineAlign
+							: span.baselineAlign );
+					fragment.source = leaf->source;
+					fragment.textDecoration =
+						inlineAncestorTextDecoration( inlineItems, leaf->path );
+					fragments.push_back( std::move( fragment ) );
+					addBoxFragments( *leaf, resolvedLeafIndex, lineIndex, bounds, true, true );
+					leafIndex = std::max( leafIndex, resolvedLeafIndex + 1 );
+				}
+			}
+		}
+
+		appendBoxFragments( fragments, boxFragments, inlineItems );
+		return fragments;
+	}
+
+  private:
+	struct AtomicBlockMetrics {
+		Sizef size;
+		Float baseline{ 0.f };
+		bool isLineBreak{ false };
+		RichText::InlineFloat floatType{ RichText::InlineFloat::None };
+		RichText::InlineClear clearType{ RichText::InlineClear::None };
+	};
+
+	static SmallVector<InlineLayoutRun, 32>
+	buildLayoutRuns( const std::vector<RichText::InlineItem>& inlineItems ) {
+		SmallVector<InlineLayoutRun, 32> runs;
+		RichText::RenderSpan::InlinePath path;
+		appendLayoutRuns( inlineItems, path, runs );
+		return runs;
+	}
+
+	static void appendLayoutRuns( const std::vector<RichText::InlineItem>& items,
+								  RichText::RenderSpan::InlinePath& path,
+								  SmallVector<InlineLayoutRun, 32>& runs ) {
+		for ( size_t i = 0; i < items.size(); ++i ) {
+			path.push_back( i );
+			const auto& item = items[i];
+			if ( item.isBox() ) {
+				const auto& box = item.asBox();
+				if ( box.children.empty() )
+					appendEmptyBoxLayoutRun( path, runs );
+				else
+					appendLayoutRuns( box.children, path, runs );
+			} else if ( item.isTextRun() ) {
+				appendTextLayoutRun( item.asTextRun(), path, runs );
+			} else {
+				appendAtomicLayoutRun( item.asAtomicBox(), path, runs );
+			}
+			path.pop_back();
+		}
+	}
+
+	static void appendEmptyBoxLayoutRun( const RichText::RenderSpan::InlinePath& path,
+										 SmallVector<InlineLayoutRun, 32>& runs ) {
+		InlineLayoutRun run;
+		run.payload.type = RichText::RenderSpan::Type::Text;
+		run.payload.inlinePath = path;
+		runs.push_back( std::move( run ) );
+	}
+
+	static void appendTextLayoutRun( const RichText::InlineItem::TextRun& textRun,
+									 const RichText::RenderSpan::InlinePath& path,
+									 SmallVector<InlineLayoutRun, 32>& runs ) {
+		InlineLayoutRun run;
+		run.payload.type = RichText::RenderSpan::Type::Text;
+		run.payload.text = textRun.text;
+		run.payload.margin = textRun.margin;
+		run.payload.padding = textRun.padding;
+		run.payload.lineHeight = textRun.lineHeight;
+		run.payload.baselineAlign = textRun.baselineAlign;
+		run.payload.suppressBackground = textRun.suppressBackground;
+		run.payload.inlinePath = path;
+		runs.push_back( std::move( run ) );
+	}
+
+	static void appendAtomicLayoutRun( const RichText::InlineItem::AtomicBox& box,
+									   const RichText::RenderSpan::InlinePath& path,
+									   SmallVector<InlineLayoutRun, 32>& runs ) {
+		InlineLayoutRun run;
+		run.payload.type = box.drawable ? RichText::RenderSpan::Type::Drawable
+										: RichText::RenderSpan::Type::AtomicBox;
+		run.payload.drawable = box.drawable;
+		run.payload.size = box.drawable ? box.drawable->getPixelsSize() : box.size;
+		run.payload.baseline = box.drawable ? run.payload.size.getHeight() : box.baseline;
+		run.payload.floatType = box.floatType;
+		run.payload.clearType = box.clearType;
+		run.payload.isLineBreak = box.isLineBreak;
+		run.payload.baselineAlign = box.baselineAlign;
+		run.payload.inlinePath = path;
+		runs.push_back( std::move( run ) );
+	}
+
+	static Float inlineStartSpacing( const RichText::RenderSpan& span,
+									 const std::vector<RichText::InlineItem>& inlineItems ) {
+		return span.margin.Left + span.padding.Left +
+			   inlineAncestorStartSpacing( inlineItems, span.inlinePath );
+	}
+
+	static Float inlineEndSpacing( const RichText::RenderSpan& span,
+								   const std::vector<RichText::InlineItem>& inlineItems ) {
+		return span.margin.Right + span.padding.Right +
+			   inlineAncestorEndSpacing( inlineItems, span.inlinePath );
+	}
+
+	static void addInlineSpacingToCurrentLine( LayoutResult& result, Float& curX, Float spacing ) {
+		if ( spacing == 0 )
+			return;
+		curX += spacing;
+		if ( !result.lines.empty() )
+			result.lines.back().width += spacing;
+	}
+
+	static LineWrapInfoEx computeTextWraps( const RichText::RenderSpan& span,
+											const FontStyleConfig& fontStyle, Float wrapWidth,
+											bool shouldWrap, Float curX ) {
+		LineWrapInfoEx wrapInfo = LineWrap::computeLineBreaksEx(
+			span.text->getString(), fontStyle, wrapWidth > 0 ? wrapWidth : 1e9f,
+			shouldWrap ? LineWrapMode::Word : LineWrapMode::NoWrap, false, 4, 0.f,
+			span.text->getTextHints(), false, curX );
+
+		if ( wrapInfo.wraps.empty() ||
+			 wrapInfo.wraps.back() != (Float)span.text->getString().size() )
+			wrapInfo.wraps.push_back( span.text->getString().size() );
+
+		return wrapInfo;
+	}
+
+	static void recomputeLineMetrics( RichText::RenderParagraph& line, Float forcedLineHeight,
+									  bool preserveFloatPositions,
+									  const std::vector<RichText::InlineItem>& inlineItems ) {
+		Float maxAscent = 0.f;
+		Float maxDescent = 0.f;
+		bool hasParticipatingAncestorLineHeight = false;
+
+		for ( const auto& span : line.spans ) {
+			if ( span.type == RichText::RenderSpan::Type::Text ) {
+				InlineVerticalEdges edges = inlineAncestorLineHeightEdges(
+					inlineItems, span.inlinePath, span.size.getHeight() );
+				hasParticipatingAncestorLineHeight =
+					hasParticipatingAncestorLineHeight || edges.top > 0 || edges.bottom > 0;
+				Float baseline = getTextBaseline( span.text, span.lineHeight );
+				maxAscent = std::max( maxAscent, baseline + edges.top );
+				maxDescent =
+					std::max( maxDescent, span.size.getHeight() - baseline + edges.bottom );
+			} else {
+				bool isFloat = span.floatType != RichText::InlineFloat::None;
+				Float baseline = span.baseline;
+				InlineVerticalEdges edges = inlineAncestorLineHeightEdges(
+					inlineItems, span.inlinePath, span.size.getHeight() );
+				if ( preserveFloatPositions && isFloat )
+					continue;
+				hasParticipatingAncestorLineHeight =
+					hasParticipatingAncestorLineHeight || edges.top > 0 || edges.bottom > 0;
+				maxAscent = std::max( maxAscent, baseline + edges.top );
+				maxDescent =
+					std::max( maxDescent, span.size.getHeight() - baseline + edges.bottom );
+			}
+		}
+
+		if ( !hasParticipatingAncestorLineHeight )
+			return;
+
+		line.maxAscent = maxAscent;
+		line.height = std::max( maxAscent + maxDescent, forcedLineHeight );
+	}
+
+	static void appendTextRenderSpan( RichText::RenderParagraph& line,
+									  const RichText::RenderSpan& payload,
+									  const FontStyleConfig& fontStyle, size_t startIdx,
+									  size_t endIdx, Float& curX, Int64& curCharIdx,
+									  const std::vector<RichText::InlineItem>& inlineItems ) {
+		std::shared_ptr<Text> renderSpanText = std::make_shared<Text>();
+		renderSpanText->setString(
+			payload.text->getString().substr( startIdx, endIdx - startIdx ) );
+		FontStyleConfig renderStyle = fontStyle;
+		renderStyle.Style |= inlineAncestorTextDecoration( inlineItems, payload.inlinePath );
+		renderSpanText->setStyleConfig( renderStyle );
+
+		Float height = getTextRunLineHeight( payload.text, payload.lineHeight );
+		Float ascent = getTextBaseline( payload.text, payload.lineHeight );
+		Float spanWidth = renderSpanText->getTextWidth();
+
+		RichText::RenderSpan renderSpan;
+		renderSpan.type = RichText::RenderSpan::Type::Text;
+		renderSpan.text = renderSpanText;
+		renderSpan.margin = payload.margin;
+		renderSpan.padding = payload.padding;
+		renderSpan.lineHeight = payload.lineHeight;
+		renderSpan.baselineAlign = payload.baselineAlign;
+		renderSpan.suppressBackground = payload.suppressBackground;
+		renderSpan.inlinePath = payload.inlinePath;
+		renderSpan.position = { curX, 0 };
+		renderSpan.size = Sizef( spanWidth, height );
+		renderSpan.startCharIndex = curCharIdx;
+		renderSpan.endCharIndex = static_cast<Int64>( curCharIdx + ( endIdx - startIdx ) );
+		curCharIdx = renderSpan.endCharIndex;
+
+		line.spans.push_back( std::move( renderSpan ) );
+		line.maxAscent = std::max( line.maxAscent, ascent );
+		line.height = std::max( line.height, height );
+
+		curX += spanWidth;
+		line.width += spanWidth;
+	}
+
+	static AtomicBlockMetrics getAtomicBlockMetrics( const RichText::RenderSpan& payload ) {
+		AtomicBlockMetrics metrics;
+		if ( payload.type == RichText::RenderSpan::Type::Drawable ) {
+			metrics.size = payload.drawable ? payload.drawable->getPixelsSize() : Sizef();
+			metrics.baseline = metrics.size.getHeight();
+		} else {
+			metrics.size = payload.size;
+			metrics.baseline = payload.baseline;
+			metrics.isLineBreak = payload.isLineBreak;
+			metrics.floatType = payload.floatType;
+			metrics.clearType = payload.clearType;
+		}
+		return metrics;
+	}
+
+	static void appendPositionedAtomicRenderSpan( RichText::RenderParagraph& line,
+												  const RichText::RenderSpan& payload,
+												  const Sizef& size, const Vector2f& position,
+												  Int64& curCharIdx ) {
+		RichText::RenderSpan renderSpan = payload;
+		renderSpan.position = position;
+		renderSpan.size = size;
+		renderSpan.startCharIndex = curCharIdx;
+		renderSpan.endCharIndex = curCharIdx + 1;
+		curCharIdx = renderSpan.endCharIndex;
+		line.spans.push_back( std::move( renderSpan ) );
+	}
+
+	static void appendAtomicRenderSpan( RichText::RenderParagraph& line,
+										const RichText::RenderSpan& payload,
+										const AtomicBlockMetrics& metrics, Float& curX,
+										Int64& curCharIdx ) {
+		appendPositionedAtomicRenderSpan( line, payload, metrics.size, { curX, 0 }, curCharIdx );
+		line.maxAscent = std::max( line.maxAscent, metrics.baseline );
+		line.height = std::max( line.height, metrics.size.getHeight() );
+
+		curX += metrics.size.getWidth();
+		line.width += metrics.size.getWidth();
+	}
+
+	static Float horizontalAlignmentOffset( const RichText::RenderParagraph& line,
+											Float maxLayoutWidth, Uint32 align ) {
+		if ( maxLayoutWidth <= 0 || align == 0 )
+			return 0;
+
+		Uint32 hAlign = Font::getHorizontalAlign( align );
+		if ( hAlign == TEXT_ALIGN_CENTER )
+			return ( maxLayoutWidth - line.width ) * 0.5f;
+		if ( hAlign == TEXT_ALIGN_RIGHT )
+			return maxLayoutWidth - line.width;
+		return 0;
+	}
+
+	static void collectLeaves( const std::vector<RichText::InlineItem>& items,
+							   RichText::RenderSpan::InlinePath& path,
+							   SmallVector<InlineAncestorRef, 4>& ancestors,
+							   SmallVector<InlineLeafRef, 32>& leaves ) {
+		for ( size_t i = 0; i < items.size(); ++i ) {
+			path.push_back( i );
+			const auto& item = items[i];
+			if ( item.isBox() ) {
+				const auto& box = item.asBox();
+				ancestors.push_back( InlineAncestorRef{ path, &box } );
+				collectLeaves( box.children, path, ancestors, leaves );
+				ancestors.pop_back();
+			} else {
+				InlineLeafRef leaf;
+				leaf.path = path;
+				leaf.ancestors = ancestors;
+				if ( item.isTextRun() ) {
+					leaf.type = RichText::InlineFragment::Type::TextRun;
+					leaf.text = item.asTextRun().text;
+					leaf.source = item.asTextRun().source;
+				} else {
+					leaf.type = RichText::InlineFragment::Type::AtomicBox;
+					leaf.source = item.asAtomicBox().source;
+					leaf.isLineBreak = item.asAtomicBox().isLineBreak;
+					leaf.baselineAlign = item.asAtomicBox().baselineAlign;
+				}
+				leaves.push_back( std::move( leaf ) );
+			}
+			path.pop_back();
+		}
+	}
+
+	static const InlineLeafRef* findNextLeaf( const SmallVector<InlineLeafRef, 32>& leaves,
+											  size_t& leafIndex,
+											  RichText::InlineFragment::Type type ) {
+		while ( leafIndex < leaves.size() &&
+				( leaves[leafIndex].type != type ||
+				  ( type == RichText::InlineFragment::Type::AtomicBox &&
+					leaves[leafIndex].isLineBreak ) ) )
+			leafIndex++;
+		return leafIndex < leaves.size() ? &leaves[leafIndex] : nullptr;
+	}
+
+	static const InlineLeafRef* findLeafByPath( const SmallVector<InlineLeafRef, 32>& leaves,
+												const RichText::RenderSpan::InlinePath& path,
+												RichText::InlineFragment::Type type,
+												size_t& leafIndex ) {
+		if ( path.empty() )
+			return nullptr;
+
+		for ( size_t i = 0; i < leaves.size(); ++i ) {
+			if ( leaves[i].type == type && sameInlinePath( leaves[i].path, path ) ) {
+				leafIndex = i;
+				return &leaves[i];
+			}
+		}
+		return nullptr;
+	}
+
+	static void
+	appendBoxFragments( std::vector<RichText::InlineFragment>& fragments,
+						const SmallVector<InlineBoxFragmentAccumulator, 16>& boxFragments,
+						const std::vector<RichText::InlineItem>& inlineItems ) {
+		for ( const auto& acc : boxFragments ) {
+			if ( !acc.valid || acc.box == nullptr )
+				continue;
+
+			Rectf bounds = acc.bounds;
+			Rectf paintBounds = acc.contentValid ? acc.contentBounds : acc.bounds;
+			const Rectf edges(
+				acc.box->margin.Left + acc.box->padding.Left + acc.box->borderWidth,
+				acc.box->margin.Top + acc.box->padding.Top + acc.box->borderWidth,
+				acc.box->margin.Right + acc.box->padding.Right + acc.box->borderWidth,
+				acc.box->margin.Bottom + acc.box->padding.Bottom + acc.box->borderWidth );
+			if ( acc.startsInlineBox )
+				bounds.Left -= edges.Left;
+			if ( acc.endsInlineBox )
+				bounds.Right += edges.Right;
+			bounds.Top -= edges.Top;
+			bounds.Bottom += edges.Bottom;
+
+			if ( acc.startsInlineBox )
+				paintBounds.Left -= acc.box->padding.Left + acc.box->borderWidth;
+			if ( acc.endsInlineBox )
+				paintBounds.Right += acc.box->padding.Right + acc.box->borderWidth;
+			paintBounds.Top -= acc.box->padding.Top + acc.box->borderWidth;
+			paintBounds.Bottom += acc.box->padding.Bottom + acc.box->borderWidth;
+
+			RichText::InlineFragment fragment;
+			fragment.type = RichText::InlineFragment::Type::Box;
+			fragment.itemPath = acc.path;
+			fragment.lineIndex = acc.lineIndex;
+			fragment.bounds = bounds;
+			fragment.paintBounds = paintBounds;
+			fragment.baselineAlign = acc.box->baselineAlign;
+			fragment.source = acc.box->source;
+			fragment.startsInlineBox = acc.startsInlineBox;
+			fragment.endsInlineBox = acc.endsInlineBox;
+			fragment.backgroundColor = acc.box->backgroundColor;
+			fragment.borderWidth = acc.box->borderWidth;
+			fragment.borderColor = acc.box->borderColor;
+			fragment.backgroundDrawable = acc.box->backgroundDrawable;
+			fragment.borderDrawable = acc.box->borderDrawable;
+			fragment.backgroundDrawableUsesFragmentColor =
+				acc.box->backgroundDrawableUsesFragmentColor;
+			fragment.textDecoration = ( acc.box->textDecoration |
+										inlineAncestorTextDecoration( inlineItems, acc.path ) ) &
+									  ( Text::Underlined | Text::StrikeThrough );
+			fragments.push_back( std::move( fragment ) );
+		}
+	}
+};
+
+} // namespace
+
 void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
 						const Rectf& padding, Float lineHeight,
-						const UI::CSSBaselineAlignValue& baselineAlign ) {
+						const BaselineAlignValue& baselineAlign, InlineSource source ) {
 	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
 	auto span = std::make_shared<Text>();
 	span->setString( text );
 	span->setStyleConfig( style );
-	mBlocks.push_back( SpanBlock{ span, margin, padding, lineHeight, baselineAlign } );
+
+	InlineItem item;
+	InlineItem::Box box;
+	box.margin = margin;
+	box.padding = padding;
+	box.lineHeight = lineHeight;
+	box.baselineAlign = baselineAlign;
+	box.participatesInLineMetrics = false;
+	box.contributesInlineSpacing = false;
+	if ( !text.empty() || margin != Rectf::Zero || padding != Rectf::Zero || lineHeight > 0 ) {
+		InlineItem textItem;
+		auto& run = textItem.data.emplace<InlineItem::TextRun>();
+		run.text = span;
+		run.source = source;
+		run.margin = margin;
+		run.padding = padding;
+		run.lineHeight = lineHeight;
+		run.baselineAlign = baselineAlign;
+		box.children.push_back( std::move( textItem ) );
+	}
+	item.data = std::move( box );
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
+
 	invalidateLayout();
 }
 
 void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 	if ( !drawable )
 		return;
-	mBlocks.push_back( drawable );
+	InlineItem item;
+	InlineItem::AtomicBox box;
+	box.drawable = drawable;
+	box.size = drawable->getPixelsSize();
+	box.baseline = box.size.getHeight();
+	item.data = std::move( box );
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
 	invalidateLayout();
 }
 
-void RichText::addCustomSize( const Sizef& size, UI::CSSFloat floatType, UI::CSSClear clearType,
-							  Float baseline, const UI::CSSBaselineAlignValue& baselineAlign ) {
-	mBlocks.push_back( CustomBlock{ size, floatType, clearType,
-									baseline >= 0.f ? baseline : size.getHeight(), false,
-									baselineAlign } );
+void RichText::addCustomSize( const Sizef& size, InlineFloat floatType, InlineClear clearType,
+							  Float baseline, const BaselineAlignValue& baselineAlign,
+							  InlineSource source ) {
+	Float usedBaseline = baseline >= 0.f ? baseline : size.getHeight();
+
+	InlineItem item;
+	InlineItem::AtomicBox box;
+	box.source = source;
+	box.size = size;
+	box.baseline = usedBaseline;
+	box.floatType = floatType;
+	box.clearType = clearType;
+	box.baselineAlign = baselineAlign;
+	item.data = std::move( box );
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
+
 	invalidateLayout();
 }
 
 void RichText::addLineBreak() {
-	mBlocks.push_back(
-		CustomBlock{ Sizef::Zero, UI::CSSFloat::None, UI::CSSClear::None, 0.f, true, {} } );
+	InlineItem item;
+	InlineItem::AtomicBox box;
+	box.isLineBreak = true;
+	item.data = std::move( box );
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
+
+	invalidateLayout();
+}
+
+void RichText::pushInlineBox( const Rectf& margin, const Rectf& padding, Float lineHeight,
+							  const BaselineAlignValue& baselineAlign, const Color& backgroundColor,
+							  Float borderWidth, const Color& borderColor, Uint32 textDecoration,
+							  InlineSource source, Drawable* backgroundDrawable,
+							  Drawable* borderDrawable, bool backgroundDrawableUsesFragmentColor ) {
+	InlineItem item;
+	InlineItem::Box box;
+	box.source = source;
+	box.margin = margin;
+	box.padding = padding;
+	box.lineHeight = lineHeight;
+	box.baselineAlign = baselineAlign;
+	box.backgroundColor = backgroundColor;
+	box.borderWidth = borderWidth;
+	box.borderColor = borderColor;
+	box.backgroundDrawable = backgroundDrawable;
+	box.borderDrawable = borderDrawable;
+	box.backgroundDrawableUsesFragmentColor = backgroundDrawableUsesFragmentColor;
+	box.textDecoration = textDecoration & ( Text::Underlined | Text::StrikeThrough );
+	item.data = std::move( box );
+
+	auto* target = resolveInlinePath( mInlineItems, mInlinePath );
+	target->push_back( std::move( item ) );
+	mInlinePath.push_back( target->size() - 1 );
+}
+
+void RichText::popInlineBox() {
+	if ( !mInlinePath.empty() )
+		mInlinePath.pop_back();
+}
+
+void RichText::addInlineText( const String& text, const FontStyleConfig& style, const Rectf& margin,
+							  const Rectf& padding, Float lineHeight,
+							  const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
+		return;
+
+	InlineItem textItem;
+	auto& run = textItem.data.emplace<InlineItem::TextRun>();
+	run.text = std::make_shared<Text>();
+	run.text->setString( text );
+	run.text->setStyleConfig( style );
+	run.source = source;
+	run.margin = margin;
+	run.padding = padding;
+	run.lineHeight = lineHeight;
+	run.baselineAlign = baselineAlign;
+	run.suppressBackground = true;
+
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( textItem ) );
+	invalidateLayout();
+}
+
+void RichText::addInlineAtomicBox( const Sizef& size, InlineFloat floatType, InlineClear clearType,
+								   Float baseline, bool isLineBreak,
+								   const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	InlineItem item;
+	InlineItem::AtomicBox box;
+	box.source = source;
+	box.size = size;
+	box.baseline = baseline >= 0.f ? baseline : size.getHeight();
+	box.floatType = floatType;
+	box.clearType = clearType;
+	box.isLineBreak = isLineBreak;
+	box.baselineAlign = baselineAlign;
+	item.data = std::move( box );
+
+	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
 	invalidateLayout();
 }
 
@@ -430,10 +1954,16 @@ void RichText::addSpan( const String& text, Font* font, Uint32 characterSize, Co
 }
 
 void RichText::clear() {
-	mBlocks.clear();
+	mInlineItems.clear();
+	mInlinePath.clear();
+	mInlineFragments.clear();
 	mLines.clear();
 	mSelection = { 0, 0 };
 	invalidateLayout();
+}
+
+void RichText::rebuildInlineFragments() {
+	mInlineFragments = RichTextInlineLayouter::rebuildFragments( mInlineItems, mLines );
 }
 
 void RichText::setFontStyleConfig( const FontStyleConfig& styleConfig ) {
@@ -457,772 +1987,41 @@ void RichText::setMaxWidth( Float width ) {
 
 void RichText::invalidate() {
 	invalidateLayout();
-	for ( auto& block : mBlocks ) {
-		if ( auto pText = std::get_if<SpanBlock>( &block ) ) {
-			if ( pText->text )
-				pText->text->invalidate();
-		}
-	}
+	invalidateInlineItemText( mInlineItems );
 }
 
 Float RichText::getMinIntrinsicWidth() {
-	Float minW = 0;
-	for ( auto& block : mBlocks ) {
-		if ( auto pText = std::get_if<SpanBlock>( &block ) ) {
-			auto& span = pText->text;
-			if ( !span || span->getString().empty() )
-				continue;
-			const String& s = span->getString();
-			size_t start = 0;
-			size_t end = 0;
-			while ( start < s.size() ) {
-				while ( start < s.size() && ( s[start] == ' ' || s[start] == '\t' ||
-											  s[start] == '\n' || s[start] == '\r' ) )
-					start++;
-				end = start;
-				while ( end < s.size() &&
-						!( s[end] == ' ' || s[end] == '\t' || s[end] == '\n' || s[end] == '\r' ) )
-					end++;
-				if ( start < end ) {
-					minW = std::max( minW, Text::getTextWidth( s.substr( start, end - start ),
-															   span->getFontStyleConfig() ) +
-											   pText->margin.Left + pText->margin.Right +
-											   pText->padding.Left + pText->padding.Right );
-				}
-				start = end;
-			}
-		} else if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
-			minW = std::max( minW, ( *pDrawable )->getPixelsSize().getWidth() );
-		} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-			minW = std::max( minW, pSize->size.getWidth() );
-		}
-	}
-	return minW;
+	return RichTextInlineLayouter::getMinIntrinsicWidth( mInlineItems );
 }
 
 Float RichText::getMaxIntrinsicWidth() {
-	Float maxW = 0;
-	Float curX = 0;
-	for ( auto& block : mBlocks ) {
-		if ( auto pText = std::get_if<SpanBlock>( &block ) ) {
-			auto& span = pText->text;
-			if ( !span || span->getString().empty() )
-				continue;
-
-			const String& s = span->getString();
-			size_t start = 0;
-			size_t end = 0;
-			curX += pText->margin.Left + pText->padding.Left;
-			while ( ( end = s.find( '\n', start ) ) != String::InvalidPos ) {
-				curX += Text::getTextWidth( s.substr( start, end - start ),
-											span->getFontStyleConfig(), 4, span->getTextHints() );
-				maxW = std::max( maxW, curX + pText->margin.Right + pText->padding.Right );
-				curX = 0;
-				start = end + 1;
-			}
-			curX += Text::getTextWidth( s.substr( start ), span->getFontStyleConfig(), 4,
-										span->getTextHints() ) +
-					pText->margin.Right + pText->padding.Right;
-		} else if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
-			curX += ( *pDrawable )->getPixelsSize().getWidth();
-		} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-			if ( !pSize->isLineBreak )
-				curX += pSize->size.getWidth();
-		}
-	}
-	maxW = std::max( maxW, curX );
-	return maxW;
+	return RichTextInlineLayouter::getMaxIntrinsicWidth( mInlineItems );
 }
 
 void RichText::updateLayout() {
 	if ( !mNeedsLayoutUpdate )
 		return;
 
-	// Detect whether any block has float/clear — if not, use the original
-	// non-float layout path which is simpler and faster.
-	bool hasFloats = false;
-	for ( auto& block : mBlocks ) {
-		if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-			if ( pSize->floatType != UI::CSSFloat::None ||
-				 pSize->clearType != UI::CSSClear::None ) {
-				hasFloats = true;
-				break;
-			}
-		}
-	}
+	bool hasFloats = RichTextInlineLayouter::needsFloatAwareLayout( mInlineItems );
 
-	// ─── Fast path: no floats or clears ─────────────────────────────
+	// ─── Inline layouter fast path: no floats or clears ─────────────
 	if ( !hasFloats ) {
-		mLines.clear();
-		mLines.push_back( RenderParagraph() );
-
-		Float curX = mTextIndent;
-		Float maxWidth = 0;
-		Int64 curCharIdx = 0;
-
-		// Pass 1: flow blocks into lines, wrapping at mMaxWidth.
-		for ( auto& block : mBlocks ) {
-			if ( auto pText = std::get_if<SpanBlock>( &block ) ) {
-				auto& span = pText->text;
-				if ( !span )
-					continue;
-
-				// Empty-string spans contribute only their margin/padding.
-				if ( span->getString().empty() ) {
-					Float l = pText->margin.Left + pText->padding.Left;
-					Float r = pText->margin.Right + pText->padding.Right;
-					if ( l <= 0 && r <= 0 )
-						continue;
-					curX += l + r;
-					if ( !mLines.empty() )
-						mLines.back().width += l + r;
-					continue;
-				}
-
-				auto& fontStyle = span->getFontStyleConfig();
-				if ( !fontStyle.Font )
-					continue;
-
-				Float extraLeft = pText->margin.Left + pText->padding.Left;
-				curX += extraLeft;
-				if ( !mLines.empty() )
-					mLines.back().width += extraLeft;
-
-				Uint32 textHints = span->getTextHints();
-
-				// Compute where lines break within this text span.
-				LineWrapInfoEx wrapInfo = LineWrap::computeLineBreaksEx(
-					span->getString(), fontStyle, mMaxWidth > 0 ? mMaxWidth : 1e9f,
-					mMaxWidth > 0 ? LineWrapMode::Word : LineWrapMode::NoWrap, false, 4, 0.f,
-					textHints, false, curX );
-
-				if ( wrapInfo.wraps.empty() ||
-					 wrapInfo.wraps.back() != (Float)span->getString().size() )
-					wrapInfo.wraps.push_back( span->getString().size() );
-
-				// Emit a RenderSpan for each segment, wrapping to new lines as needed.
-				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
-					size_t startIdx = wrapInfo.wraps[i];
-					size_t endIdx = wrapInfo.wraps[i + 1];
-					bool isNewline =
-						( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
-
-					if ( !isNewline ) {
-						std::shared_ptr<Text> renderSpanText = std::make_shared<Text>();
-						renderSpanText->setString(
-							span->getString().substr( startIdx, endIdx - startIdx ) );
-						renderSpanText->setStyleConfig( fontStyle );
-
-						Float height = getSpanLineHeight( *pText );
-						Float ascent = getTextBaseline( *pText );
-						Float spanWidth = renderSpanText->getTextWidth();
-
-						RenderSpan renderSpan{
-							SpanBlock{ renderSpanText, pText->margin, pText->padding,
-									   pText->lineHeight, pText->baselineAlign },
-							{ curX, 0 },
-							Sizef( spanWidth, height ),
-							curCharIdx,
-							static_cast<Int64>( curCharIdx + ( endIdx - startIdx ) ) };
-						curCharIdx = renderSpan.endCharIndex;
-
-						RenderParagraph& currentLine = mLines.back();
-						currentLine.spans.push_back( renderSpan );
-
-						currentLine.maxAscent = std::max( currentLine.maxAscent, ascent );
-						currentLine.height = std::max( currentLine.height, height );
-
-						curX += spanWidth;
-						currentLine.width += spanWidth;
-					}
-
-					// After the last segment, add trailing margin and check if the
-					// margin itself forces a wrap.
-					if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
-						Float extraRight = pText->margin.Right + pText->padding.Right;
-						curX += extraRight;
-						mLines.back().width += extraRight;
-						if ( !isNewline && mMaxWidth > 0 && curX > mMaxWidth ) {
-							maxWidth = std::max( maxWidth, curX );
-							mLines.push_back( RenderParagraph() );
-							curX = 0;
-							continue;
-						}
-					}
-
-					// Start a new line for hard breaks (newlines) or soft wraps.
-					if ( i < wrapInfo.wraps.size() - 2 || isNewline ) {
-						if ( isNewline ) {
-							curCharIdx++;
-							if ( i == wrapInfo.wraps.size() - 2 ) {
-								Float extraRight = pText->margin.Right + pText->padding.Right;
-								curX += extraRight;
-								mLines.back().width += extraRight;
-							}
-						}
-						maxWidth = std::max( maxWidth, curX );
-						mLines.push_back( RenderParagraph() );
-						curX = 0;
-					}
-				}
-			} else {
-				// Drawable or CustomBlock (non-float).
-				Sizef blockSize;
-				Float blockBaseline = 0.f;
-				bool isLineBreak = false;
-				if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
-					auto& drawable = *pDrawable;
-					blockSize = drawable ? drawable->getPixelsSize() : Sizef();
-					blockBaseline = blockSize.getHeight();
-				} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-					blockSize = pSize->size;
-					blockBaseline = pSize->baseline;
-					isLineBreak = pSize->isLineBreak;
-				}
-
-				if ( isLineBreak ) {
-					maxWidth = std::max( maxWidth, curX );
-					if ( !mLines.back().spans.empty() )
-						mLines.push_back( RenderParagraph() );
-					curX = 0;
-					continue;
-				}
-
-				// Inline elements that don't fit wrap to the next line.
-				if ( mMaxWidth > 0 &&
-					 ( curX + blockSize.getWidth() >= mMaxWidth || curX >= mMaxWidth ) &&
-					 curX > 0 ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
-
-				RenderSpan renderSpan{ block, { curX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
-				curCharIdx = renderSpan.endCharIndex;
-
-				RenderParagraph& currentLine = mLines.back();
-				currentLine.spans.push_back( renderSpan );
-
-				currentLine.maxAscent = std::max( currentLine.maxAscent, blockBaseline );
-				currentLine.height = std::max( currentLine.height, blockSize.getHeight() );
-
-				curX += blockSize.getWidth();
-				currentLine.width += blockSize.getWidth();
-
-				if ( mMaxWidth > 0 && curX >= mMaxWidth ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
-			}
-		}
-
-		maxWidth = std::max( maxWidth, curX );
-
-		// Remove trailing empty line if present.
-		if ( !mLines.empty() && mLines.back().spans.empty() && mLines.size() > 1 ) {
-			mLines.pop_back();
-		}
-
-		// Pass 2: assign Y positions to each line, apply text alignment,
-		// and compute vertical offsets for spans within their line.
-		Float curY = 0;
-		for ( auto& line : mLines ) {
-			line.y = curY;
-
-			// Compute horizontal alignment offset for this line.
-			Float xOffset = 0;
-			if ( mMaxWidth > 0 && mAlign != 0 ) {
-				Uint32 hAlign = Font::getHorizontalAlign( mAlign );
-				if ( hAlign == TEXT_ALIGN_CENTER ) {
-					xOffset = ( mMaxWidth - line.width ) * 0.5f;
-				} else if ( hAlign == TEXT_ALIGN_RIGHT ) {
-					xOffset = mMaxWidth - line.width;
-				}
-			}
-
-			Float maxLineHeight = 0;
-			Float minLineTop = 0;
-			for ( auto& span : line.spans ) {
-				if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-					Float baseline = getTextBaseline( *pText );
-					Float offsetY = getBaselineAlignedOffset( line, span.size, baseline,
-															  getSpanLineHeight( *pText ),
-															  pText->baselineAlign, mDefaultStyle );
-					span.position.x += xOffset;
-					span.position.y = offsetY;
-					minLineTop = std::min( minLineTop, offsetY );
-					maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
-				} else {
-					Float baseline = span.size.getHeight();
-					UI::CSSBaselineAlignValue baselineAlign;
-					if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
-						baseline = pSize->baseline;
-						baselineAlign = pSize->baselineAlign;
-					}
-					Float offsetY =
-						getBaselineAlignedOffset( line, span.size, baseline, span.size.getHeight(),
-												  baselineAlign, mDefaultStyle );
-					span.position.x += xOffset;
-					span.position.y = offsetY;
-					minLineTop = std::min( minLineTop, offsetY );
-					maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
-				}
-			}
-
-			if ( minLineTop < 0 ) {
-				for ( auto& span : line.spans )
-					span.position.y -= minLineTop;
-				maxLineHeight -= minLineTop;
-			}
-
-			line.height = std::max( line.height, maxLineHeight );
-			if ( mLineHeight > 0 )
-				line.height = std::max( line.height, mLineHeight );
-			curY += line.height;
-		}
-
-		mSize = Sizef( maxWidth, curY );
-		mTotalCharacterCount = curCharIdx;
+		auto result = RichTextInlineLayouter::layoutNoFloats( mInlineItems, mMaxWidth, mTextIndent,
+															  mAlign, mLineHeight, mDefaultStyle );
+		mLines = std::move( result.lines );
+		mSize = result.size;
+		mTotalCharacterCount = result.totalCharacterCount;
+		rebuildInlineFragments();
 		mNeedsLayoutUpdate = false;
 		return;
 	}
 
-	// ─── Float-aware path ────────────────────────────────────────────
-
-	mLines.clear();
-	mLines.push_back( RenderParagraph() );
-
-	Float curX = mTextIndent;
-	Float maxWidth = 0;
-	Int64 curCharIdx = 0;
-
-	// Active float rectangles: { left, top, right, bottom } in local coords.
-	std::vector<Rectf> leftFloats;
-	std::vector<Rectf> rightFloats;
-	Float curY = 0;
-
-	// ── Helper lambdas ─────────────────────────────────────────────
-	// Returns the rightmost x-coordinate occupied by left floats at the given y.
-	auto floatLeftEdge = [&]( Float y ) -> Float {
-		Float l = 0;
-		for ( auto& f : leftFloats ) {
-			if ( y >= f.Top && y < f.Bottom )
-				l = std::max( l, f.Right );
-		}
-		return l;
-	};
-
-	// Returns the leftmost x-coordinate occupied by right floats at the given y.
-	auto floatRightEdge = [&]( Float y ) -> Float {
-		Float r = mMaxWidth > 0 ? mMaxWidth : 1e9f;
-		for ( auto& f : rightFloats ) {
-			if ( y >= f.Top && y < f.Bottom )
-				r = std::min( r, f.Left );
-		}
-		return r;
-	};
-
-	// Available horizontal space at y, narrowed by active floats on both sides.
-	auto effectiveMaxWidthAt = [&]( Float y ) -> Float {
-		return floatRightEdge( y ) - floatLeftEdge( y );
-	};
-
-	auto activeFloatBottom = [&]( Float y ) -> Float {
-		Float bottom = y;
-		for ( const auto& f : leftFloats ) {
-			if ( y >= f.Top && y < f.Bottom )
-				bottom = std::max( bottom, f.Bottom );
-		}
-		for ( const auto& f : rightFloats ) {
-			if ( y >= f.Top && y < f.Bottom )
-				bottom = std::max( bottom, f.Bottom );
-		}
-		return bottom;
-	};
-
-	// Advances curY past the bottom of active floats specified by clearType.
-	// Returns true if curY was moved.
-	auto clearFloats = [&]( UI::CSSClear clearType ) -> bool {
-		bool advanced = false;
-		if ( clearType == UI::CSSClear::Left || clearType == UI::CSSClear::Both ) {
-			for ( auto& f : leftFloats ) {
-				if ( f.Bottom > curY ) {
-					curY = f.Bottom;
-					advanced = true;
-				}
-			}
-		}
-		if ( clearType == UI::CSSClear::Right || clearType == UI::CSSClear::Both ) {
-			for ( auto& f : rightFloats ) {
-				if ( f.Bottom > curY ) {
-					curY = f.Bottom;
-					advanced = true;
-				}
-			}
-		}
-		return advanced;
-	};
-
-	// ── Pass 1: flow blocks with float awareness ────────────────────
-	for ( auto& block : mBlocks ) {
-		if ( auto pText = std::get_if<SpanBlock>( &block ) ) {
-			// ── Text span ─────────────────────────────────────────
-			auto& span = pText->text;
-			if ( !span )
-				continue;
-
-			if ( span->getString().empty() ) {
-				Float l = pText->margin.Left + pText->padding.Left;
-				Float r = pText->margin.Right + pText->padding.Right;
-				if ( l <= 0 && r <= 0 )
-					continue;
-				curX += l + r;
-				if ( !mLines.empty() )
-					mLines.back().width += l + r;
-				continue;
-			}
-
-			auto& fontStyle = span->getFontStyleConfig();
-			if ( !fontStyle.Font )
-				continue;
-
-			Float extraLeft = pText->margin.Left + pText->padding.Left;
-			curX += extraLeft;
-			if ( !mLines.empty() )
-				mLines.back().width += extraLeft;
-
-			// Shift curX inside to the left edge — text starts
-			// to the right of any left floats.
-			Float le = floatLeftEdge( curY );
-			if ( curX < le )
-				curX = le;
-
-			// Narrow the available width by active floats at this Y.
-			Uint32 textHints = span->getTextHints();
-			Float effW = effectiveMaxWidthAt( curY );
-			if ( mMaxWidth > 0 && mMaxWidth < effW )
-				effW = mMaxWidth;
-
-			LineWrapInfoEx wrapInfo =
-				LineWrap::computeLineBreaksEx( span->getString(), fontStyle, effW > 0 ? effW : 1e9f,
-											   effW > 0 ? LineWrapMode::Word : LineWrapMode::NoWrap,
-											   false, 4, 0.f, textHints, false, curX );
-
-			if ( wrapInfo.wraps.empty() ||
-				 wrapInfo.wraps.back() != (Float)span->getString().size() )
-				wrapInfo.wraps.push_back( span->getString().size() );
-
-			for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
-				size_t startIdx = wrapInfo.wraps[i];
-				size_t endIdx = wrapInfo.wraps[i + 1];
-				bool isNewline = ( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
-
-				if ( !isNewline ) {
-					std::shared_ptr<Text> renderSpanText = std::make_shared<Text>();
-					renderSpanText->setString(
-						span->getString().substr( startIdx, endIdx - startIdx ) );
-					renderSpanText->setStyleConfig( fontStyle );
-
-					Float height = getSpanLineHeight( *pText );
-					Float ascent = getTextBaseline( *pText );
-					Float spanWidth = renderSpanText->getTextWidth();
-
-					RenderSpan renderSpan{
-						SpanBlock{ renderSpanText, pText->margin, pText->padding, pText->lineHeight,
-								   pText->baselineAlign },
-						{ curX, 0 },
-						Sizef( spanWidth, height ),
-						curCharIdx,
-						static_cast<Int64>( curCharIdx + ( endIdx - startIdx ) ) };
-
-					curCharIdx = renderSpan.endCharIndex;
-
-					RenderParagraph& currentLine = mLines.back();
-					currentLine.spans.push_back( renderSpan );
-
-					currentLine.maxAscent = std::max( currentLine.maxAscent, ascent );
-					currentLine.height = std::max( currentLine.height, height );
-
-					curX += spanWidth;
-					currentLine.width += spanWidth;
-				}
-
-				// After the last segment, add trailing margin and check if the
-				// margin itself forces a wrap.
-				if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
-					Float extraRight = pText->margin.Right + pText->padding.Right;
-					curX += extraRight;
-					mLines.back().width += extraRight;
-					if ( effW > 0 && effW < 1e9f && curX > effW ) {
-						maxWidth = std::max( maxWidth, curX );
-						mLines.push_back( RenderParagraph() );
-						curX = 0;
-						continue;
-					}
-				}
-
-				// Newline or soft-wrap → start a new line.
-				if ( i < wrapInfo.wraps.size() - 2 || isNewline ) {
-					if ( isNewline ) {
-						curCharIdx++;
-						if ( i == wrapInfo.wraps.size() - 2 ) {
-							Float extraRight = pText->margin.Right + pText->padding.Right;
-							curX += extraRight;
-							mLines.back().width += extraRight;
-						}
-					}
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
-			}
-		} else {
-			// ── Drawable or CustomBlock ────────────────────────────
-			Sizef blockSize;
-			Float blockBaseline = 0.f;
-			bool isLineBreak = false;
-			UI::CSSFloat floatType = UI::CSSFloat::None;
-			UI::CSSClear clearType = UI::CSSClear::None;
-			if ( auto pDrawable = std::get_if<std::shared_ptr<Drawable>>( &block ) ) {
-				auto& drawable = *pDrawable;
-				blockSize = drawable ? drawable->getPixelsSize() : Sizef();
-				blockBaseline = blockSize.getHeight();
-			} else if ( auto pSize = std::get_if<CustomBlock>( &block ) ) {
-				blockSize = pSize->size;
-				blockBaseline = pSize->baseline;
-				floatType = pSize->floatType;
-				clearType = pSize->clearType;
-				isLineBreak = pSize->isLineBreak;
-			}
-
-			if ( isLineBreak ) {
-				maxWidth = std::max( maxWidth, curX );
-				if ( !mLines.back().spans.empty() ) {
-					curY += mLines.back().height;
-					mLines.push_back( RenderParagraph() );
-					mLines.back().y = curY;
-				}
-				curX = 0;
-				continue;
-			}
-
-			// ── Clear: advance curY past active floats ─────────────
-			if ( clearType != UI::CSSClear::None ) {
-				if ( clearFloats( clearType ) ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					mLines.back().y = curY;
-					curX = 0;
-				}
-			}
-
-			// Left edge of open space at current Y (after any clears).
-			Float le = floatLeftEdge( curY );
-
-			if ( floatType != UI::CSSFloat::None ) {
-				// ── Float placement ────────────────────────────────
-				// Position the float at the left/right edge of the
-				// available space. Floats do NOT consume inline-flow
-				// horizontal space (curX is not advanced) and are not
-				// affected by text-align (see pass 2).
-				Float posX;
-				if ( floatType == UI::CSSFloat::Left ) {
-					posX = le;
-					Float availW = floatRightEdge( curY );
-					if ( availW > 0 && availW < 1e9f &&
-						 posX + blockSize.getWidth() > availW + 0.01f ) {
-						Float maxBottom = curY;
-						for ( auto& f : leftFloats )
-							maxBottom = std::max( maxBottom, f.Bottom );
-						for ( auto& f : rightFloats )
-							maxBottom = std::max( maxBottom, f.Bottom );
-						if ( maxBottom > curY ) {
-							maxWidth = std::max( maxWidth, curX );
-							mLines.push_back( RenderParagraph() );
-							curX = 0;
-							curY = maxBottom;
-							mLines.back().y = curY;
-							posX = floatLeftEdge( curY );
-						}
-					}
-				} else {
-					Float re = floatRightEdge( curY );
-					posX = re - blockSize.getWidth();
-					if ( blockSize.getWidth() > re - le + 0.01f ) {
-						Float maxBottom = curY;
-						for ( auto& f : leftFloats )
-							maxBottom = std::max( maxBottom, f.Bottom );
-						for ( auto& f : rightFloats )
-							maxBottom = std::max( maxBottom, f.Bottom );
-						if ( maxBottom > curY ) {
-							maxWidth = std::max( maxWidth, curX );
-							mLines.push_back( RenderParagraph() );
-							curX = 0;
-							curY = maxBottom;
-							mLines.back().y = curY;
-							re = floatRightEdge( curY );
-							le = floatLeftEdge( curY );
-							posX = re - blockSize.getWidth();
-						}
-					}
-					if ( posX < le )
-						posX = le;
-				}
-
-				RenderSpan renderSpan{ block, { posX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
-				curCharIdx = renderSpan.endCharIndex;
-
-				mLines.back().spans.push_back( renderSpan );
-
-				// Record the float's bounding box so subsequent
-				// content can wrap around it.
-				Rectf fr( posX, curY, posX + blockSize.getWidth(), curY + blockSize.getHeight() );
-				if ( floatType == UI::CSSFloat::Left )
-					leftFloats.push_back( fr );
-				else
-					rightFloats.push_back( fr );
-			} else {
-				// ── Normal (non-float) block ────────────────────
-				if ( curX < le )
-					curX = le;
-
-				Float effW = effectiveMaxWidthAt( curY );
-
-				if ( effW > 0 && effW < 1e9f && blockSize.getWidth() > effW + 0.01f ) {
-					Float maxBottom = activeFloatBottom( curY );
-					if ( maxBottom > curY ) {
-						maxWidth = std::max( maxWidth, curX );
-						if ( !mLines.back().spans.empty() )
-							mLines.push_back( RenderParagraph() );
-						curX = 0;
-						curY = maxBottom;
-						mLines.back().y = curY;
-						le = floatLeftEdge( curY );
-						effW = effectiveMaxWidthAt( curY );
-					}
-				}
-
-				// Wrap if the block doesn't fit in the available width
-				// (narrowed by active floats).
-				if ( effW > 0 && effW < 1e9f &&
-					 ( curX + blockSize.getWidth() >= effW || curX >= effW ) && curX > 0 ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
-
-				RenderSpan renderSpan{ block, { curX, 0 }, blockSize, curCharIdx, curCharIdx + 1 };
-				curCharIdx = renderSpan.endCharIndex;
-
-				RenderParagraph& currentLine = mLines.back();
-				currentLine.spans.push_back( renderSpan );
-
-				currentLine.maxAscent = std::max( currentLine.maxAscent, blockBaseline );
-				currentLine.height = std::max( currentLine.height, blockSize.getHeight() );
-
-				curX += blockSize.getWidth();
-				currentLine.width += blockSize.getWidth();
-
-				if ( effW > 0 && effW < 1e9f && curX >= effW ) {
-					maxWidth = std::max( maxWidth, curX );
-					mLines.push_back( RenderParagraph() );
-					curX = 0;
-				}
-			}
-		}
-	}
-
-	maxWidth = std::max( maxWidth, curX );
-
-	if ( !mLines.empty() && mLines.back().spans.empty() && mLines.size() > 1 ) {
-		mLines.pop_back();
-	}
-
-	// ── Pass 2: assign Y positions and apply text alignment ───────
-	// NOTE: float spans are excluded from the xOffset because
-	// text-align only affects inline-flow content, not floated elements.
-	Float accumY = 0;
-	for ( auto& line : mLines ) {
-		if ( line.y > accumY )
-			accumY = line.y;
-		line.y = accumY;
-
-		Float xOffset = 0;
-		if ( mMaxWidth > 0 && mAlign != 0 ) {
-			Uint32 hAlign = Font::getHorizontalAlign( mAlign );
-			if ( hAlign == TEXT_ALIGN_CENTER ) {
-				xOffset = ( mMaxWidth - line.width ) * 0.5f;
-			} else if ( hAlign == TEXT_ALIGN_RIGHT ) {
-				xOffset = mMaxWidth - line.width;
-			}
-		}
-
-		Float maxLineHeight = 0;
-		Float minLineTop = 0;
-		for ( auto& span : line.spans ) {
-			bool isFloat = false;
-			if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
-				if ( pSize->floatType != UI::CSSFloat::None )
-					isFloat = true;
-			}
-			if ( auto pText = std::get_if<SpanBlock>( &span.block ) ) {
-				Float baseline = getTextBaseline( *pText );
-				Float offsetY = getBaselineAlignedOffset( line, span.size, baseline,
-														  getSpanLineHeight( *pText ),
-														  pText->baselineAlign, mDefaultStyle );
-				span.position.x += xOffset;
-				span.position.y = offsetY;
-				minLineTop = std::min( minLineTop, offsetY );
-				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
-			} else {
-				Float baseline = span.size.getHeight();
-				UI::CSSBaselineAlignValue baselineAlign;
-				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) ) {
-					baseline = pSize->baseline;
-					baselineAlign = pSize->baselineAlign;
-				}
-				Float offsetY =
-					getBaselineAlignedOffset( line, span.size, baseline, span.size.getHeight(),
-											  baselineAlign, mDefaultStyle );
-				// Float spans keep their edge-aligned x; only inline-flow spans shift.
-				if ( isFloat ) {
-					span.position.y = 0;
-					continue;
-				} else {
-					span.position.x += xOffset;
-				}
-				span.position.y = offsetY;
-				minLineTop = std::min( minLineTop, offsetY );
-				maxLineHeight = std::max( maxLineHeight, offsetY + span.size.getHeight() );
-			}
-		}
-
-		if ( minLineTop < 0 ) {
-			for ( auto& span : line.spans ) {
-				bool isFloat = false;
-				if ( auto pSize = std::get_if<CustomBlock>( &span.block ) )
-					isFloat = pSize->floatType != UI::CSSFloat::None;
-				if ( !isFloat )
-					span.position.y -= minLineTop;
-			}
-			maxLineHeight -= minLineTop;
-		}
-
-		line.height = std::max( line.height, maxLineHeight );
-		if ( mLineHeight > 0 )
-			line.height = std::max( line.height, mLineHeight );
-		accumY += line.height;
-	}
-
-	Float floatBoundsBottom = 0;
-	for ( const auto& f : leftFloats )
-		floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
-	for ( const auto& f : rightFloats )
-		floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
-
-	mSize = Sizef( maxWidth, std::max( accumY, floatBoundsBottom ) );
-	mTotalCharacterCount = curCharIdx;
+	auto result = RichTextInlineLayouter::layoutWithFloats( mInlineItems, mMaxWidth, mTextIndent,
+															mAlign, mLineHeight, mDefaultStyle );
+	mLines = std::move( result.lines );
+	mSize = result.size;
+	mTotalCharacterCount = result.totalCharacterCount;
+	rebuildInlineFragments();
 	mNeedsLayoutUpdate = false;
 }
 

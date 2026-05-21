@@ -219,6 +219,10 @@ UIBackgroundDrawable& UINodeDrawable::getBackgroundDrawable() {
 	return mBackgroundColor;
 }
 
+bool UINodeDrawable::hasDrawableLayers() const {
+	return !mGroup.empty();
+}
+
 bool UINodeDrawable::isSmooth() const {
 	return mSmooth;
 }

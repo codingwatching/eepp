@@ -658,12 +658,14 @@ UTEST( UITextNode_RichTextRebuild, MixedContentAppearsInRichText ) {
 	UIRichText* rt = sceneNode->find<UIRichText>( "rt" );
 	ASSERT_TRUE( rt != nullptr );
 
-	int textBlocks = 0;
-	for ( const auto& block : rt->getRichTextPtr()->getBlocks() ) {
-		if ( std::holds_alternative<RichText::SpanBlock>( block ) )
-			textBlocks++;
+	int textSpans = 0;
+	for ( const auto& line : rt->getRichTextPtr()->getLines() ) {
+		for ( const auto& span : line.spans ) {
+			if ( span.type == RichText::RenderSpan::Type::Text )
+				textSpans++;
+		}
 	}
-	EXPECT_GE( textBlocks, 3 ); // "before ", "bold", " after"
+	EXPECT_GE( textSpans, 3 ); // "before ", "bold", " after"
 
 	destroyRichTextScene( sceneNode );
 }
