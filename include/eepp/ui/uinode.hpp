@@ -1783,7 +1783,7 @@ class EE_API UINode : public Node {
 	 * @param Flag The flag bit to modify.
 	 * @param Val The value to set (1 to set, 0 to clear).
 	 */
-	void writeFlag( const Uint32& Flag, const Uint32& Val );
+	void writeFlag( const Uint64& Flag, const Uint32& Val );
 
 	/**
 	 * @brief Creates padding rectangle from skin border size.

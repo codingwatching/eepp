@@ -81,5 +81,3 @@ UTEST( Benchmark, InlineLayout ) {
 
 	Engine::destroySingleton();
 }
-
-UTEST_MAIN()

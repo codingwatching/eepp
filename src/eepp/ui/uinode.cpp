@@ -1390,7 +1390,7 @@ UISkin* UINode::getSkin() const {
 	return NULL;
 }
 
-void UINode::writeFlag( const Uint32& Flag, const Uint32& Val ) {
+void UINode::writeFlag( const Uint64& Flag, const Uint32& Val ) {
 	if ( Val )
 		mFlags |= Flag;
 	else {

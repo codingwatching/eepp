@@ -1761,27 +1761,15 @@ workspace "eepp"
 		files { "src/benchmarks/*.cpp" }
 		incdirs { "src/thirdparty" }
 		build_link_configuration( "eepp-benchmarks", true )
-		if table.contains(backends, "SDL2") then
-			defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_2" }
-		end
-		if table.contains(backends, "SDL3") then
-			defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_3" }
-		end
-
+		
 	project "eepp-unit_tests"
 		kind "ConsoleApp"
 		targetdir(_MAIN_SCRIPT_DIR .. "/bin/unit_tests")
 		links { "eterm-static", "languages-syntax-highlighting-static" }
 		incdirs { "src/modules/eterm/include/", "src/thirdparty" }
 		language "C++"
-    files { "src/tests/unit_tests/*.cpp" }
-    build_link_configuration( "eepp-unit_tests", true )
-    if table.contains(backends, "SDL2") then
-        defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_2" }
-    end
-    if table.contains(backends, "SDL3") then
-        defines { "EE_BACKEND_SDL_ACTIVE", "EE_SDL_VERSION_3" }
-    end
+		files { "src/tests/unit_tests/*.cpp" }
+		build_link_configuration( "eepp-unit_tests", true )
 
 if os.isfile("external_projects.lua") then
 	dofile("external_projects.lua")
