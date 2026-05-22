@@ -2234,14 +2234,19 @@ UTEST( UIHTML, RedditHeaderPagenameBottomAlign ) {
 	auto* headerLeft = sceneNode->getRoot()->find( "header-bottom-left" )->asType<UIHTMLWidget>();
 	auto* logo = sceneNode->getRoot()->find( "header-img" )->asType<UIHTMLWidget>();
 	auto* page = sceneNode->getRoot()->querySelector( ".pagename" )->asType<UIHTMLWidget>();
+	auto* jumpToContent = sceneNode->getRoot()->find( "jumpToContent" )->asType<UIHTMLWidget>();
 	ASSERT_TRUE( headerLeft != nullptr );
 	ASSERT_TRUE( logo != nullptr );
 	ASSERT_TRUE( page != nullptr );
+	ASSERT_TRUE( jumpToContent != nullptr );
 
 	EXPECT_EQ( logo->getBaselineAlign().type, CSSBaselineAlignment::Bottom );
 	EXPECT_EQ( page->getBaselineAlign().type, CSSBaselineAlignment::Bottom );
 	EXPECT_NEAR( headerLeft->getPixelsSize().getHeight(),
 				 page->getPixelsPosition().y + page->getPixelsSize().getHeight(), 0.5f );
+	EXPECT_EQ( CSSPosition::Absolute, jumpToContent->getCSSPosition() );
+	EXPECT_NEAR( -865.f, jumpToContent->convertToWorldSpace( { 0, 0 } ).x, 1.f );
+	EXPECT_NEAR( 25.f, jumpToContent->convertToWorldSpace( { 0, 0 } ).y, 1.f );
 
 	Engine::destroySingleton();
 }

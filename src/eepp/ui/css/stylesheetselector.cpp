@@ -8,10 +8,7 @@ StyleSheetSelector::StyleSheetSelector() : mName( "*" ), mSpecificity( 0 ), mCac
 }
 
 StyleSheetSelector::StyleSheetSelector( const std::string& selectorName ) :
-	mName( String::toLower( selectorName ) ),
-	mSpecificity( 0 ),
-	mCacheable( true ),
-	mStructurallyVolatile( false ) {
+	mName( selectorName ), mSpecificity( 0 ), mCacheable( true ), mStructurallyVolatile( false ) {
 	parseSelector( mName );
 }
 

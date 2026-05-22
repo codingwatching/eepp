@@ -87,19 +87,21 @@ void StyleSheetSelectorRule::pushSelectorTypeIdentifier( TypeIdentifier selector
 														 std::string name ) {
 	switch ( selectorTypeIdentifier ) {
 		case GLOBAL:
-			mTagName = name;
+			String::toLowerInPlace( name );
+			mTagName = std::move( name );
 			mSpecificity += SpecificityGlobal;
 			break;
 		case TAG:
-			mTagName = name;
+			String::toLowerInPlace( name );
+			mTagName = std::move( name );
 			mSpecificity += SpecificityTag;
 			break;
 		case CLASS:
-			mClasses.push_back( name );
+			mClasses.push_back( std::move( name ) );
 			mSpecificity += SpecificityClass;
 			break;
 		case ID:
-			mId = name;
+			mId = std::move( name );
 			mSpecificity += SpecificityId;
 			break;
 		default:
