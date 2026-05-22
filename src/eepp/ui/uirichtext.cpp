@@ -410,6 +410,9 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::WhiteSpaceCollapse:
 			setWhiteSpaceCollapse( toWhiteSpaceCollapse( attribute.value() ) );
 			break;
+		case PropertyId::TextTransform:
+			setTextTransform( TextTransform::fromString( attribute.asString() ) );
+			break;
 		default:
 			return UIHTMLWidget::applyProperty( attribute );
 	}
@@ -461,6 +464,8 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 			return mTextIndentEq.empty() ? "0" : mTextIndentEq;
 		case PropertyId::WhiteSpaceCollapse:
 			return fromWhiteSpaceCollapse( mWhiteSpaceCollapse );
+		case PropertyId::TextTransform:
+			return TextTransform::toString( getTextTransform() );
 		default:
 			return UIHTMLWidget::getPropertyString( propertyDef, propertyIndex );
 	}
@@ -475,7 +480,8 @@ std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 				   PropertyId::TextAlign,		   PropertyId::SelectionColor,
 				   PropertyId::SelectionBackColor, PropertyId::TextSelection,
 				   PropertyId::TextDecoration,	   PropertyId::LineHeight,
-				   PropertyId::TextIndent,		   PropertyId::WhiteSpaceCollapse };
+				   PropertyId::TextIndent,		   PropertyId::WhiteSpaceCollapse,
+				   PropertyId::TextTransform };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -731,6 +737,18 @@ Float UIRichText::getTextIndentPx() const {
 	mTextIndentPxCache = const_cast<UIRichText*>( this )->lengthFromValue(
 		mTextIndentEq, CSS::PropertyRelativeTarget::None, 0, 0 );
 	return mTextIndentPxCache;
+}
+
+const TextTransform::Value& UIRichText::getTextTransform() const {
+	return mTextTransform;
+}
+
+void UIRichText::setTextTransform( const TextTransform::Value& textTransform ) {
+	if ( textTransform != mTextTransform ) {
+		mTextTransform = textTransform;
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
 }
 
 void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
@@ -1060,11 +1078,46 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		richText.setMaxWidth( 0.f ); // Let it grow unbounded to query text bounds later
 	}
 
+	auto getEffectiveTextTransform = []( Node* node ) -> TextTransform::Value {
+		while ( node ) {
+			if ( node->isType( UI_TYPE_RICHTEXT ) || node->isType( UI_TYPE_TEXTSPAN ) ) {
+				auto tt = node->asType<UIRichText>()->getTextTransform();
+				if ( tt != TextTransform::None )
+					return tt;
+			}
+			node = node->getParent();
+		}
+		return TextTransform::None;
+	};
+
+	auto applyTextTransform = []( String& text, TextTransform::Value tt ) {
+		switch ( tt ) {
+			case TextTransform::LowerCase:
+				text = text.toLower();
+				break;
+			case TextTransform::UpperCase:
+				text = text.toUpper();
+				break;
+			case TextTransform::Capitalize:
+				text = text.capitalize();
+				break;
+			default:
+				break;
+		}
+	};
+
 	if ( container->isType( UI_TYPE_TEXTSPAN ) ) {
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
 		if ( !selfSpan->getText().empty() && !selfSpan->isInline() &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
 			String::View selfText = selfSpan->getText().view();
+			String transformed;
+			auto tt = getEffectiveTextTransform( selfSpan );
+			if ( tt != TextTransform::None ) {
+				transformed = selfText;
+				applyTextTransform( transformed, tt );
+				selfText = transformed.view();
+			}
 			FontStyleConfig style = selfSpan->getFontStyleConfig();
 			style.BackgroundColor = Color::Transparent;
 			richText.addSpan( selfText, style, Rectf::Zero, Rectf::Zero, 0,
@@ -1134,6 +1187,12 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 			if ( shouldCollapse && lastSpanEndsWithSpace && !text.empty() && text[0] == ' ' )
 				text = text.substr( 1 );
+
+			{
+				auto tt = getEffectiveTextTransform( textNode );
+				if ( tt != TextTransform::None )
+					applyTextTransform( text, tt );
+			}
 
 			if ( text.empty() ) {
 				textNode->setLayoutCharCount( 0 );
@@ -1228,6 +1287,14 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				if ( shouldCollapse && lastSpanEndsWithSpace && !spanText.empty() &&
 					 spanText[0] == ' ' )
 					spanText = spanText.substr( 1 );
+
+				String transformed;
+				auto tt = getEffectiveTextTransform( span );
+				if ( tt != TextTransform::None ) {
+					transformed = spanText;
+					applyTextTransform( transformed, tt );
+					spanText = transformed.view();
+				}
 
 				if ( !spanText.empty() ) {
 					richText.addInlineText( spanText, span->getFontStyleConfig(), Rectf::Zero,

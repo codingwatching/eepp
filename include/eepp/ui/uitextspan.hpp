@@ -117,6 +117,7 @@ class EE_API UITextSpan : public UIRichText {
 		StyleStateFontShadowColor = 1 << 6,
 		StyleStateFontShadowOffset = 1 << 7,
 		StyleStateFontBackgroundColor = 1 << 8,
+		StyleStateTextTransform = 1 << 9,
 		StyleStateAll = 0xFFFFFFFF
 	};
 
@@ -129,6 +130,8 @@ class EE_API UITextSpan : public UIRichText {
 	bool hasFontShadowColor() const;
 	bool hasFontShadowOffset() const;
 	bool hasFontBackgroundColor() const;
+
+	bool hasTextTransform() const;
 
 	SpanHitBoxes& getHitBoxes();
 

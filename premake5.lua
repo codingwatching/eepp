@@ -1761,7 +1761,7 @@ workspace "eepp"
 		files { "src/benchmarks/*.cpp" }
 		incdirs { "src/thirdparty" }
 		build_link_configuration( "eepp-benchmarks", true )
-		
+
 	project "eepp-unit_tests"
 		kind "ConsoleApp"
 		targetdir(_MAIN_SCRIPT_DIR .. "/bin/unit_tests")

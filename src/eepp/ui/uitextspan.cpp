@@ -126,6 +126,9 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextDecoration:
 			setTextDecoration( attribute.asTextDecoration() );
 			break;
+		case PropertyId::TextTransform:
+			setTextTransform( TextTransform::fromString( attribute.asString() ) );
+			break;
 		default:
 			return UIRichText::applyProperty( attribute );
 	}
@@ -163,6 +166,8 @@ std::string UITextSpan::getPropertyString( const PropertyDefinition* propertyDef
 			return getOutlineColor().toHexString();
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
+		case PropertyId::TextTransform:
+			return TextTransform::toString( getTextTransform() );
 		default:
 			return UIRichText::getPropertyString( propertyDef, propertyIndex );
 	}
@@ -180,7 +185,8 @@ std::vector<PropertyId> UITextSpan::getPropertiesImplemented() const {
 				   PropertyId::TextShadowOffset,
 				   PropertyId::TextStrokeWidth,
 				   PropertyId::TextStrokeColor,
-				   PropertyId::TextDecoration };
+				   PropertyId::TextDecoration,
+				   PropertyId::TextTransform };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -564,6 +570,10 @@ bool UITextSpan::hasFontShadowOffset() const {
 
 bool UITextSpan::hasFontBackgroundColor() const {
 	return 0 != ( mStyleState & StyleStateFontBackgroundColor );
+}
+
+bool UITextSpan::hasTextTransform() const {
+	return 0 != ( mStyleState & StyleStateTextTransform );
 }
 
 SpanHitBoxes& UITextSpan::getHitBoxes() {

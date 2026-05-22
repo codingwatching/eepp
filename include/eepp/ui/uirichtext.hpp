@@ -2,6 +2,7 @@
 #define EE_UI_UIRICHTEXT_HPP
 
 #include <eepp/graphics/richtext.hpp>
+#include <eepp/graphics/texttransform.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayout.hpp>
 
@@ -141,6 +142,10 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	void setTextSelectionEnabled( bool active );
 
+	const TextTransform::Value& getTextTransform() const;
+
+	void setTextTransform( const TextTransform::Value& textTransform );
+
 	const Color& getSelectionBackColor() const;
 
 	void setSelectionBackColor( const Color& color );
@@ -169,6 +174,7 @@ class EE_API UIRichText : public UIHTMLWidget {
 	mutable Float mTextIndentPxCache{ 0 };
 	mutable bool mTextIndentPxDirty{ true };
 	WhiteSpaceCollapse mWhiteSpaceCollapse{ WhiteSpaceCollapse::Collapse };
+	TextTransform::Value mTextTransform{ TextTransform::None };
 
 	explicit UIRichText( const std::string& tag = "richtext" );
 
