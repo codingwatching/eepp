@@ -262,6 +262,9 @@ bool UISceneNode::windowExists( UIWindow* win ) {
 
 std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 											  const Uint32& marker ) {
+	Uint32 oldMarker = mCurrentMarker;
+	mCurrentMarker = marker;
+
 	std::vector<UIWidget*> rootWidgets;
 
 	if ( NULL == parent )
@@ -343,6 +346,7 @@ std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 		}
 	}
 
+	mCurrentMarker = oldMarker;
 	return rootWidgets;
 }
 

@@ -740,6 +740,8 @@ class EE_API UISceneNode : public SceneNode {
 
 	void loadFontStyleVariants( Font* font, const std::string& family ) const;
 
+	Uint32 getCurrentMarker() const { return mCurrentMarker; }
+
   protected:
 	friend class EE::UI::UIWindow;
 	friend class EE::UI::UIWidget;
@@ -767,6 +769,7 @@ class EE_API UISceneNode : public SceneNode {
 	Uint32 mMaxInvalidationDepth{ 2 };
 	Node* mCurParent{ nullptr };
 	Uint32 mCurOnSizeChangeListener{ 0 };
+	Uint32 mCurrentMarker{ 0 };
 	std::shared_ptr<ThreadPool> mThreadPool;
 	URI mURI;
 	URI mReferer;

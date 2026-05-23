@@ -5,6 +5,7 @@
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/scopedop.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
+#include <eepp/ui/css/stylesheetparser.hpp>
 #include <eepp/ui/uiborderdrawable.hpp>
 #include <eepp/ui/uicodeeditor.hpp>
 #include <eepp/ui/uilayouter.hpp>
@@ -783,7 +784,21 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 					}
 				}
 			} else if ( String::iequals( child.name(), "style" ) ) {
-				getUISceneNode()->loadNode( child, this, 0 );
+				CSS::StyleSheetParser parser;
+				std::string styleContent;
+				for ( pugi::xml_node styleChild = child.first_child(); styleChild;
+					  styleChild = styleChild.next_sibling() ) {
+					if ( styleChild.type() == pugi::node_pcdata ||
+						 styleChild.type() == pugi::node_cdata ) {
+						styleContent += styleChild.value();
+					}
+				}
+
+				if ( parser.loadFromString( std::string_view{ styleContent } ) ) {
+					parser.getStyleSheet().setMarker( getUISceneNode()->getCurrentMarker() );
+					getUISceneNode()->combineStyleSheet( parser.getStyleSheet(), false );
+				}
+				continue;
 			} else if ( String::iequals( child.name(), "script" ) ) {
 				// No plans to support it
 				continue;
