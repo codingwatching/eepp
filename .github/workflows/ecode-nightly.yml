@@ -52,8 +52,8 @@ jobs:
     container:
       image: ubuntu:20.04
     env:
-      CC: clang-20
-      CXX: clang++-20
+      CC: gcc
+      CXX: g++
     steps:
       - name: Install essentials
         run: |
@@ -115,10 +115,6 @@ jobs:
           bash projects/linux/scripts/install_sdl2.sh
       - name: Build ecode
         run: |
-          export CC="clang-20"
-          export CXX="clang++-20 -stdlib=libc++"
-          export LDFLAGS="-stdlib=libc++"
-
           bash projects/linux/ecode/build.app.sh --with-static-cpp --version ${{ env.INSTALL_REF }} --arch ${{ matrix.config.arch }}
       - name: Upload Files
         uses: softprops/action-gh-release@v3
