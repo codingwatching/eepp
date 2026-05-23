@@ -1197,7 +1197,7 @@ class RichTextInlineLayouter {
 					else
 						rightFloats.push_back( fr );
 				} else {
-					if ( curX < le )
+					if ( !metrics.isBlock && curX < le )
 						curX = le;
 
 					Float startSpacing = 0.f;
@@ -1209,9 +1209,10 @@ class RichTextInlineLayouter {
 					bool hadLineContentBeforeSpacing = !result.lines.back().spans.empty();
 					addInlineSpacingToCurrentLine( result, curX, startSpacing );
 
-					Float effW = effectiveMaxWidthAt( curY );
+					Float effW = metrics.isBlock ? maxLayoutWidth : effectiveMaxWidthAt( curY );
 
-					if ( effW > 0 && effW < 1e9f && metrics.size.getWidth() > effW + 0.01f ) {
+					if ( !metrics.isBlock && effW > 0 && effW < 1e9f &&
+						 metrics.size.getWidth() > effW + 0.01f ) {
 						Float maxBottom = activeFloatBottom( curY );
 						if ( maxBottom > curY ) {
 							maxWidth = std::max( maxWidth, curX );
@@ -1225,7 +1226,7 @@ class RichTextInlineLayouter {
 						}
 					}
 
-					if ( effW > 0 && effW < 1e9f &&
+					if ( !metrics.isBlock && effW > 0 && effW < 1e9f &&
 						 ( curX + metrics.size.getWidth() >= effW || curX >= effW ) && curX > 0 &&
 						 hadLineContentBeforeSpacing ) {
 						maxWidth = std::max( maxWidth, curX );
@@ -1446,6 +1447,7 @@ class RichTextInlineLayouter {
 		Sizef size;
 		Float baseline{ 0.f };
 		bool isLineBreak{ false };
+		bool isBlock{ false };
 		RichText::InlineFloat floatType{ RichText::InlineFloat::None };
 		RichText::InlineClear clearType{ RichText::InlineClear::None };
 	};
@@ -1518,6 +1520,7 @@ class RichTextInlineLayouter {
 		run.payload.floatType = box.floatType;
 		run.payload.clearType = box.clearType;
 		run.payload.isLineBreak = box.isLineBreak;
+		run.payload.isBlock = box.isBlock;
 		run.payload.baselineAlign = box.baselineAlign;
 		run.payload.inlinePath = path;
 		run.payload._leafIndex = nextLeafIndex++;
@@ -1647,6 +1650,7 @@ class RichTextInlineLayouter {
 			metrics.size = payload.size;
 			metrics.baseline = payload.baseline;
 			metrics.isLineBreak = payload.isLineBreak;
+			metrics.isBlock = payload.isBlock;
 			metrics.floatType = payload.floatType;
 			metrics.clearType = payload.clearType;
 		}
@@ -1856,7 +1860,7 @@ void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 
 void RichText::addCustomSize( const Sizef& size, InlineFloat floatType, InlineClear clearType,
 							  Float baseline, const BaselineAlignValue& baselineAlign,
-							  InlineSource source ) {
+							  InlineSource source, bool isBlock ) {
 	Float usedBaseline = baseline >= 0.f ? baseline : size.getHeight();
 
 	InlineItem item;
@@ -1866,6 +1870,7 @@ void RichText::addCustomSize( const Sizef& size, InlineFloat floatType, InlineCl
 	box.baseline = usedBaseline;
 	box.floatType = floatType;
 	box.clearType = clearType;
+	box.isBlock = isBlock;
 	box.baselineAlign = baselineAlign;
 	item.data = std::move( box );
 	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );

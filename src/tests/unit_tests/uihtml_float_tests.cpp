@@ -156,6 +156,7 @@ UTEST( UIHTMLFloat, floatLeft_TextWrapsRight ) {
 	inlineChild->setParent( container );
 	inlineChild->setPixelsSize( 80, 30 );
 	inlineChild->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	inlineChild->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -188,6 +189,7 @@ UTEST( UIHTMLFloat, floatRight_TextFlowsLeft ) {
 	inlineChild->setParent( container );
 	inlineChild->setPixelsSize( 80, 30 );
 	inlineChild->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	inlineChild->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -197,6 +199,40 @@ UTEST( UIHTMLFloat, floatRight_TextFlowsLeft ) {
 	EXPECT_NEAR( fpos.y, ipos.y, 1.f );
 	Float fRightEdge = fpos.x + floatChild->getPixelsSize().getWidth();
 	EXPECT_LT( ipos.x + inlineChild->getPixelsSize().getWidth(), fRightEdge + 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, rightFloatDoesNotDisplaceFollowingNormalBlock ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* container = UIRichText::New();
+	container->setParent( sceneNode->getRoot() );
+	container->setPixelsSize( 600, 400 );
+	container->setPixelsPosition( 10, 10 );
+	container->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::WrapContent );
+
+	UIHTMLWidget* side = UIHTMLWidget::New();
+	side->setParent( container );
+	side->setPixelsSize( 100, 100 );
+	side->setCSSFloat( CSSFloat::Right );
+	side->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* content = UIHTMLWidget::New();
+	content->setParent( container );
+	content->setPixelsSize( 0, 30 );
+	content->setLayoutPixelsMarginRight( 120 );
+	content->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	Vector2f sidePos = side->convertToWorldSpace( { 0, 0 } );
+	Vector2f contentPos = content->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( sidePos.y, contentPos.y, 1.f );
+	EXPECT_NEAR( contentPos.x, container->convertToWorldSpace( { 0, 0 } ).x, 1.f );
+	EXPECT_NEAR( content->getPixelsSize().getWidth(), 480.f, 1.f );
 
 	Engine::destroySingleton();
 }
@@ -327,6 +363,7 @@ UTEST( UIHTMLFloat, clearLeft_OnlyJumpsPastLeftFloats ) {
 	inlineChild->setParent( container );
 	inlineChild->setPixelsSize( 50, 20 );
 	inlineChild->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	inlineChild->setDisplay( CSSDisplay::InlineBlock );
 
 	UIHTMLWidget* clearLeftChild = UIHTMLWidget::New();
 	clearLeftChild->setParent( container );
@@ -402,6 +439,7 @@ UTEST( UIHTMLFloat, mixedLeftRight_ContentBetween ) {
 	middleChild->setParent( container );
 	middleChild->setPixelsSize( 150, 30 );
 	middleChild->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	middleChild->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -438,6 +476,7 @@ UTEST( UIHTMLFloat, floatWrapsContentBelowWhenTooWide ) {
 	wideChild->setParent( container );
 	wideChild->setPixelsSize( 400, 25 );
 	wideChild->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	wideChild->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -469,6 +508,7 @@ UTEST( UIHTMLFloat, floatLeft_InlineBlockBeside ) {
 	inlineBlock->setParent( container );
 	inlineBlock->setPixelsSize( 80, 30 );
 	inlineBlock->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	inlineBlock->setDisplay( CSSDisplay::InlineBlock );
 
 	sceneNode->updateDirtyLayouts();
 

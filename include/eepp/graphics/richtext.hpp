@@ -142,7 +142,8 @@ class EE_API RichText : public Drawable {
 	 */
 	void addCustomSize( const Sizef& size, InlineFloat floatType = InlineFloat::None,
 						InlineClear clearType = InlineClear::None, Float baseline = -1.f,
-						const BaselineAlignValue& baselineAlign = {}, InlineSource source = {} );
+						const BaselineAlignValue& baselineAlign = {}, InlineSource source = {},
+						bool isBlock = false );
 
 	/** @brief Adds a virtual line break that is not associated with a DOM text character. */
 	void addLineBreak();
@@ -185,6 +186,7 @@ class EE_API RichText : public Drawable {
 		InlineFloat floatType{ InlineFloat::None };
 		InlineClear clearType{ InlineClear::None };
 		bool isLineBreak{ false };
+		bool isBlock{ false };
 		InlinePath inlinePath;
 		Vector2f position; // Local position relative to RichText origin
 		Sizef size;
@@ -298,6 +300,7 @@ class EE_API RichText : public Drawable {
 			InlineFloat floatType{ InlineFloat::None };
 			InlineClear clearType{ InlineClear::None };
 			bool isLineBreak{ false };
+			bool isBlock{ false };
 			BaselineAlignValue baselineAlign;
 		};
 

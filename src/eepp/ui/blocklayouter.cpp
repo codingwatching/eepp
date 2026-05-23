@@ -216,6 +216,11 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 		return bounds.Left <= bounds.Right && bounds.Top <= bounds.Bottom;
 	};
 
+	auto isFloatingWidget = []( UIWidget* widget ) {
+		return widget->isType( UI_TYPE_HTML_WIDGET ) &&
+			   widget->asType<UIHTMLWidget>()->getCSSFloat() != CSSFloat::None;
+	};
+
 	auto expandBounds = [&]( Rectf& bounds, bool& valid, const Rectf& rect ) {
 		if ( !valid ) {
 			bounds = rect;
@@ -443,7 +448,8 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 										atomicBounds.Top + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
-					if ( widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
+					if ( !isFloatingWidget( widget ) &&
+						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
 						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 						Float contentWidth = eemax(
 							0.f, mContainer->getPixelsSize().getWidth() - contentOffset.Left -
@@ -471,7 +477,8 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 										contentOffset.Top + lineY + span->position.y + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
-					if ( widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
+					if ( !isFloatingWidget( widget ) &&
+						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
 						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 						// Stretch match-parent children only after the wrap-content parent has its
 						// final used width. During RichText measurement this width may still be a

@@ -1396,10 +1396,32 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					floatType = widget->asType<UIHTMLWidget>()->getCSSFloat();
 					clearType = widget->asType<UIHTMLWidget>()->getCSSClear();
 				}
-				bool isNormalFlowBlock = isBlock && floatType == CSSFloat::None;
+				bool isFloating = floatType != CSSFloat::None;
+				bool isNormalFlowBlock = isBlock && !isFloating;
+				bool shrinkToFitFloat =
+					isFloating && widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
 
 				if ( isNormalFlowBlock )
 					richText.addLineBreak();
+
+				if ( shrinkToFitFloat && mode == IntrinsicMode::None ) {
+					container->onAutoSizeChild( widget );
+					Float availableWidth = 0.f;
+					if ( container->getPixelsSize().getWidth() > 0 ) {
+						availableWidth = eemax( 0.f, container->getPixelsSize().getWidth() -
+														 container->getPixelsContentOffset().Left -
+														 container->getPixelsContentOffset().Right -
+														 margin.Left - margin.Right );
+					}
+					Float preferredMin = widget->getMinIntrinsicWidth();
+					Float preferred = widget->getMaxIntrinsicWidth();
+					Float shrinkWidth = preferred;
+					if ( availableWidth > 0 )
+						shrinkWidth = eemin( eemax( preferredMin, availableWidth ), preferred );
+					widget->setPixelsSize( shrinkWidth, widget->getPixelsSize().getHeight() );
+					size = widget->getPixelsSize();
+					w = shrinkWidth;
+				}
 
 				Sizef customSize( w + margin.Left + margin.Right,
 								  size.getHeight() + margin.Top + margin.Bottom );
@@ -1407,7 +1429,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 										toRichTextClear( clearType ),
 										getAtomicInlineBoxBaseline( widget, size, margin ),
 										toRichTextBaselineAlign( getWidgetBaselineAlign( widget ) ),
-										toRichTextWidgetSource( widget ) );
+										toRichTextWidgetSource( widget ), isNormalFlowBlock );
 
 				if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 					 widget->asType<UITextSpan>()->isInlineBlock() &&

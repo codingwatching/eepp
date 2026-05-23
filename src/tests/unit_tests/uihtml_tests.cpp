@@ -2439,3 +2439,38 @@ UTEST( FontTrueType, glyphScaleZeroDimensionsNoCrash ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, LiFloatLeft ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 653, "li float left", WindowStyle::Default, WindowBackend::Default,
+						32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/float_li.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	auto livec = sceneNode->getRoot()->findAllByTag( "li" );
+
+	ASSERT_GT( livec.size(), (size_t)0 );
+
+	auto refY = livec[0]->getPixelsPosition().y;
+
+	for ( size_t i = 1; i < livec.size(); i++ )
+		EXPECT_NEAR( refY, livec[i]->getPixelsPosition().y, 1.f );
+
+	Engine::destroySingleton();
+}
