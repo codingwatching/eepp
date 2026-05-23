@@ -1882,6 +1882,7 @@ void TerminalDisplay::invalidateCursor() {
 	invalidateLine( mCursor.y );
 	mDirtyCursor = true;
 	mDirty = true;
+	updateIMELocation();
 }
 
 void TerminalDisplay::invalidateLine( const int& line ) {
