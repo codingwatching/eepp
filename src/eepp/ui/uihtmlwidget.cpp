@@ -154,6 +154,15 @@ void UIHTMLWidget::setCSSClear( CSSClear cssClear ) {
 	}
 }
 
+Rectf UIHTMLWidget::getNormalFlowLayoutPixelsMargin() const {
+	Rectf margin = getLayoutPixelsMargin();
+	if ( hasLayoutMarginTopAuto() )
+		margin.Top = 0.f;
+	if ( hasLayoutMarginBottomAuto() )
+		margin.Bottom = 0.f;
+	return margin;
+}
+
 void UIHTMLWidget::setBaselineAlign( const CSSBaselineAlignValue& baselineAlign ) {
 	if ( mBaselineAlign != baselineAlign ) {
 		mBaselineAlign = baselineAlign;

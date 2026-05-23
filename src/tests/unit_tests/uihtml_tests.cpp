@@ -1650,6 +1650,8 @@ static UISceneNode* init_test_inline_block() {
 	font = FontTrueType::New( "NotoSans-Regular" );
 	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
 	FontFamily::loadFromRegular( font );
+	FontTrueType* monoFont = FontTrueType::New( "monospace" );
+	monoFont->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
 	UISceneNode* sceneNode = UISceneNode::New();
 	SceneManager::instance()->add( sceneNode );
 	SceneManager::instance()->setCurrentUISceneNode( sceneNode );
@@ -1998,6 +2000,33 @@ UTEST( UIHTML, HeightExpansion_FixedDoesNotExpand ) {
 
 	// The height should be 100px, not 550px because the fixed div should be ignored.
 	EXPECT_NEAR( bodyWidget->getPixelsSize().getHeight(), 100.f, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, BodyHeightMiscalculationFixture ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Body Height Miscalculation Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/body_height_miscalculation.html", html );
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto bodyNode = sceneNode->getRoot()->findByType( UI_TYPE_HTML_BODY );
+	ASSERT_TRUE( bodyNode != nullptr );
+
+	auto bodyWidget = bodyNode->asType<UIWidget>();
+
+	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 3000.f );
+	EXPECT_LT( bodyWidget->getPixelsSize().getHeight(), 6000.f );
 
 	Engine::destroySingleton();
 }

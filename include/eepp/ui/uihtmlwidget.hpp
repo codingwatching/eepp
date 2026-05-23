@@ -46,6 +46,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	void setCSSClear( CSSClear cssClear );
 
+	Rectf getNormalFlowLayoutPixelsMargin() const;
+
 	const CSSBaselineAlignValue& getBaselineAlign() const { return mBaselineAlign; }
 
 	void setBaselineAlign( const CSSBaselineAlignValue& baselineAlign );
