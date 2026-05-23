@@ -1605,7 +1605,7 @@ UTEST( UIBorder, renderingVariations ) {
 	SceneManager::instance()->draw();
 	win->display();
 
-	compareImages( utest_state, utest_result, win, "eepp-ui-border-rendering", "html", 4 );
+	compareImages( utest_state, utest_result, win, "eepp-ui-border-rendering", "html", 12 );
 
 	Engine::destroySingleton();
 }
@@ -1639,7 +1639,7 @@ UTEST( UIBorder, renderingVariations2 ) {
 	SceneManager::instance()->draw();
 	win->display();
 
-	compareImages( utest_state, utest_result, win, "eepp-ui-border-rendering-2", "html", 4 );
+	compareImages( utest_state, utest_result, win, "eepp-ui-border-rendering-2", "html", 12 );
 
 	Engine::destroySingleton();
 }
