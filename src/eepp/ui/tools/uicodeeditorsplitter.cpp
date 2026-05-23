@@ -577,8 +577,10 @@ UICodeEditorSplitter::createWidget( UIWidget* widget, const std::string& tabName
 	UITabWidget* tabWidget = nullptr;
 
 	UIWidget* curWidget = getCurWidget();
-	if ( !curWidget )
+	if ( !curWidget ) {
+		Log::error( "UICodeEditorSplitter::createWidget curWidget was nullptr!" );
 		return std::make_pair( (UITab*)nullptr, (UIWidget*)nullptr );
+	}
 	tabWidget = tabWidgetFromWidget( curWidget );
 
 	if ( !tabWidget ) {
@@ -600,6 +602,11 @@ UICodeEditorSplitter::createWidgetInTabWidget( UITabWidget* tabWidget, UIWidget*
 		return std::make_pair( (UITab*)nullptr, (UIWidget*)nullptr );
 	UITab* tab = tabWidget->add( tabName, widget );
 	widget->setData( (UintPtr)tab );
+	// We use both events because there was an strange behavior that sometimes OnFocusWithin was not
+	// enough, so this is just in case.
+	widget->on( Event::OnFocus, [this]( const Event* event ) {
+		setCurrentWidget( event->getNode()->asType<UIWidget>() );
+	} );
 	widget->on( Event::OnFocusWithin, [this]( const Event* event ) {
 		setCurrentWidget( event->getNode()->asType<UIWidget>() );
 	} );

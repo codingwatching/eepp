@@ -608,7 +608,9 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 
 	void loadDiffFromPaths( const std::string& oldPath, const std::string& newPath );
 
-	void loadDiffFromMemory( const std::string& content, const std::string& originalFilePath = "" );
+	void loadDiffFromMemory( const std::string& content, const std::string& originalFilePath = "",
+							 const std::string& oldFilePath = "",
+							 const std::string& repoPath = "" );
 
 	void loadDiffFromStrings( const std::string& str, const std::string& otherStr );
 

@@ -1,7 +1,9 @@
 #include "utest.h"
+#include <eepp/graphics/image.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/ui/doc/textdocument.hpp>
 #include <eepp/ui/tools/uidiffview.hpp>
+#include <eepp/ui/tools/uiimageviewer.hpp>
 #include <eepp/ui/uiapplication.hpp>
 #include <eepp/ui/uicodeeditor.hpp>
 
@@ -99,4 +101,61 @@ UTEST( UIDiffView, LoadFromPatchAndVerifyCleanText ) {
 	EXPECT_TRUE( expectedCleanText == textUtf8 );
 
 	eeDelete( diffView );
+}
+
+UTEST( UIDiffView, LoadFromFileImageDiffUsesImageViewers ) {
+	UIApplication app( WindowSettings{ 800, 600, "eepp - unit tests" } );
+
+	std::string oldImagePath( "/tmp/eepp-uidiffview-old.png" );
+	std::string newImagePath( "/tmp/eepp-uidiffview-new.png" );
+	Graphics::Image oldImage( 8, 8, 4, Color::Red );
+	Graphics::Image newImage( 8, 8, 4, Color::Blue );
+	ASSERT_TRUE( oldImage.saveToFile( oldImagePath, Graphics::Image::SaveType::PNG ) );
+	ASSERT_TRUE( newImage.saveToFile( newImagePath, Graphics::Image::SaveType::PNG ) );
+
+	UIDiffView* diffView = UIDiffView::New();
+	diffView->setPixelsSize( 400, 200 );
+	diffView->loadFromFile( oldImagePath, newImagePath );
+
+	EXPECT_TRUE( diffView->isImageDiff() );
+	EXPECT_TRUE( diffView->getLeftImageViewer()->isVisible() );
+	EXPECT_TRUE( diffView->getRightImageViewer()->isVisible() );
+	EXPECT_FALSE( diffView->getEditor()->isVisible() );
+	EXPECT_FALSE( diffView->getLeftEditor()->isVisible() );
+	EXPECT_FALSE( diffView->getRightEditor()->isVisible() );
+	EXPECT_TRUE( diffView->getFileName().toUtf8() == "eepp-uidiffview-new.png" );
+
+	eeDelete( diffView );
+	FileSystem::fileRemove( oldImagePath );
+	FileSystem::fileRemove( newImagePath );
+}
+
+UTEST( UIDiffView, LoadFromPatchImageDiffUsesProvidedOldFile ) {
+	UIApplication app( WindowSettings{ 800, 600, "eepp - unit tests" } );
+
+	std::string oldImagePath( "/tmp/eepp-uidiffview-patch-old.png" );
+	std::string newImagePath( "/tmp/eepp-uidiffview-patch-new.png" );
+	Graphics::Image oldImage( 8, 8, 4, Color::Red );
+	Graphics::Image newImage( 8, 8, 4, Color::Blue );
+	ASSERT_TRUE( oldImage.saveToFile( oldImagePath, Graphics::Image::SaveType::PNG ) );
+	ASSERT_TRUE( newImage.saveToFile( newImagePath, Graphics::Image::SaveType::PNG ) );
+
+	std::string patchText = R"patch(diff --git a/assets/logo.png b/assets/logo.png
+index 1234567..89abcde 100644
+Binary files a/assets/logo.png and b/assets/logo.png differ
+)patch";
+
+	UIDiffView* diffView = UIDiffView::New();
+	diffView->setPixelsSize( 400, 200 );
+	diffView->loadFromPatch( patchText, newImagePath, oldImagePath );
+
+	EXPECT_TRUE( diffView->isImageDiff() );
+	EXPECT_EQ( UIDiffView::ViewMode::SideBySide, diffView->getViewMode() );
+	EXPECT_TRUE( diffView->getLeftImageViewer()->isVisible() );
+	EXPECT_TRUE( diffView->getRightImageViewer()->isVisible() );
+	EXPECT_TRUE( diffView->getFileName().toUtf8() == "logo.png" );
+
+	eeDelete( diffView );
+	FileSystem::fileRemove( oldImagePath );
+	FileSystem::fileRemove( newImagePath );
 }

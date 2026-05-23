@@ -158,7 +158,9 @@ class PluginContextProvider {
 	virtual void loadDiffFromPath( const std::string& path ) = 0;
 
 	virtual void loadDiffFromMemory( const std::string& content,
-									 const std::string& originalFilePath = "" ) = 0;
+									 const std::string& originalFilePath = "",
+									 const std::string& oldFilePath = "",
+									 const std::string& repoPath = "" ) = 0;
 
 	virtual void loadFolder( std::string path, bool forceNewWindow = false ) = 0;
 

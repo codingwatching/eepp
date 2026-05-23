@@ -2637,14 +2637,15 @@ void App::loadAudioFromPath( const std::string& path, bool autoPlay ) {
 	audioPlayer->loadFromPath( path, autoPlay );
 }
 
-void App::loadDiffFromMemory( const std::string& content, const std::string& originalFilePath ) {
+void App::loadDiffFromMemory( const std::string& content, const std::string& originalFilePath,
+							  const std::string& oldFilePath, const std::string& repoPath ) {
 	if ( UIDiffView::isMultiFileDiff( content ) ) {
 		auto diffViewTitle = i18n( "diff_viewer", "Diff Viewer" ) + ": " + originalFilePath;
 		UIIcon* icon = getUISceneNode()->findIcon( "filetype-diff" );
 		if ( !icon )
 			icon = getUISceneNode()->findIcon( "file" );
 
-		auto scrollView = UIDiffView::NewMultiFileDiffViewer( content );
+		auto scrollView = UIDiffView::NewMultiFileDiffViewer( content, repoPath );
 		auto [tab, iv] = getSplitter()->createWidget( scrollView, diffViewTitle );
 		if ( icon )
 			tab->setIcon( icon->getSize( getMenuIconSize() ) );
@@ -2662,7 +2663,10 @@ void App::loadDiffFromMemory( const std::string& content, const std::string& ori
 
 	auto diffViewTitle = i18n( "diff_viewer", "Diff Viewer" );
 	auto* diffView = Tools::UIDiffView::New();
+	diffView->setAutoDeleteOldTempImage( true );
 	auto [tab, iv] = getSplitter()->createWidget( diffView, diffViewTitle );
+	if ( !tab )
+		return;
 	if ( !originalFilePath.empty() ) {
 		std::string fileName = FileSystem::fileNameFromPath( originalFilePath );
 		tab->setText( diffViewTitle + ": " + fileName );
@@ -2676,7 +2680,7 @@ void App::loadDiffFromMemory( const std::string& content, const std::string& ori
 	if ( icon )
 		tab->setIcon( icon->getSize( getMenuIconSize() ) );
 	diffView->setHeadersVisible( true );
-	diffView->loadFromPatch( content, originalFilePath );
+	diffView->loadFromPatch( content, originalFilePath, oldFilePath );
 	diffView->setSyntaxColorScheme( *getCurrentColorScheme() );
 	registerUnlockedCommands( *diffView );
 }
