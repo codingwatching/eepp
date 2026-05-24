@@ -119,12 +119,15 @@ void UIHTMLInput::createChildWidget() {
 		mChildWidget = nullptr;
 	}
 
-	if ( mInputType == "button" || mInputType == "submit" ) {
+	if ( mInputType == "button" || mInputType == "submit" || mInputType == "reset" ) {
 		mChildWidget = UIPushButton::New();
 	} else if ( mInputType == "checkbox" ) {
 		mChildWidget = UICheckBox::New();
 	} else if ( mInputType == "hidden" ) {
-		// We don't need it
+		setVisible( false );
+		setEnabled( false );
+		mVisible = false;
+		mDisplay = CSSDisplay::None;
 	} else if ( mInputType == "number" ) {
 		mChildWidget = UISpinBox::New();
 	} else if ( mInputType == "password" ) {
@@ -148,6 +151,7 @@ void UIHTMLInput::createChildWidget() {
 			if ( mChildWidget )
 				setPixelsSize( mChildWidget->getPixelsSize() );
 		} );
+
 		for ( const auto& propIt : mProperties ) {
 			mChildWidget->applyProperty( propIt.second );
 		}

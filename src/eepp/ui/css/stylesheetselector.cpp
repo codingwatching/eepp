@@ -20,6 +20,10 @@ const Uint32& StyleSheetSelector::getSpecificity() const {
 	return mSpecificity;
 }
 
+void StyleSheetSelector::setSpecificity( const Uint32& specificity ) {
+	mSpecificity = specificity;
+}
+
 void removeExtraSpaces( std::string& string ) {
 	// TODO: Optimize this
 	String::trimInPlace( string );

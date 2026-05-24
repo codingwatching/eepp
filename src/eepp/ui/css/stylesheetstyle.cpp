@@ -23,6 +23,14 @@ StyleSheetStyle::StyleSheetStyle( const std::string& selector,
 	}
 }
 
+void StyleSheetStyle::setSelectorSpecificity( const Uint32& specificity ) {
+	const_cast<StyleSheetSelector&>( mSelector ).setSpecificity( specificity );
+	for ( auto& it : mProperties )
+		it.second.setSpecificity( specificity );
+	for ( auto& it : mVariables )
+		it.second.setSpecificity( specificity );
+}
+
 std::string StyleSheetStyle::build( bool emitMediaQueryStart, bool emitMediaQueryEnd ) {
 	std::string css;
 

@@ -52,91 +52,13 @@
 	droppable-hovering-color: #FFFFFF20;
 }
 
-MarkdownView > *,
-body {
-	color: var(--font);
-}
-
-b,
-strong {
-	font-style: bold;
-}
-
-small {
-	font-size: smaller;
-}
-
-u,
-ins {
-	text-decoration: underline;
-}
-
-s,
-del {
-	text-decoration: strikethrough;
-}
-
-i,
-em,
-cite {
-	font-style: italic;
-}
-
-CodeEditor,
-code,
-kbd {
-	font-family: monospace;
-}
-
-h1 {
-	font-size: 2em;
-	font-weight: bold;
-}
-
-h2 {
-	font-size: 1.5em;
-	font-weight: bold;
-}
-
-h3 {
-	font-size: 1.17em;
-	font-weight: bold;
-}
-
-h4 {
-	font-size: 1em;
-	font-weight: bold;
-}
-
-h5 {
-	font-size: 0.83em;
-	font-weight: bold;
-}
-
-h6 {
-	font-size: 0.67em;
-	font-weight: bold;
-}
-
-a {
-	cursor: arrow;
-	text-decoration: none;
-}
-
-a:hover {
-	text-decoration: underline;
-	cursor: hand;
-}
-
-sub,
-sup {
-	font-size: smaller;
-}
-
-blockquote {
-	padding-left: 8dp;
+MarkdownView {
 	background-color: var(--list-back);
-	border-left: 2dp solid var(--tab-line);
+	padding: 4dp;
+}
+
+MarkdownView body {
+	color: var(--font);
 }
 
 MarkdownView p,
@@ -169,11 +91,6 @@ MarkdownView a {
 
 MarkdownView a:hover {
 	color: var(--font-highlight);
-}
-
-MarkdownView {
-	background-color: var(--list-back);
-	padding: 4dp;
 }
 
 MarkdownView li > p { margin: 0; }

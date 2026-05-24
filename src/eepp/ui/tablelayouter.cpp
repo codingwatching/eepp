@@ -524,10 +524,18 @@ void TableLayouter::updateLayout() {
 		}
 		row->setPixelsSize( containerWidth - paddingH, rowHeight );
 
-		if ( r == 0 && mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_HEAD ) ) {
+		if ( r == 0 && mCells[start]->getParent() &&
+			 ( mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_HEAD ) ||
+			   ( mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_ROW ) &&
+				 mCells[start]->getParent()->getParent() &&
+				 mCells[start]->getParent()->getParent()->isType( UI_TYPE_HTML_TABLE_HEAD ) ) ) ) {
 			headHeight = rowHeight;
 		} else if ( r == rowCount - 1 && columnCount &&
-					mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_FOOTER ) ) {
+					( mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_FOOTER ) ||
+					  ( mCells[start]->getParent()->isType( UI_TYPE_HTML_TABLE_ROW ) &&
+						mCells[start]->getParent()->getParent() &&
+						mCells[start]->getParent()->getParent()->isType(
+							UI_TYPE_HTML_TABLE_FOOTER ) ) ) ) {
 			footerHeight = rowHeight;
 		} else {
 			bodyHeight += rowHeight;

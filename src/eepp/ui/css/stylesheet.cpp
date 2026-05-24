@@ -95,6 +95,12 @@ void StyleSheet::removeAllWithoutMarker( const Uint32& marker ) {
 	invalidateCache();
 }
 
+void StyleSheet::setSelectorSpecificity( const Uint32& specificity ) {
+	for ( auto& node : mNodes )
+		node->setSelectorSpecificity( specificity );
+	invalidateCache();
+}
+
 StyleSheet StyleSheet::getAllWithMarker( const Uint32& marker ) const {
 	StyleSheet style;
 	std::vector<std::shared_ptr<StyleSheetStyle>> hits;

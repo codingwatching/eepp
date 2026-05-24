@@ -1,4 +1,5 @@
 #include "compareimages.hpp"
+#include "eepp/ui/uiwindow.hpp"
 #include "utest.hpp"
 
 #include <eepp/graphics/fontfamily.hpp>
@@ -782,13 +783,17 @@ UTEST( UIHTMLDetails, summaryListStyleNoneClearsDefaultPadding ) {
 	init_ui_test();
 	auto* sceneNode = SceneManager::instance()->getUISceneNode();
 	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
-		<details>
-			<summary id="default">Default marker</summary>
-			<summary id="none" style="list-style-type: none;">No marker</summary>
-			<summary id="explicit" style="list-style-type: none; padding-left: 7px;">
-				Explicit padding
-			</summary>
-		</details>
+	<html>
+		<body>
+			<details>
+				<summary id="default">Default marker</summary>
+				<summary id="none" style="list-style-type: none;">No marker</summary>
+				<summary id="explicit" style="list-style-type: none; padding-left: 7px;">
+					Explicit padding
+				</summary>
+			</details>
+		</body>
+	</html>
 	)html" ) );
 	sceneNode->updateDirtyLayouts();
 

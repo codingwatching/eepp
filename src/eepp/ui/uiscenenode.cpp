@@ -1624,4 +1624,9 @@ void UISceneNode::loadFontStyleVariants( Font* font, const std::string& family )
 		ft->setBoldItalicFont( boldItalicFont );
 }
 
+void UISceneNode::loadHTMLBaseCSS() {
+	// Load HTML base defaults (idempotent - marker check prevents duplicates)
+	UIWidgetCreator::loadHTMLBaseDefaults( mStyleSheet, String::hash( "html_defaults" ) );
+}
+
 }} // namespace EE::UI

@@ -617,6 +617,7 @@ bool UITextInput::applyProperty( const StyleSheetProperty& attribute ) {
 
 	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
 		case PropertyId::Text:
+		case PropertyId::Value:
 			setText( getTranslatorString( attribute.value() ) );
 			break;
 		case PropertyId::AllowEditing:

@@ -96,6 +96,7 @@ bool UITextEdit::applyProperty( const StyleSheetProperty& attribute ) {
 
 	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
 		case PropertyId::Text:
+		case PropertyId::Value:
 			setText( attribute.value() );
 			break;
 		case PropertyId::Wordwrap:

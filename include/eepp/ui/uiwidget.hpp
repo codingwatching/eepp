@@ -1375,6 +1375,10 @@ class EE_API UIWidget : public UINode {
 	/* @return The size of the widget when size policy is match_parent */
 	Sizef getSizeFromLayoutPolicy();
 
+	void setStyleSheetProperties( const CSS::StyleSheetProperties& properties );
+
+	void setStyleSheetProperty( const CSS::StyleSheetProperty& property );
+
   protected:
 	friend class UIManager;
 	friend class UISceneNode;

@@ -19,6 +19,8 @@ class EE_API StyleSheetSelector {
 
 	const Uint32& getSpecificity() const;
 
+	void setSpecificity( const Uint32& specificity );
+
 	bool select( UIWidget* element, const bool& applyPseudo = true ) const;
 
 	bool isCacheable() const;

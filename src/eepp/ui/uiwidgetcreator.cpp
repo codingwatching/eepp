@@ -1,3 +1,4 @@
+#include <eepp/ui/css/stylesheetparser.hpp>
 #include <eepp/ui/tools/uidiffview.hpp>
 #include <eepp/ui/tools/uiimageviewer.hpp>
 #include <eepp/ui/tools/uitextureviewer.hpp>
@@ -65,6 +66,124 @@ UIWidgetCreator::WidgetCallbackMap UIWidgetCreator::widgetCallback =
 
 UIWidgetCreator::RegisteredWidgetCallbackMap UIWidgetCreator::registeredWidget =
 	UIWidgetCreator::RegisteredWidgetCallbackMap();
+
+static const std::string_view getHTMLBaseDefaultsCSS() {
+	return R"css(
+body { color: black; margin: 0.67em; }
+
+h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+h2 { font-size: 1.5em; font-weight: bold; margin: 0.83em 0; }
+h3 { font-size: 1.17em; font-weight: bold; margin: 1em 0; }
+h4 { font-size: 1em; font-weight: bold; margin: 1.33em 0; }
+h5 { font-size: 0.83em; font-weight: bold; margin: 1.67em 0; }
+h6 { font-size: 0.67em; font-weight: bold; margin: 2.33em 0; }
+
+p { margin: 1em 0; }
+pre { margin: 1em 0; }
+blockquote { margin: 1em 0; }
+hr { margin: 0.5em 0; background-color: gray; height: 1dp; }
+ul, ol, dl { margin: 1em 0; }
+
+b, strong { font-weight: bold; }
+i, em, cite { font-style: italic; }
+small { font-size: smaller; }
+u, ins { text-decoration: underline; }
+s, del { text-decoration: line-through; }
+code, kbd { font-family: monospace; }
+sub, sup { font-size: smaller; }
+mark { background-color: yellow; }
+
+a, a:link { color: #0000EE; text-decoration: none; cursor: arrow; }
+a:hover { text-decoration: underline; cursor: hand; }
+a:visited { color: #551A8B; }
+
+ul { padding-left: 40dp; list-style-type: disc; }
+ol { padding-left: 40dp; list-style-type: decimal; }
+dd { margin-left: 40dp; }
+
+summary { cursor: pointer; padding-left: 20dp; list-style-type: disclosure-closed; }
+
+textarea { border-width: 1dp; border-color: #767676; background-color: white; color: black; padding: 2dp; selection-back-color: lightgray; }
+
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+	border-width: 1dp;
+	border-color: #767676;
+	background-color: white;
+	color: black;
+	padding-top: 1dp;
+	padding-bottom: 1dp;
+	padding-left: 2dp;
+	padding-right: 2dp;
+	hint-color: #767676;
+}
+
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+	border-width: 1dp;
+	border-color: #767676;
+	background-color: #f0f0f0;
+	color: black;
+	padding-top: 2dp;
+	padding-bottom: 3dp;
+	padding-left: 6dp;
+	padding-right: 6dp;
+	text-decoration: none;
+}
+
+input[type="submit"]:hover,
+input[type="button"]:hover,
+input[type="reset"]:hover {
+	background-color: #e5e5e5;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+	text-decoration: none;
+}
+
+CheckBox::active,
+CheckBox::inactive {
+	width: 12dp;
+	height: 12dp;
+	border-width: 1dp;
+}
+
+CheckBox::inactive {
+	border-color: #767676;
+}
+
+CheckBox::active {
+	border-color: black;
+	foreground-image: rectangle(solid, black);
+	foreground-size: 8dpru 8dpru;
+	foreground-position: center;
+}
+
+RadioButton::active,
+RadioButton::inactive {
+	width: 12dp;
+	height: 12dp;
+	border-width: 1dp;
+	border-radius: 100%;
+}
+
+RadioButton::inactive {
+	border-color: #767676;
+}
+
+RadioButton::active {
+	border-color: black;
+	foreground-image: circle(solid, black);
+	foreground-size: 8dp 8dp;
+	foreground-position: 6dp 6dp;
+}
+
+)css";
+
+}
 
 void UIWidgetCreator::createBaseWidgetList() {
 	if ( !sBaseListCreated ) {
@@ -171,35 +290,11 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["h6"] = UIRichText::NewH6;
 		registeredWidget["br"] = UIRichText::NewBr;
 		registeredWidget["hr"] = UIRichText::NewHr;
-		registeredWidget["ul"] = [] {
-			auto* w = UIRichText::NewWithTag( "ul" );
-			w->setFlags( UI_CREATING_NODE );
-			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
-			w->applyProperty( StyleSheetProperty( "list-style-type", "disc" ) );
-			w->getUIStyle()->setStyleSheetProperty(
-				StyleSheetProperty( "list-style-type", "disc" ) );
-			w->unsetFlags( UI_CREATING_NODE );
-			return w;
-		};
-		registeredWidget["ol"] = [] {
-			auto* w = UIRichText::NewWithTag( "ol" );
-			w->setFlags( UI_CREATING_NODE );
-			w->applyProperty( StyleSheetProperty( "padding-left", "40dp" ) );
-			w->applyProperty( StyleSheetProperty( "list-style-type", "decimal" ) );
-			w->getUIStyle()->setStyleSheetProperty(
-				StyleSheetProperty( "list-style-type", "decimal" ) );
-			w->unsetFlags( UI_CREATING_NODE );
-			return w;
-		};
+		registeredWidget["ul"] = [] { return UIRichText::NewWithTag( "ul" ); };
+		registeredWidget["ol"] = [] { return UIRichText::NewWithTag( "ol" ); };
 		registeredWidget["dl"] = [] { return UIRichText::NewWithTag( "dl" ); };
 		registeredWidget["dt"] = [] { return UIRichText::NewWithTag( "dt" ); };
-		registeredWidget["dd"] = [] {
-			auto* w = UIRichText::NewWithTag( "dd" );
-			w->setFlags( UI_CREATING_NODE );
-			w->applyProperty( StyleSheetProperty( "margin-left", "40dp" ) );
-			w->unsetFlags( UI_CREATING_NODE );
-			return w;
-		};
+		registeredWidget["dd"] = [] { return UIRichText::NewWithTag( "dd" ); };
 		registeredWidget["li"] = UIHTMLListItem::New;
 		registeredWidget["details"] = UIHTMLDetails::New;
 		registeredWidget["summary"] = UIHTMLSummary::New;
@@ -250,10 +345,8 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["textarea"] = UIHTMLTextArea::New;
 		registeredWidget["button"] = [] {
 			auto but = UIPushButton::NewWithTag( "button" );
-			but->setFlags( UI_CREATING_NODE );
 			but->setFlags( UI_HTML_ELEMENT );
 			but->setLayoutSizePolicy( SizePolicy::WrapContent, SizePolicy::WrapContent );
-			but->unsetFlags( UI_CREATING_NODE );
 			return but;
 		};
 		registeredWidget["webview"] = UIWebView::New;
@@ -320,6 +413,18 @@ std::vector<std::string> UIWidgetCreator::getWidgetNames() {
 	for ( const auto& widgetIt : registeredWidget )
 		names.push_back( widgetIt.first );
 	return names;
+}
+
+void UIWidgetCreator::loadHTMLBaseDefaults( CSS::StyleSheet& styleSheet, Uint32 marker ) {
+	if ( styleSheet.markerExists( marker ) )
+		return;
+	CSS::StyleSheetParser parser;
+	if ( parser.loadFromString( getHTMLBaseDefaultsCSS() ) ) {
+		CSS::StyleSheet baseDefaults = parser.getStyleSheet();
+		baseDefaults.setSelectorSpecificity( 0 );
+		baseDefaults.setMarker( marker );
+		styleSheet.combineStyleSheet( baseDefaults );
+	}
 }
 
 }} // namespace EE::UI

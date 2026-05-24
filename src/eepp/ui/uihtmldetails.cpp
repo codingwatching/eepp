@@ -202,12 +202,9 @@ UIHTMLSummary* UIHTMLSummary::New() {
 UIHTMLSummary::UIHTMLSummary() : UIRichText( "summary" ) {
 	mDisplay = CSSDisplay::ListItem;
 	setFlags( UI_CREATING_NODE );
-	applyProperty( StyleSheetProperty( "cursor", "pointer" ) );
-	applyProperty( StyleSheetProperty( "padding-left", "20dp" ) );
-	applyProperty( StyleSheetProperty( "list-style-type", "disclosure-closed" ) );
-	getUIStyle()->setStyleSheetProperty( StyleSheetProperty( "cursor", "pointer" ) );
-	getUIStyle()->setStyleSheetProperty(
-		StyleSheetProperty( "list-style-type", "disclosure-closed" ) );
+	setStyleSheetProperty( StyleSheetProperty( "cursor", "pointer" ) );
+	setStyleSheetProperty( StyleSheetProperty( "padding-left", "20dp" ) );
+	setStyleSheetProperty( StyleSheetProperty( "list-style-type", "disclosure-closed" ) );
 	unsetFlags( UI_CREATING_NODE );
 	setFlags( UI_TAB_FOCUSABLE );
 }
@@ -278,7 +275,8 @@ bool UIHTMLSummary::applyProperty( const StyleSheetProperty& attribute ) {
 			setListStyleType( CSSListStyleTypeHelper::fromString( attribute.value() ) );
 			return true;
 		case PropertyId::PaddingLeft:
-			if ( !isCreatingNode() && !mApplyingDefaultListStylePadding )
+			if ( !isCreatingNode() && !mApplyingDefaultListStylePadding &&
+				 attribute.getSpecificity() != 0 )
 				mUsingDefaultListStylePadding = false;
 			break;
 		default:
@@ -348,7 +346,7 @@ void UIHTMLSummary::syncDefaultListStylePadding() {
 		return;
 
 	mApplyingDefaultListStylePadding = true;
-	UIRichText::applyProperty( StyleSheetProperty(
+	setStyleSheetProperty( StyleSheetProperty(
 		"padding-left", mListStyleType == CSSListStyleType::None ? "0dp" : "20dp" ) );
 	mApplyingDefaultListStylePadding = false;
 }

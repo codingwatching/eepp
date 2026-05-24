@@ -220,7 +220,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "-filter=\"UIRichText.InvalidWidthLengthComputation3\"",
+        "args": "",
         "command": "${project_root}/bin/unit_tests/eepp-unit_tests-debug",
         "name": "eepp-unit_tests-debug",
         "working_dir": "${project_root}/bin/unit_tests/"

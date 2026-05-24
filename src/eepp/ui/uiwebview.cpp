@@ -21,6 +21,8 @@ UIWebView::UIWebView() : UIScrollView( "webview" ) {
 	mDocContainer->setFlags( UI_OWNS_CHILDREN_POSITION );
 	mDocContainer->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::WrapContent );
 	mDocContainer->setParent( this );
+	mDocContainer->setBackgroundColor( Color::White );
+	mStyleSheetDefaultMarker = String::hash( "html_defaults" );
 }
 
 UIWebView::~UIWebView() {}

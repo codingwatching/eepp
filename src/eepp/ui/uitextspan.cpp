@@ -223,7 +223,7 @@ Font* UITextSpan::getFont() const {
 }
 
 UITextSpan* UITextSpan::setFont( Font* font ) {
-	if ( mRichText.getFontStyleConfig().Font != font ) {
+	if ( mRichText.getFontStyleConfig().Font != font || !( mStyleState & StyleStateFont ) ) {
 		mRichText.getFontStyleConfig().Font = font;
 		mStyleState |= StyleStateFont;
 		mRichText.invalidate();
@@ -238,7 +238,8 @@ Uint32 UITextSpan::getFontSize() const {
 }
 
 UITextSpan* UITextSpan::setFontSize( const Uint32& characterSize ) {
-	if ( mRichText.getFontStyleConfig().CharacterSize != characterSize ) {
+	if ( mRichText.getFontStyleConfig().CharacterSize != characterSize ||
+		 !( mStyleState & StyleStateFontSize ) ) {
 		if ( characterSize == 0 )
 			return this;
 		mRichText.getFontStyleConfig().CharacterSize = characterSize;
@@ -295,7 +296,8 @@ const Float& UITextSpan::getOutlineThickness() const {
 }
 
 UITextSpan* UITextSpan::setOutlineThickness( const Float& outlineThickness ) {
-	if ( mRichText.getFontStyleConfig().OutlineThickness != outlineThickness ) {
+	if ( mRichText.getFontStyleConfig().OutlineThickness != outlineThickness ||
+		 !( mStyleState & StyleStateOutlineThickness ) ) {
 		mRichText.getFontStyleConfig().OutlineThickness = outlineThickness;
 		mStyleState |= StyleStateOutlineThickness;
 		mRichText.invalidate();
@@ -311,7 +313,8 @@ const Color& UITextSpan::getOutlineColor() const {
 }
 
 UITextSpan* UITextSpan::setOutlineColor( const Color& outlineColor ) {
-	if ( mRichText.getFontStyleConfig().OutlineColor != outlineColor ) {
+	if ( mRichText.getFontStyleConfig().OutlineColor != outlineColor ||
+		 !( mStyleState & StyleStateOutlineColor ) ) {
 		mRichText.getFontStyleConfig().OutlineColor = outlineColor;
 		mStyleState |= StyleStateOutlineColor;
 		mRichText.invalidate();
@@ -326,7 +329,8 @@ const Color& UITextSpan::getFontColor() const {
 }
 
 UITextSpan* UITextSpan::setFontColor( const Color& color ) {
-	if ( mRichText.getFontStyleConfig().FontColor != color ) {
+	if ( mRichText.getFontStyleConfig().FontColor != color ||
+		 !( mStyleState & StyleStateFontColor ) ) {
 		mRichText.getFontStyleConfig().FontColor = color;
 		mStyleState |= StyleStateFontColor;
 		mRichText.invalidate();
@@ -663,6 +667,9 @@ bool UIAnchorSpan::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::Href:
 			setHref( attribute.asString() );
+			break;
+		case PropertyId::Color:
+			setFontColor( attribute.asColor() );
 			break;
 		default:
 			UITextSpan::applyProperty( attribute );

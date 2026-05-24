@@ -23,42 +23,6 @@
 
 namespace EE { namespace UI {
 
-static void applyDefaultBlockMargins( UIWidget* widget, const std::string& tag ) {
-	static const UnorderedMap<std::string, std::pair<Float, Float>> defaultsTopBottom = {
-		{ "h1", { 0.67f, 0.67f } },			{ "h2", { 0.83f, 0.83f } },
-		{ "h3", { 1.00f, 1.00f } },			{ "h4", { 1.33f, 1.33f } },
-		{ "h5", { 1.67f, 1.67f } },			{ "h6", { 2.33f, 2.33f } },
-		{ "p", { 1.00f, 1.00f } },			{ "pre", { 1.00f, 1.00f } },
-		{ "blockquote", { 1.00f, 1.00f } }, { "hr", { 0.50f, 0.50f } },
-		{ "ul", { 1.00f, 1.00f } },			{ "ol", { 1.00f, 1.00f } },
-		{ "dl", { 1.00f, 1.00f } },			{ "body", { 0.67f, 0.67f } },
-	};
-
-	static const UnorderedMap<std::string, std::pair<Float, Float>> defaultsLeftRight = {
-		{ "body", { 0.67f, 0.67f } },
-	};
-
-	widget->setFlags( UI_CREATING_NODE );
-
-	auto ittb = defaultsTopBottom.find( tag );
-	if ( ittb != defaultsTopBottom.end() ) {
-		widget->applyProperty(
-			StyleSheetProperty( "margin-top", String::format( "%gem", ittb->second.first ) ) );
-		widget->applyProperty(
-			StyleSheetProperty( "margin-bottom", String::format( "%gem", ittb->second.second ) ) );
-	}
-
-	auto itlr = defaultsLeftRight.find( tag );
-	if ( itlr != defaultsLeftRight.end() ) {
-		widget->applyProperty(
-			StyleSheetProperty( "margin-left", String::format( "%gem", itlr->second.first ) ) );
-		widget->applyProperty(
-			StyleSheetProperty( "margin-right", String::format( "%gem", itlr->second.second ) ) );
-	}
-
-	widget->unsetFlags( UI_CREATING_NODE );
-}
-
 UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string val ) {
 	String::toLowerInPlace( val );
 	if ( "preserve" == val )
@@ -94,6 +58,7 @@ UIHTMLHtml* UIHTMLHtml::New( const std::string& tag ) {
 
 UIHTMLHtml::UIHTMLHtml( const std::string& tag ) : UIRichText( tag ) {
 	enableReportSizeChangeToChildren();
+	getUISceneNode()->loadHTMLBaseCSS();
 }
 
 Uint32 UIHTMLHtml::getType() const {
@@ -139,6 +104,7 @@ UIHTMLBody* UIHTMLBody::New( const std::string& tag ) {
 
 UIHTMLBody::UIHTMLBody( const std::string& tag ) : UIRichText( tag ) {
 	enableReportSizeChangeToChildren();
+	getUISceneNode()->loadHTMLBaseCSS();
 }
 
 Uint32 UIHTMLBody::getType() const {
@@ -241,7 +207,6 @@ UIRichText* UIRichText::NewHtml() {
 UIRichText* UIRichText::NewBody() {
 	auto* body = UIHTMLBody::New( "body" );
 	body->setClipType( ClipType::None );
-	applyDefaultBlockMargins( body, body->getElementTag() );
 	return body;
 }
 
@@ -251,11 +216,7 @@ UIRichText* UIRichText::NewBr() {
 
 UIRichText* UIRichText::NewHr() {
 	auto* w = UILineBreak::New( "hr" );
-	w->setFlags( UI_CREATING_NODE );
-	applyDefaultBlockMargins( w, "hr" );
-	w->setBackgroundColor( Color::Gray );
 	w->mMinHeightEq = "1dp";
-	w->unsetFlags( UI_CREATING_NODE );
 	return w;
 };
 
@@ -264,9 +225,7 @@ UIRichText* UIRichText::New() {
 }
 
 UIRichText* UIRichText::NewWithTag( const std::string& tag ) {
-	auto* w = eeNew( UIRichText, ( tag ) );
-	applyDefaultBlockMargins( w, tag );
-	return w;
+	return eeNew( UIRichText, ( tag ) );
 }
 
 UIRichText::UIRichText( const std::string& tag ) : UIHTMLWidget( tag ) {
@@ -288,6 +247,8 @@ UIRichText::UIRichText( const std::string& tag ) : UIHTMLWidget( tag ) {
 		mRichText.getFontStyleConfig().CharacterSize =
 			sceneNode->getUIThemeManager()->getDefaultFontSize();
 	}
+
+	mRichText.getFontStyleConfig().FontColor = Color::Black;
 
 	setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::WrapContent );
 }

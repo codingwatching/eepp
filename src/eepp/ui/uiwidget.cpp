@@ -2816,4 +2816,25 @@ Float UIWidget::getPropertyHeight() const {
 	}
 	return 0.f;
 }
+
+void UIWidget::setStyleSheetProperties( const CSS::StyleSheetProperties& properties ) {
+	mStyle->setStyleSheetProperties( properties );
+	for ( const auto& [_, property] : properties )
+		applyProperty( property );
+}
+
+void UIWidget::setStyleSheetProperty( const CSS::StyleSheetProperty& property ) {
+	mStyle->setStyleSheetProperty( property );
+
+	if ( StyleSheetSpecification::instance()->isShorthand( property.getName() ) ) {
+		auto properties = StyleSheetSpecification::instance()
+							  ->getShorthand( property.getName() )
+							  ->parse( property.getValue() );
+		for ( const auto& prop : properties ) {
+			applyProperty( prop );
+		}
+	} else
+		applyProperty( property );
+}
+
 }} // namespace EE::UI

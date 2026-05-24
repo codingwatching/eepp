@@ -67,6 +67,8 @@ class EE_API StyleSheetStyle {
 
 	void setMarker( const Uint32& marker );
 
+	void setSelectorSpecificity( const Uint32& specificity );
+
 	bool updatePropertyValue( const std::string& name, const std::string& value );
 
   protected:

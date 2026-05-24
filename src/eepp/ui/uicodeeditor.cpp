@@ -3060,6 +3060,7 @@ bool UICodeEditor::applyProperty( const StyleSheetProperty& attribute ) {
 			setLineWrapType( LineWrap::toLineWrapType( attribute.asString() ) );
 			break;
 		case PropertyId::Text:
+		case PropertyId::Value:
 			mDoc->textInput( attribute.asString() );
 			break;
 		case PropertyId::BackgroundColor: {

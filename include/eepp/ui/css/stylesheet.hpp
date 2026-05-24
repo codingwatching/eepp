@@ -60,6 +60,8 @@ class EE_API StyleSheet {
 
 	void removeAllWithoutMarker( const Uint32& marker );
 
+	void setSelectorSpecificity( const Uint32& specificity );
+
 	bool markerExists( const Uint32& marker ) const;
 
 	StyleSheet getAllWithMarker( const Uint32& marker ) const;

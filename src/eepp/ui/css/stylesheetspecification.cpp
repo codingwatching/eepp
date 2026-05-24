@@ -340,7 +340,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 
 	registerProperty( "white-space-collapse", "collapse", true ).setType( PropertyType::String );
 
-	registerProperty( "hint", "" ).setType( PropertyType::String );
+	registerProperty( "hint", "" ).setType( PropertyType::String ).addAlias( "placeholder" );
 	registerProperty( "hint-color", "" ).setType( PropertyType::Color );
 	registerProperty( "hint-shadow-color", "" ).setType( PropertyType::Color );
 	registerProperty( "hint-shadow-offset", "" ).setType( PropertyType::Vector2 );

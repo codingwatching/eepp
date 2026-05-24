@@ -742,6 +742,8 @@ class EE_API UISceneNode : public SceneNode {
 
 	Uint32 getCurrentMarker() const { return mCurrentMarker; }
 
+	void loadHTMLBaseCSS();
+
   protected:
 	friend class EE::UI::UIWindow;
 	friend class EE::UI::UIWidget;
