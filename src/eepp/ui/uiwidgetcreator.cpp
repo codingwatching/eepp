@@ -88,7 +88,7 @@ b, strong { font-weight: bold; }
 i, em, cite { font-style: italic; }
 small { font-size: smaller; }
 u, ins { text-decoration: underline; }
-s, del { text-decoration: line-through; }
+s, strike, del { text-decoration: line-through; }
 code, kbd { font-family: monospace; }
 sub, sup { font-size: smaller; }
 mark { background-color: yellow; }
@@ -182,7 +182,6 @@ RadioButton::active {
 }
 
 )css";
-
 }
 
 void UIWidgetCreator::createBaseWidgetList() {
@@ -273,6 +272,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["u"] = UITextSpan::NewUnderline;
 		registeredWidget["ins"] = UITextSpan::NewUnderline;
 		registeredWidget["s"] = UITextSpan::NewStrikethrough;
+		registeredWidget["strike"] = [] { return UITextSpan::NewWithTag( "strike" ); };
 		registeredWidget["del"] = UITextSpan::NewStrikethrough;
 		registeredWidget["font"] = UITextSpan::NewFont;
 		registeredWidget["code"] = UITextSpan::NewCode;

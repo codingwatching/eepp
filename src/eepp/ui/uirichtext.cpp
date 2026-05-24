@@ -1307,6 +1307,8 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					"\n", widget->asType<UILineBreak>()->getRichText().getFontStyleConfig() );
 				lastSpanEndsWithSpace = false;
 			} else {
+				if ( widget->hasLayoutMarginAuto() )
+					widget->updateLayoutMarginAuto();
 				Rectf margin =
 					widget->isType( UI_TYPE_HTML_WIDGET )
 						? widget->asType<UIHTMLWidget>()->getNormalFlowLayoutPixelsMargin()

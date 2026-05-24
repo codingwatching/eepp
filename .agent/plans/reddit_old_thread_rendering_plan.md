@@ -16,7 +16,7 @@ The target is not a Reddit-specific hack. Each fix must move the HTML/CSS engine
 - Reference image: `bin/unit_tests/assets/html/reddit_old_thread_reference_image.png`
 - Smoke test: `UIHTML.redditOldThreadWebViewSmoke`
 
-The smoke test loads `assets/ui/breeze.css` first and then opens the old Reddit fixture through `UIWebView`, so it follows the same path as the browser-like local workflow. It asserts the important page regions exist and emits `assets/html/eepp-reddit-old-thread-current.webp` through the existing image comparison helper.
+The smoke test opens the old Reddit fixture through `UIWebView` without loading the app theme. Browser-like HTML defaults are supplied by the HTML base defaults stylesheet when HTML widgets enter the node tree, so the test exercises the same default-style path used by real HTML content. It asserts the important page regions exist and emits `assets/html/eepp-reddit-old-thread-current.webp` through the existing image comparison helper.
 
 The smoke test is opt-in because the full fixture is slow in ASAN:
 
@@ -38,7 +38,10 @@ Current progress:
 - `BlockLayouter` now forwards inherited float exclusions through normal non-floating blocks and preserves the parent-computed used width for BFC match-parent children next to floats.
 - The fixture now keeps the main `.entry` selftext box to the left of `.side` (`side.x=719`, `entry.x=44`, `entry.width=670` in the current smoke run).
 - External float exclusions are filtered for fixed-width descendants whose content box is entirely outside the float's horizontal range. This keeps the comment form textarea from being pushed below the sidebar while still letting match-parent content compute a float-constrained used width.
-- Remaining visible blockers: header/topbar layout is still badly overlapped, the vote arrow sprites/centering are incomplete, the comment form spacing is too large, and the footer/comments vertical spacing still diverges from Chrome.
+- The smoke test no longer loads `breeze.css`; HTML defaults now come from automatic HTML base-default injection.
+- Legacy `<strike>` is registered as an HTML phrasing element and receives default `line-through` styling, removing a missing-element warning from the fixture.
+- Horizontal `auto` margins are recomputed at RichText/block layout read points, and the old Reddit vote arrow is centered inside `.midcol` (`arrow.x=17`, `midcol.x=15`, `arrow.width=15`, `midcol.width=19` in the current smoke run).
+- Remaining visible blockers: header/topbar layout is still badly overlapped, vote arrow sprite painting/background positioning still needs verification, the comment form spacing is too large, and the footer/comments vertical spacing still diverges from Chrome.
 
 ## Reference Layout Invariants
 
@@ -133,7 +136,7 @@ Reduced tests:
 
 ### 4. CSS Display Defaults And Element Creation
 
-The user currently loads `breeze.css` because not all base HTML element display/state defaults have moved into HTML element creation. This should be reduced.
+The old `breeze.css` dependency has been removed from the old Reddit smoke test. HTML base defaults are now injected automatically when HTML content is attached to a scene.
 
 Old Reddit relies on browser defaults for:
 
@@ -142,7 +145,7 @@ Old Reddit relies on browser defaults for:
 - replaced/form controls such as `input`, `textarea`
 - hidden inputs and `display:none` nodes
 
-Plan:
+Remaining plan:
 
 - Audit `UIWidgetCreator` and HTML element constructors for browser-like default display.
 - Keep theme-specific visual styling in CSS, but move semantic defaults into element creation.
@@ -329,12 +332,12 @@ Exit criteria:
 
 ### Phase 4: Defaults And Form Controls
 
-Move semantic HTML defaults out of theme dependency where practical, keeping `breeze.css` as a visual theme rather than a behavior crutch.
+Keep semantic HTML defaults independent from the app theme. `breeze.css` should remain a visual UI theme, not a behavior crutch for HTML content.
 
 Exit criteria:
 
 - Minimal HTML default-display tests pass without loading `breeze.css`.
-- The old Reddit smoke test still passes with breeze loaded.
+- The old Reddit smoke test passes without loading `breeze.css`.
 - Form controls in the comment box and sidebar match expected broad geometry.
 
 ### Phase 5: Full-Page Visual Gate

@@ -189,10 +189,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
 	SceneManager::instance()->add( sceneNode );
 	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
-	UITheme* theme = UITheme::load( "breeze", "breeze", "", font, "assets/ui/breeze.css" );
-	ASSERT_TRUE( theme != nullptr );
-	sceneNode->setStyleSheet( theme->getStyleSheet() );
-	themeManager->setDefaultFont( font )->setDefaultTheme( theme )->add( theme );
+	themeManager->setDefaultFont( font );
 
 	UIWebView* webView = UIWebView::New();
 	webView->setParent( sceneNode->getRoot() );
@@ -230,6 +227,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	Vector2f contentPos = content->convertToWorldSpace( { 0, 0 } );
 	Vector2f midcolPos = midcol->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f entryPos = entry->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f arrowPos = arrow->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 
 	std::cerr << "old reddit rects: "
 			  << "side=(" << sidePos.x << "," << sidePos.y << " "
@@ -243,12 +241,36 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			  << midcol->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
 			  << "entry=(" << entryPos.x << "," << entryPos.y << " "
 			  << entry->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
-			  << entry->asType<UIWidget>()->getPixelsSize().getHeight() << ")" << std::endl;
+			  << entry->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "arrow=(" << arrowPos.x << "," << arrowPos.y << " "
+			  << arrow->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << arrow->asType<UIWidget>()->getPixelsSize().getHeight() << ")" << std::endl;
+
+	const Float midcolCenter =
+		midcolPos.x + midcol->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
+	const Float arrowCenter =
+		arrowPos.x + arrow->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
+	EXPECT_NEAR( midcolCenter, arrowCenter, 1.f );
 
 	if ( !FileSystem::fileExists( "output" ) )
 		FileSystem::makeDir( "output" );
 	win->getFrontBufferImage().saveToFile( "output/eepp-reddit-old-thread-current.webp",
 										   Image::SaveType::WEBP );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, StrikeElementUsesDefaultLineThrough ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML(
+		R"html(<body><p><strike id="strike">old</strike></p></body>)html" ) );
+	SceneManager::instance()->update();
+
+	auto* strike = sceneNode->getRoot()->find( "strike" )->asType<UITextSpan>();
+	ASSERT_TRUE( strike != nullptr );
+	EXPECT_TRUE( 0 != ( strike->getTextDecoration() & Text::StrikeThrough ) );
 
 	Engine::destroySingleton();
 }
@@ -1300,6 +1322,20 @@ UTEST( UILayout, marginAuto ) {
 
 	EXPECT_NEAR( childWidget->getLayoutPixelsMargin().Left, expectedMarginX, 1.f );
 	EXPECT_NEAR( childWidget->getLayoutPixelsMargin().Right, expectedMarginX, 1.f );
+
+	childWidget->setLayoutMarginAuto( false, false, true, true );
+	sceneNode->updateDirtyLayouts();
+
+	Float expectedMarginY =
+		( contWidget->getPixelsSize().getHeight() - childWidget->getPixelsSize().getHeight() ) /
+		2.f;
+
+	EXPECT_NEAR( childWidget->getLayoutPixelsMargin().Top, expectedMarginY, 1.f );
+	EXPECT_NEAR( childWidget->getLayoutPixelsMargin().Bottom, expectedMarginY, 1.f );
+	EXPECT_FALSE( childWidget->hasLayoutMarginLeftAuto() );
+	EXPECT_FALSE( childWidget->hasLayoutMarginRightAuto() );
+	EXPECT_TRUE( childWidget->hasLayoutMarginTopAuto() );
+	EXPECT_TRUE( childWidget->hasLayoutMarginBottomAuto() );
 
 	Engine::destroySingleton();
 }

@@ -16,6 +16,7 @@
 
 using namespace EE;
 using namespace EE::UI;
+using namespace EE::UI::Tools;
 using namespace EE::Window;
 using namespace EE::Graphics;
 
@@ -272,6 +273,34 @@ UTEST( UIHTMLFloat, leftFloatOverflowHiddenBlockFormattingContextSitsBesideFloat
 	EXPECT_GE( entryPos.x, midcolPos.x + midcol->getPixelsSize().getWidth() +
 							   midcol->getLayoutPixelsMargin().Right - 1.f );
 	EXPECT_NEAR( entry->getPixelsSize().getWidth(), 567.f, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, autoHorizontalMarginsCenterBlockInsideFloat ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="midcol" style="float:left;width:19px;height:50px;overflow:hidden">
+				<div id="arrow" style="display:block;width:15px;height:14px;margin-left:auto;margin-right:auto"></div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* midcol = sceneNode->find<UIWidget>( "midcol" );
+	auto* arrow = sceneNode->find<UIWidget>( "arrow" );
+	ASSERT_TRUE( midcol != nullptr );
+	ASSERT_TRUE( arrow != nullptr );
+
+	Vector2f midcolPos = midcol->convertToWorldSpace( { 0, 0 } );
+	Vector2f arrowPos = arrow->convertToWorldSpace( { 0, 0 } );
+	Float midcolCenter = midcolPos.x + midcol->getPixelsSize().getWidth() / 2.f;
+	Float arrowCenter = arrowPos.x + arrow->getPixelsSize().getWidth() / 2.f;
+
+	EXPECT_NEAR( midcolCenter, arrowCenter, 1.f );
 
 	Engine::destroySingleton();
 }

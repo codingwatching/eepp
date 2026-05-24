@@ -328,6 +328,10 @@ class EE_API UIWidget : public UINode {
 
 	bool hasLayoutMarginBottomAuto() const;
 
+	bool hasLayoutMarginAuto() const;
+
+	UIWidget* updateLayoutMarginAuto();
+
 	/**
 	 * @brief Sets the layout margin for all sides in pixels.
 	 *

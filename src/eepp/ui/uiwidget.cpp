@@ -188,7 +188,7 @@ UIWidget* UIWidget::setLayoutMarginTopAuto( bool isAuto ) {
 }
 
 UIWidget* UIWidget::setLayoutMarginBottomAuto( bool isAuto ) {
-	return setLayoutMarginAuto( MarginAuto::Top, isAuto );
+	return setLayoutMarginAuto( MarginAuto::Bottom, isAuto );
 }
 
 UIWidget* UIWidget::setLayoutMarginAuto( bool left, bool right, bool top, bool bottom ) {
@@ -213,6 +213,15 @@ bool UIWidget::hasLayoutMarginTopAuto() const {
 
 bool UIWidget::hasLayoutMarginBottomAuto() const {
 	return mMarginAuto & MarginAuto::Bottom;
+}
+
+bool UIWidget::hasLayoutMarginAuto() const {
+	return mMarginAuto != 0;
+}
+
+UIWidget* UIWidget::updateLayoutMarginAuto() {
+	calculateAutoMargin();
+	return this;
 }
 
 UIWidget* UIWidget::setLayoutPixelsMargin( const Rectf& margin ) {
