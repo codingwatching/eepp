@@ -212,12 +212,24 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	auto midcol = sceneNode->getRoot()->findByClass( "midcol" );
 	auto entry = sceneNode->getRoot()->findByClass( "entry" );
 	auto arrow = sceneNode->getRoot()->findByClass( "arrow" );
+	auto srHeader = sceneNode->getRoot()->find( "sr-header-area" );
+	auto redesignButton = sceneNode->getRoot()->find( "redesign-beta-optin-btn" );
+	auto srDrop = sceneNode->getRoot()->querySelector( "#sr-header-area .dropdown.srdrop" );
+	auto srList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list" );
+	auto headerBottomLeft = sceneNode->getRoot()->find( "header-bottom-left" );
+	auto dropChoices = sceneNode->getRoot()->querySelector( ".drop-choices.srdrop" );
 
 	ASSERT_TRUE( side != nullptr );
 	ASSERT_TRUE( siteTable != nullptr );
 	ASSERT_TRUE( midcol != nullptr );
 	ASSERT_TRUE( entry != nullptr );
 	ASSERT_TRUE( arrow != nullptr );
+	ASSERT_TRUE( srHeader != nullptr );
+	ASSERT_TRUE( redesignButton != nullptr );
+	ASSERT_TRUE( srDrop != nullptr );
+	ASSERT_TRUE( srList != nullptr );
+	ASSERT_TRUE( headerBottomLeft != nullptr );
+	ASSERT_TRUE( dropChoices != nullptr );
 
 	UIWidget* content =
 		siteTable->getParent()->isWidget() ? siteTable->getParent()->asType<UIWidget>() : nullptr;
@@ -228,6 +240,14 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	Vector2f midcolPos = midcol->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f entryPos = entry->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f arrowPos = arrow->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f srHeaderPos = srHeader->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f redesignButtonPos =
+		redesignButton->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f srDropPos = srDrop->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f srListPos = srList->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f headerBottomLeftPos =
+		headerBottomLeft->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f dropChoicesPos = dropChoices->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 
 	std::cerr << "old reddit rects: "
 			  << "side=(" << sidePos.x << "," << sidePos.y << " "
@@ -244,13 +264,49 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			  << entry->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
 			  << "arrow=(" << arrowPos.x << "," << arrowPos.y << " "
 			  << arrow->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
-			  << arrow->asType<UIWidget>()->getPixelsSize().getHeight() << ")" << std::endl;
+			  << arrow->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "srHeader=(" << srHeaderPos.x << "," << srHeaderPos.y << " "
+			  << srHeader->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << srHeader->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "redesignButton=(" << redesignButtonPos.x << "," << redesignButtonPos.y << " "
+			  << redesignButton->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << redesignButton->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "srDrop=(" << srDropPos.x << "," << srDropPos.y << " "
+			  << srDrop->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << srDrop->asType<UIWidget>()->getPixelsSize().getHeight() << " float="
+			  << CSSFloatHelper::toString( srDrop->asType<UIHTMLWidget>()->getCSSFloat() ) << ") "
+			  << "srList=(" << srListPos.x << "," << srListPos.y << " "
+			  << srList->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << srList->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " lines=" << srList->asType<UIRichText>()->getRichTextPtr()->getLines().size()
+			  << " wrap=" << srList->asType<UIRichText>()->getLineWrap() << ") "
+			  << "headerBottomLeft=(" << headerBottomLeftPos.x << "," << headerBottomLeftPos.y
+			  << " " << headerBottomLeft->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << headerBottomLeft->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "dropChoices=(" << dropChoicesPos.x << "," << dropChoicesPos.y << " "
+			  << dropChoices->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << dropChoices->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " visible=" << dropChoices->asType<UIWidget>()->isVisible() << " display="
+			  << CSSDisplayHelper::toString( dropChoices->asType<UIHTMLWidget>()->getDisplay() )
+			  << ")" << std::endl;
 
 	const Float midcolCenter =
 		midcolPos.x + midcol->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
 	const Float arrowCenter =
 		arrowPos.x + arrow->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
 	EXPECT_NEAR( midcolCenter, arrowCenter, 1.f );
+
+	auto* arrowBackground = arrow->asType<UIWidget>()->getBackground();
+	ASSERT_TRUE( arrowBackground != nullptr );
+	auto* arrowBackgroundLayer = arrowBackground->getLayer( 0 );
+	ASSERT_TRUE( arrowBackgroundLayer != nullptr );
+	ASSERT_TRUE( arrowBackgroundLayer->getDrawable() != nullptr );
+	EXPECT_EQ( arrowBackgroundLayer->getDrawable()->getPixelsSize().getWidth(), 140 );
+	EXPECT_EQ( arrowBackgroundLayer->getDrawable()->getPixelsSize().getHeight(), 1751 );
+	EXPECT_STDSTREQ( arrowBackgroundLayer->getPositionX(), "-42px" );
+	EXPECT_STDSTREQ( arrowBackgroundLayer->getPositionY(), "-1678px" );
+	EXPECT_NEAR( arrowBackgroundLayer->getOffset().x, -42.f, 0.1f );
+	EXPECT_NEAR( arrowBackgroundLayer->getOffset().y, -1678.f, 0.1f );
 
 	if ( !FileSystem::fileExists( "output" ) )
 		FileSystem::makeDir( "output" );
@@ -271,6 +327,70 @@ UTEST( UIHTML, StrikeElementUsesDefaultLineThrough ) {
 	auto* strike = sceneNode->getRoot()->find( "strike" )->asType<UITextSpan>();
 	ASSERT_TRUE( strike != nullptr );
 	EXPECT_TRUE( 0 != ( strike->getTextDecoration() & Text::StrikeThrough ) );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceNowrapDisablesSoftWrap ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	const std::string text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+
+	sceneNode->loadLayoutFromString(
+		HTMLFormatter::HTMLtoXML( String::format( R"html(
+			<body>
+				<div id="wrap" style="width: 120px; font-size: 16px">%s</div>
+				<div id="nowrap" style="width: 120px; font-size: 16px; white-space: nowrap">
+					%s
+				</div>
+			</body>
+		)html",
+												  text.c_str(), text.c_str() ) ) );
+	SceneManager::instance()->update();
+
+	auto* wrap = sceneNode->getRoot()->find( "wrap" )->asType<UIRichText>();
+	auto* nowrap = sceneNode->getRoot()->find( "nowrap" )->asType<UIRichText>();
+	ASSERT_TRUE( wrap != nullptr );
+	ASSERT_TRUE( nowrap != nullptr );
+
+	EXPECT_GT( wrap->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_EQ( nowrap->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_FALSE( nowrap->getLineWrap() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceNowrapKeepsInlineListOnOneLine ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<div id="bar" style="width: 120px; white-space: nowrap; overflow: hidden">
+				<ul id="list" style="display: inline; list-style: none; margin: 0; padding: 0">
+					<li style="display: inline; white-space: nowrap">alpha</li>
+					<li style="display: inline; white-space: nowrap">beta</li>
+					<li style="display: inline; white-space: nowrap">gamma</li>
+					<li style="display: inline; white-space: nowrap">delta</li>
+					<li style="display: inline; white-space: nowrap">epsilon</li>
+					<li style="display: inline; white-space: nowrap">zeta</li>
+					<li style="display: inline; white-space: nowrap">eta</li>
+					<li style="display: inline; white-space: nowrap">theta</li>
+				</ul>
+			</div>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* bar = sceneNode->getRoot()->find( "bar" )->asType<UIRichText>();
+	auto* list = sceneNode->getRoot()->find( "list" )->asType<UIRichText>();
+	ASSERT_TRUE( bar != nullptr );
+	ASSERT_TRUE( list != nullptr );
+
+	EXPECT_EQ( bar->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_FALSE( bar->getLineWrap() );
+	EXPECT_FALSE( list->getLineWrap() );
 
 	Engine::destroySingleton();
 }
@@ -2297,6 +2417,51 @@ UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
 
 	Engine::destroySingleton();
 	EE::Graphics::PixelDensity::setPixelDensity( 1.0f );
+}
+
+UTEST( UIBackground, cssFileRelativeSpriteUrlAndNegativePosition ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="sprite" class="sprite"></div>
+		</body>
+	)html" ) );
+	sceneNode->combineStyleSheet(
+		R"css(
+			.sprite {
+				width: 15px;
+				height: 14px;
+				background-image: url(sprite-reddit.13AvZYXRW_4.png);
+				background-position: -42px -1678px;
+				background-repeat: no-repeat;
+			}
+		)css",
+		true, String::hash( "reddit-sprite-test" ),
+		URI( "file://" + Sys::getProcessPath() +
+			 "assets/html/reddit_old_thread_files/reddit-sprite-test.css" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* sprite = sceneNode->find<UIWidget>( "sprite" );
+	ASSERT_TRUE( sprite != nullptr );
+	auto* background = sprite->getBackground();
+	ASSERT_TRUE( background != nullptr );
+	auto* layer = background->getLayer( 0 );
+	ASSERT_TRUE( layer != nullptr );
+	ASSERT_TRUE( layer->getDrawable() != nullptr );
+
+	EXPECT_EQ( layer->getDrawable()->getPixelsSize().getWidth(), 140 );
+	EXPECT_EQ( layer->getDrawable()->getPixelsSize().getHeight(), 1751 );
+	EXPECT_STDSTREQ( layer->getPositionX(), "-42px" );
+	EXPECT_STDSTREQ( layer->getPositionY(), "-1678px" );
+	EXPECT_NEAR( layer->getOffset().x, -42.f, 0.1f );
+	EXPECT_NEAR( layer->getOffset().y, -1678.f, 0.1f );
+	EXPECT_EQ( layer->getRepeatX(), UINodeDrawable::RepeatX::NoRepeat );
+	EXPECT_EQ( layer->getRepeatY(), UINodeDrawable::RepeatY::NoRepeat );
+
+	Engine::destroySingleton();
 }
 
 UTEST( UIBackground, InlineBlockImageSpans ) {

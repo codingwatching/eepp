@@ -135,6 +135,12 @@ class EE_API RichText : public Drawable {
 	/** @return The maximum width for wrapping. */
 	Float getMaxWidth() const { return mMaxWidth; }
 
+	/** @brief Enables or disables soft wrapping when max width is set. */
+	void setLineWrap( bool lineWrap );
+
+	/** @return Whether soft wrapping is enabled. */
+	bool getLineWrap() const { return mLineWrap; }
+
 	bool setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions );
 
 	const std::vector<FloatExclusion>& getExternalFloatExclusions() const {
@@ -418,6 +424,7 @@ class EE_API RichText : public Drawable {
 	bool mNeedsLayoutUpdate{ true };
 	Float mLineHeight{ 0 };
 	Float mTextIndent{ 0 };
+	bool mLineWrap{ true };
 };
 
 }} // namespace EE::Graphics

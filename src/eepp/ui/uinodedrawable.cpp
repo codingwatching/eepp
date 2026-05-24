@@ -788,7 +788,7 @@ Vector2f UINodeDrawable::LayerDrawable::calcPosition( std::string positionXEq,
 		positionXEq = "center";
 
 	if ( positionYEq.empty() )
-		positionXEq = "center";
+		positionYEq = "center";
 
 	auto posX = String::split( positionXEq, ' ' );
 	auto posY = String::split( positionYEq, ' ' );

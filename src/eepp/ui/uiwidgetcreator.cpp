@@ -119,9 +119,11 @@ input[type="number"] {
 	hint-color: #767676;
 }
 
+button,
 input[type="submit"],
 input[type="button"],
 input[type="reset"] {
+	display: inline-block;
 	border-width: 1dp;
 	border-color: #767676;
 	background-color: #f0f0f0;
@@ -133,6 +135,7 @@ input[type="reset"] {
 	text-decoration: none;
 }
 
+button:hover,
 input[type="submit"]:hover,
 input[type="button"]:hover,
 input[type="reset"]:hover {
@@ -343,12 +346,7 @@ void UIWidgetCreator::createBaseWidgetList() {
 		registeredWidget["td"] = [] { return UIHTMLTableCell::New( "td" ); };
 		registeredWidget["input"] = UIHTMLInput::New;
 		registeredWidget["textarea"] = UIHTMLTextArea::New;
-		registeredWidget["button"] = [] {
-			auto but = UIPushButton::NewWithTag( "button" );
-			but->setFlags( UI_HTML_ELEMENT );
-			but->setLayoutSizePolicy( SizePolicy::WrapContent, SizePolicy::WrapContent );
-			return but;
-		};
+		registeredWidget["button"] = [] { return UIRichText::NewWithTag( "button" ); };
 		registeredWidget["webview"] = UIWebView::New;
 
 		sBaseListCreated = true;

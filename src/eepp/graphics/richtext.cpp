@@ -843,8 +843,8 @@ class RichTextInlineLayouter {
 
 	static LayoutResult layoutNoFloats( const std::vector<RichText::InlineItem>& inlineItems,
 										Float maxLayoutWidth, Float textIndent, Uint32 align,
-										Float forcedLineHeight,
-										const FontStyleConfig& defaultStyle ) {
+										Float forcedLineHeight, const FontStyleConfig& defaultStyle,
+										bool lineWrap ) {
 		LayoutResult result;
 		result.lines.push_back( RichText::RenderParagraph() );
 
@@ -877,7 +877,7 @@ class RichTextInlineLayouter {
 											   inlineStartSpacing( payload, inlineItems ) );
 
 				LineWrapInfoEx wrapInfo = computeTextWraps( payload, fontStyle, maxLayoutWidth,
-															maxLayoutWidth > 0, curX );
+															lineWrap && maxLayoutWidth > 0, curX );
 
 				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 					size_t startIdx = wrapInfo.wraps[i];
@@ -934,7 +934,7 @@ class RichTextInlineLayouter {
 				bool hadLineContentBeforeSpacing = !result.lines.back().spans.empty();
 				addInlineSpacingToCurrentLine( result, curX, startSpacing );
 
-				if ( maxLayoutWidth > 0 &&
+				if ( lineWrap && maxLayoutWidth > 0 &&
 					 ( curX + metrics.size.getWidth() >= maxLayoutWidth ||
 					   curX >= maxLayoutWidth ) &&
 					 curX > 0 && hadLineContentBeforeSpacing ) {
@@ -947,7 +947,7 @@ class RichTextInlineLayouter {
 				appendAtomicRenderSpan( result.lines.back(), payload, metrics, curX, curCharIdx );
 				addInlineSpacingToCurrentLine( result, curX, endSpacing );
 
-				if ( maxLayoutWidth > 0 && curX >= maxLayoutWidth ) {
+				if ( lineWrap && maxLayoutWidth > 0 && curX >= maxLayoutWidth ) {
 					maxWidth = std::max( maxWidth, curX );
 					result.lines.push_back( RichText::RenderParagraph() );
 					curX = 0;
@@ -975,11 +975,10 @@ class RichTextInlineLayouter {
 		return result;
 	}
 
-	static LayoutResult
-	layoutWithFloats( const std::vector<RichText::InlineItem>& inlineItems, Float maxLayoutWidth,
-					  Float textIndent, Uint32 align, Float forcedLineHeight,
-					  const FontStyleConfig& defaultStyle,
-					  const std::vector<RichText::FloatExclusion>& externalFloatExclusions ) {
+	static LayoutResult layoutWithFloats(
+		const std::vector<RichText::InlineItem>& inlineItems, Float maxLayoutWidth,
+		Float textIndent, Uint32 align, Float forcedLineHeight, const FontStyleConfig& defaultStyle,
+		const std::vector<RichText::FloatExclusion>& externalFloatExclusions, bool lineWrap ) {
 		LayoutResult result;
 		result.lines.push_back( RichText::RenderParagraph() );
 
@@ -1090,7 +1089,7 @@ class RichTextInlineLayouter {
 					effW = maxLayoutWidth;
 
 				LineWrapInfoEx wrapInfo =
-					computeTextWraps( payload, fontStyle, effW, effW > 0, curX );
+					computeTextWraps( payload, fontStyle, effW, lineWrap && effW > 0, curX );
 
 				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 					size_t startIdx = wrapInfo.wraps[i];
@@ -1132,7 +1131,8 @@ class RichTextInlineLayouter {
 
 				if ( metrics.isLineBreak ) {
 					maxWidth = std::max( maxWidth, curX );
-					if ( !result.lines.back().spans.empty() ) {
+					if ( !result.lines.back().spans.empty() &&
+						 lineHasInFlowContent( result.lines.back() ) ) {
 						curY += result.lines.back().height;
 						result.lines.push_back( RichText::RenderParagraph() );
 						result.lines.back().y = curY;
@@ -1232,7 +1232,7 @@ class RichTextInlineLayouter {
 						}
 					}
 
-					if ( !metrics.isBlock && effW > 0 && effW < 1e9f &&
+					if ( lineWrap && !metrics.isBlock && effW > 0 && effW < 1e9f &&
 						 metrics.size.getWidth() > effW + 0.01f ) {
 						Float maxBottom = activeFloatBottom( curY );
 						if ( maxBottom > curY ) {
@@ -1247,7 +1247,7 @@ class RichTextInlineLayouter {
 						}
 					}
 
-					if ( !metrics.isBlock && effW > 0 && effW < 1e9f &&
+					if ( lineWrap && !metrics.isBlock && effW > 0 && effW < 1e9f &&
 						 ( curX + metrics.size.getWidth() >= effW || curX >= effW ) && curX > 0 &&
 						 hadLineContentBeforeSpacing ) {
 						maxWidth = std::max( maxWidth, curX );
@@ -1261,7 +1261,7 @@ class RichTextInlineLayouter {
 											curCharIdx );
 					addInlineSpacingToCurrentLine( result, curX, endSpacing );
 
-					if ( effW > 0 && effW < 1e9f && curX >= effW ) {
+					if ( lineWrap && effW > 0 && effW < 1e9f && curX >= effW ) {
 						maxWidth = std::max( maxWidth, curX );
 						result.lines.push_back( RichText::RenderParagraph() );
 						curX = 0;
@@ -1706,6 +1706,14 @@ class RichTextInlineLayouter {
 		line.width += metrics.size.getWidth();
 	}
 
+	static bool lineHasInFlowContent( const RichText::RenderParagraph& line ) {
+		for ( const auto& span : line.spans ) {
+			if ( span.floatType == RichText::InlineFloat::None )
+				return true;
+		}
+		return false;
+	}
+
 	static Float horizontalAlignmentOffset( const RichText::RenderParagraph& line,
 											Float maxLayoutWidth, Uint32 align ) {
 		if ( maxLayoutWidth <= 0 || align == 0 )
@@ -2036,6 +2044,13 @@ void RichText::setMaxWidth( Float width ) {
 	}
 }
 
+void RichText::setLineWrap( bool lineWrap ) {
+	if ( mLineWrap != lineWrap ) {
+		mLineWrap = lineWrap;
+		invalidateLayout();
+	}
+}
+
 bool RichText::setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions ) {
 	if ( mExternalFloatExclusions == exclusions )
 		return false;
@@ -2067,8 +2082,8 @@ void RichText::updateLayout() {
 
 	// ─── Inline layouter fast path: no floats or clears ─────────────
 	if ( !hasFloats ) {
-		auto result = RichTextInlineLayouter::layoutNoFloats( mInlineItems, mMaxWidth, mTextIndent,
-															  mAlign, mLineHeight, mDefaultStyle );
+		auto result = RichTextInlineLayouter::layoutNoFloats(
+			mInlineItems, mMaxWidth, mTextIndent, mAlign, mLineHeight, mDefaultStyle, mLineWrap );
 		mLines = std::move( result.lines );
 		mSize = result.size;
 		mTotalCharacterCount = result.totalCharacterCount;
@@ -2079,7 +2094,7 @@ void RichText::updateLayout() {
 
 	auto result = RichTextInlineLayouter::layoutWithFloats( mInlineItems, mMaxWidth, mTextIndent,
 															mAlign, mLineHeight, mDefaultStyle,
-															mExternalFloatExclusions );
+															mExternalFloatExclusions, mLineWrap );
 	mLines = std::move( result.lines );
 	mSize = result.size;
 	mTotalCharacterCount = result.totalCharacterCount;

@@ -277,6 +277,200 @@ UTEST( UIHTMLFloat, leftFloatOverflowHiddenBlockFormattingContextSitsBesideFloat
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTMLFloat, whitespaceBetweenFloatAndBfcDoesNotPushBfcBelowFloat ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="container" style="width:600px">
+				<div id="left" style="float:left;width:140px;height:18px"></div>
+				<div id="bfc" style="overflow:hidden;height:18px">top row</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* left = sceneNode->find<UIWidget>( "left" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( left != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+
+	Vector2f leftPos = left->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( leftPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, leftPos.x + left->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, htmlButtonCanFloatBeforeBlockFormattingContext ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="container" style="width:600px">
+				<button id="button" style="float:left;width:140px;height:18px">action</button>
+				<div id="bfc" style="overflow:hidden;height:18px">top row</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* button = sceneNode->find<UIWidget>( "button" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( button != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+	ASSERT_TRUE( button->isType( UI_TYPE_HTML_WIDGET ) );
+	EXPECT_EQ( button->asType<UIHTMLWidget>()->getCSSFloat(), CSSFloat::Left );
+
+	Vector2f buttonPos = button->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( buttonPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, buttonPos.x + button->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, bfcAfterFloatOnlyLineStaysOnSameRow ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="container" style="width:600px; line-height:18px">
+				<button id="button" style="float:left;width:138px;height:18px">action</button>
+				<div id="drop" style="float:left;width:117px;height:18px">menu</div>
+				<div id="bfc" style="overflow:hidden;height:18px; white-space:nowrap">top row</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* button = sceneNode->find<UIWidget>( "button" );
+	auto* drop = sceneNode->find<UIWidget>( "drop" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( button != nullptr );
+	ASSERT_TRUE( drop != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+
+	Vector2f buttonPos = button->convertToWorldSpace( { 0, 0 } );
+	Vector2f dropPos = drop->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( buttonPos.y, bfcPos.y, 1.f );
+	EXPECT_NEAR( dropPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, dropPos.x + drop->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, autoHeightBfcAfterFloatOnlyLineStaysOnSameRow ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="container" style="width:600px; line-height:18px">
+				<button id="button" style="float:left;width:138px;height:18px">action</button>
+				<div id="drop" style="float:left;width:117px;height:18px">menu</div>
+				<div id="bfc" style="overflow:hidden; white-space:nowrap">
+					<span>home</span><span> - popular</span><span> - all</span>
+				</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* drop = sceneNode->find<UIWidget>( "drop" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( drop != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+
+	Vector2f dropPos = drop->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( dropPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, dropPos.x + drop->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, inlineListBfcAfterFloatOnlyLineStaysOnSameRow ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="container" style="width:600px; line-height:18px; white-space:nowrap">
+				<button id="button" style="float:left;width:138px;height:18px">action</button>
+				<div id="drop" style="float:left;width:117px;height:18px">menu</div>
+				<div id="bfc" style="overflow:hidden">
+					<ul id="list" style="display:inline;list-style:none;margin:0;padding:0">
+						<li style="display:inline;white-space:nowrap">home</li>
+						<li style="display:inline;white-space:nowrap"> - popular</li>
+						<li style="display:inline;white-space:nowrap"> - all</li>
+					</ul>
+				</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* drop = sceneNode->find<UIWidget>( "drop" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( drop != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+
+	Vector2f dropPos = drop->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( dropPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, dropPos.x + drop->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, absoluteInlineListBfcAfterFloatOnlyLineStaysOnSameRow ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="header" style="position:relative;width:600px;height:18px;line-height:18px;white-space:nowrap">
+				<div id="clip" style="position:absolute;left:0;right:0">
+					<button id="button" style="float:left;width:138px;height:18px">action</button>
+					<div id="drop" style="float:left;width:117px;height:18px">menu</div>
+					<div id="bfc" style="overflow:hidden">
+						<ul id="list" style="display:inline;list-style:none;margin:0;padding:0">
+							<li style="display:inline;white-space:nowrap">home</li>
+							<li style="display:inline;white-space:nowrap"> - popular</li>
+							<li style="display:inline;white-space:nowrap"> - all</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* drop = sceneNode->find<UIWidget>( "drop" );
+	auto* bfc = sceneNode->find<UIWidget>( "bfc" );
+	ASSERT_TRUE( drop != nullptr );
+	ASSERT_TRUE( bfc != nullptr );
+
+	Vector2f dropPos = drop->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( dropPos.y, bfcPos.y, 1.f );
+	EXPECT_GE( bfcPos.x, dropPos.x + drop->getPixelsSize().getWidth() - 1.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLFloat, autoHorizontalMarginsCenterBlockInsideFloat ) {
 	init_float_test();
 	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();

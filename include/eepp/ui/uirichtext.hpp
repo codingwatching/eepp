@@ -24,6 +24,8 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	static std::string fromWhiteSpaceCollapse( WhiteSpaceCollapse val );
 
+	static std::string fromWhiteSpace( WhiteSpaceCollapse collapse, bool lineWrap );
+
 	static String collapseInternalWhitespace( const String& s );
 
 	static void rebuildRichText( UILayout* container, RichText& richText,
@@ -130,6 +132,12 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	void setWhiteSpaceCollapse( WhiteSpaceCollapse collapse );
 
+	bool getLineWrap() const;
+
+	void setLineWrap( bool lineWrap );
+
+	void applyWhiteSpace( std::string val );
+
 	Float getLineHeightPx() const;
 
 	UIRichText* setLineHeightEq( const std::string& eq );
@@ -174,6 +182,7 @@ class EE_API UIRichText : public UIHTMLWidget {
 	mutable Float mTextIndentPxCache{ 0 };
 	mutable bool mTextIndentPxDirty{ true };
 	WhiteSpaceCollapse mWhiteSpaceCollapse{ WhiteSpaceCollapse::Collapse };
+	bool mLineWrap{ true };
 	TextTransform::Value mTextTransform{ TextTransform::None };
 
 	explicit UIRichText( const std::string& tag = "richtext" );

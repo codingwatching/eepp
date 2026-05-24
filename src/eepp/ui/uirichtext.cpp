@@ -52,6 +52,22 @@ std::string UIRichText::fromWhiteSpaceCollapse( WhiteSpaceCollapse val ) {
 	}
 }
 
+std::string UIRichText::fromWhiteSpace( WhiteSpaceCollapse collapse, bool lineWrap ) {
+	switch ( collapse ) {
+		case WhiteSpaceCollapse::Preserve:
+			return lineWrap ? "pre-wrap" : "pre";
+		case WhiteSpaceCollapse::PreserveBreaks:
+			return "pre-line";
+		case WhiteSpaceCollapse::BreakSpaces:
+			return "break-spaces";
+		case WhiteSpaceCollapse::PreserveSpaces:
+			return lineWrap ? "preserve-spaces" : "preserve nowrap";
+		case WhiteSpaceCollapse::Collapse:
+		default:
+			return lineWrap ? "normal" : "nowrap";
+	}
+}
+
 UIHTMLHtml* UIHTMLHtml::New( const std::string& tag ) {
 	return eeNew( UIHTMLHtml, ( tag ) );
 }
@@ -369,6 +385,9 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextIndent:
 			setTextIndentEq( attribute.value() );
 			break;
+		case PropertyId::WhiteSpace:
+			applyWhiteSpace( attribute.value() );
+			break;
 		case PropertyId::WhiteSpaceCollapse:
 			setWhiteSpaceCollapse( toWhiteSpaceCollapse( attribute.value() ) );
 			break;
@@ -424,6 +443,8 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 			return mLineHeightEq.empty() ? "normal" : mLineHeightEq;
 		case PropertyId::TextIndent:
 			return mTextIndentEq.empty() ? "0" : mTextIndentEq;
+		case PropertyId::WhiteSpace:
+			return fromWhiteSpace( mWhiteSpaceCollapse, mLineWrap );
 		case PropertyId::WhiteSpaceCollapse:
 			return fromWhiteSpaceCollapse( mWhiteSpaceCollapse );
 		case PropertyId::TextTransform:
@@ -435,15 +456,13 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 
 std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 	auto props = UIHTMLWidget::getPropertiesImplemented();
-	auto local = { PropertyId::FontFamily,		   PropertyId::FontSize,
-				   PropertyId::FontStyle,		   PropertyId::Color,
-				   PropertyId::TextShadowColor,	   PropertyId::TextShadowOffset,
-				   PropertyId::TextStrokeWidth,	   PropertyId::TextStrokeColor,
-				   PropertyId::TextAlign,		   PropertyId::SelectionColor,
-				   PropertyId::SelectionBackColor, PropertyId::TextSelection,
-				   PropertyId::TextDecoration,	   PropertyId::LineHeight,
-				   PropertyId::TextIndent,		   PropertyId::WhiteSpaceCollapse,
-				   PropertyId::TextTransform };
+	auto local = {
+		PropertyId::FontFamily,		 PropertyId::FontSize,			 PropertyId::FontStyle,
+		PropertyId::Color,			 PropertyId::TextShadowColor,	 PropertyId::TextShadowOffset,
+		PropertyId::TextStrokeWidth, PropertyId::TextStrokeColor,	 PropertyId::TextAlign,
+		PropertyId::SelectionColor,	 PropertyId::SelectionBackColor, PropertyId::TextSelection,
+		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent,
+		PropertyId::WhiteSpace,		 PropertyId::WhiteSpaceCollapse, PropertyId::TextTransform };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -629,6 +648,42 @@ void UIRichText::setWhiteSpaceCollapse( WhiteSpaceCollapse collapse ) {
 		mWhiteSpaceCollapse = collapse;
 		notifyLayoutAttrChange();
 		notifyLayoutAttrChangeParent();
+	}
+}
+
+bool UIRichText::getLineWrap() const {
+	return mLineWrap;
+}
+
+void UIRichText::setLineWrap( bool lineWrap ) {
+	if ( mLineWrap != lineWrap ) {
+		mLineWrap = lineWrap;
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
+}
+
+void UIRichText::applyWhiteSpace( std::string val ) {
+	String::toLowerInPlace( val );
+	String::trimInPlace( val );
+	if ( val == "normal" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::Collapse );
+		setLineWrap( true );
+	} else if ( val == "nowrap" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::Collapse );
+		setLineWrap( false );
+	} else if ( val == "pre" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::Preserve );
+		setLineWrap( false );
+	} else if ( val == "pre-wrap" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::Preserve );
+		setLineWrap( true );
+	} else if ( val == "pre-line" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::PreserveBreaks );
+		setLineWrap( true );
+	} else if ( val == "break-spaces" ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::BreakSpaces );
+		setLineWrap( true );
 	}
 }
 
@@ -1010,6 +1065,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		auto* uiRt = static_cast<UIRichText*>( container );
 		richText.setLineHeight( uiRt->getLineHeightPx() );
 		richText.setTextIndent( uiRt->getTextIndentPx() );
+		richText.setLineWrap( uiRt->getLineWrap() );
 	}
 	bool shouldCollapse = container->isType( UI_TYPE_RICHTEXT )
 							  ? static_cast<UIRichText*>( container )->getWhiteSpaceCollapse() ==
@@ -1152,6 +1208,12 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			Node* next = findLogicalNext( node );
 			bool nextIsInline =
 				next && next->isWidget() && next->asType<UIWidget>()->isInlineDisplay();
+
+			if ( shouldCollapse && textNode->isWhitespaceOnly() && !prevIsInline &&
+				 !nextIsInline ) {
+				textNode->setLayoutCharCount( 0 );
+				return;
+			}
 
 			// Strip leading space if prev is not inline (block boundary)
 			if ( !prevIsInline && !text.empty() && text[0] == ' ' )

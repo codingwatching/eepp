@@ -338,6 +338,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 
 	registerProperty( "word-wrap", "" ).setType( PropertyType::Bool );
 
+	registerProperty( "white-space", "normal", true ).setType( PropertyType::String );
 	registerProperty( "white-space-collapse", "collapse", true ).setType( PropertyType::String );
 
 	registerProperty( "hint", "" ).setType( PropertyType::String ).addAlias( "placeholder" );
