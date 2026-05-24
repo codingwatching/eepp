@@ -8,6 +8,7 @@
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitheme.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
@@ -233,6 +234,136 @@ UTEST( UIHTMLFloat, rightFloatDoesNotDisplaceFollowingNormalBlock ) {
 	EXPECT_NEAR( sidePos.y, contentPos.y, 1.f );
 	EXPECT_NEAR( contentPos.x, container->convertToWorldSpace( { 0, 0 } ).x, 1.f );
 	EXPECT_NEAR( content->getPixelsSize().getWidth(), 480.f, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, leftFloatOverflowHiddenBlockFormattingContextSitsBesideFloat ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* container = UIRichText::New();
+	container->setParent( sceneNode->getRoot() );
+	container->setPixelsSize( 600, 400 );
+	container->setPixelsPosition( 10, 10 );
+	container->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::WrapContent );
+
+	UIHTMLWidget* midcol = UIHTMLWidget::New();
+	midcol->setParent( container );
+	midcol->setPixelsSize( 20, 50 );
+	midcol->setCSSFloat( CSSFloat::Left );
+	midcol->setLayoutPixelsMarginLeft( 5 );
+	midcol->setLayoutPixelsMarginRight( 5 );
+	midcol->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* entry = UIHTMLWidget::New();
+	entry->setParent( container );
+	entry->setPixelsSize( 0, 40 );
+	entry->setLayoutPixelsMarginLeft( 3 );
+	entry->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+	entry->applyProperty( StyleSheetProperty( "overflow", "hidden" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	Vector2f midcolPos = midcol->convertToWorldSpace( { 0, 0 } );
+	Vector2f entryPos = entry->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( midcolPos.y, entryPos.y, 1.f );
+	EXPECT_GE( entryPos.x, midcolPos.x + midcol->getPixelsSize().getWidth() +
+							   midcol->getLayoutPixelsMargin().Right - 1.f );
+	EXPECT_NEAR( entry->getPixelsSize().getWidth(), 567.f, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, rightFloatConstrainsTextInsideFollowingNormalBlock ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* container = UIRichText::New();
+	container->setParent( sceneNode->getRoot() );
+	container->setPixelsSize( 600, 400 );
+	container->setPixelsPosition( 10, 10 );
+	container->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::WrapContent );
+
+	UIHTMLWidget* side = UIHTMLWidget::New();
+	side->setParent( container );
+	side->setPixelsSize( 100, 100 );
+	side->setCSSFloat( CSSFloat::Right );
+	side->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIRichText* content = UIRichText::NewDiv();
+	content->setParent( container );
+	content->setPixelsSize( 0, 120 );
+	content->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+
+	UITextNode* text = UITextNode::New();
+	text->setParent( content );
+	text->setText( "one two three four five six seven eight nine ten eleven twelve thirteen "
+				   "fourteen fifteen sixteen seventeen eighteen nineteen twenty" );
+
+	sceneNode->updateDirtyLayouts();
+	sceneNode->updateDirtyLayouts();
+
+	Vector2f sidePos = side->convertToWorldSpace( { 0, 0 } );
+	Vector2f contentPos = content->convertToWorldSpace( { 0, 0 } );
+	const auto& lines = content->getRichTextPtr()->getLines();
+
+	ASSERT_FALSE( lines.empty() );
+	EXPECT_NEAR( sidePos.y, contentPos.y, 1.f );
+	EXPECT_NEAR( contentPos.x, container->convertToWorldSpace( { 0, 0 } ).x, 1.f );
+	EXPECT_NEAR( content->getPixelsSize().getWidth(), 600.f, 1.f );
+	EXPECT_LE( lines.front().width, 500.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, rightFloatConstrainsNestedBlockFormattingContext ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* container = UIRichText::New();
+	container->setParent( sceneNode->getRoot() );
+	container->setPixelsSize( 600, 400 );
+	container->setPixelsPosition( 10, 10 );
+	container->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::WrapContent );
+
+	UIHTMLWidget* side = UIHTMLWidget::New();
+	side->setParent( container );
+	side->setPixelsSize( 100, 100 );
+	side->setCSSFloat( CSSFloat::Right );
+	side->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIRichText* content = UIRichText::NewDiv();
+	content->setParent( container );
+	content->setPixelsSize( 0, 120 );
+	content->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+
+	UIRichText* normalBlock = UIRichText::NewDiv();
+	normalBlock->setParent( content );
+	normalBlock->setPixelsSize( 0, 80 );
+	normalBlock->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+
+	UIRichText* entry = UIRichText::NewDiv();
+	entry->setParent( normalBlock );
+	entry->setPixelsSize( 0, 40 );
+	entry->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::Fixed );
+	entry->applyProperty( StyleSheetProperty( "overflow", "hidden" ) );
+
+	UITextNode* entryText = UITextNode::New();
+	entryText->setParent( entry );
+	entryText->setText( "entry text" );
+
+	sceneNode->updateDirtyLayouts();
+	sceneNode->updateDirtyLayouts();
+	sceneNode->updateDirtyLayouts();
+
+	Vector2f sidePos = side->convertToWorldSpace( { 0, 0 } );
+	Vector2f entryPos = entry->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_NEAR( sidePos.y, entryPos.y, 1.f );
+	EXPECT_NEAR( entryPos.x, container->convertToWorldSpace( { 0, 0 } ).x, 1.f );
+	EXPECT_NEAR( entry->getPixelsSize().getWidth(), 500.f, 1.f );
 
 	Engine::destroySingleton();
 }

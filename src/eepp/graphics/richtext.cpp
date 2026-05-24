@@ -975,10 +975,11 @@ class RichTextInlineLayouter {
 		return result;
 	}
 
-	static LayoutResult layoutWithFloats( const std::vector<RichText::InlineItem>& inlineItems,
-										  Float maxLayoutWidth, Float textIndent, Uint32 align,
-										  Float forcedLineHeight,
-										  const FontStyleConfig& defaultStyle ) {
+	static LayoutResult
+	layoutWithFloats( const std::vector<RichText::InlineItem>& inlineItems, Float maxLayoutWidth,
+					  Float textIndent, Uint32 align, Float forcedLineHeight,
+					  const FontStyleConfig& defaultStyle,
+					  const std::vector<RichText::FloatExclusion>& externalFloatExclusions ) {
 		LayoutResult result;
 		result.lines.push_back( RichText::RenderParagraph() );
 
@@ -989,6 +990,15 @@ class RichTextInlineLayouter {
 		SmallVector<Rectf, 4> rightFloats;
 		Float curY = 0;
 		SmallVector<InlineLayoutRun, 32> runs = buildLayoutRuns( inlineItems );
+
+		for ( const auto& exclusion : externalFloatExclusions ) {
+			if ( exclusion.type == RichText::InlineFloat::Left )
+				leftFloats.push_back( exclusion.rect );
+			else if ( exclusion.type == RichText::InlineFloat::Right )
+				rightFloats.push_back( exclusion.rect );
+		}
+		size_t externalLeftFloatCount = leftFloats.size();
+		size_t externalRightFloatCount = rightFloats.size();
 
 		auto floatLeftEdge = [&]( Float y ) -> Float {
 			Float l = 0;
@@ -1210,6 +1220,17 @@ class RichTextInlineLayouter {
 					addInlineSpacingToCurrentLine( result, curX, startSpacing );
 
 					Float effW = metrics.isBlock ? maxLayoutWidth : effectiveMaxWidthAt( curY );
+					if ( metrics.isBlockFormattingContext ) {
+						le = floatLeftEdge( curY );
+						Float re = floatRightEdge( curY );
+						Float availableWidth = re - le;
+						if ( availableWidth > 0 && availableWidth < 1e9f ) {
+							if ( metrics.size.getWidth() > availableWidth + 0.01f )
+								metrics.size.setWidth( availableWidth );
+							curX = le;
+							effW = availableWidth;
+						}
+					}
 
 					if ( !metrics.isBlock && effW > 0 && effW < 1e9f &&
 						 metrics.size.getWidth() > effW + 0.01f ) {
@@ -1268,10 +1289,10 @@ class RichTextInlineLayouter {
 		}
 
 		Float floatBoundsBottom = 0;
-		for ( const auto& f : leftFloats )
-			floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
-		for ( const auto& f : rightFloats )
-			floatBoundsBottom = std::max( floatBoundsBottom, f.Bottom );
+		for ( size_t i = externalLeftFloatCount; i < leftFloats.size(); ++i )
+			floatBoundsBottom = std::max( floatBoundsBottom, leftFloats[i].Bottom );
+		for ( size_t i = externalRightFloatCount; i < rightFloats.size(); ++i )
+			floatBoundsBottom = std::max( floatBoundsBottom, rightFloats[i].Bottom );
 
 		result.size = Sizef( maxWidth, std::max( accumY, floatBoundsBottom ) );
 		result.totalCharacterCount = curCharIdx;
@@ -1448,6 +1469,7 @@ class RichTextInlineLayouter {
 		Float baseline{ 0.f };
 		bool isLineBreak{ false };
 		bool isBlock{ false };
+		bool isBlockFormattingContext{ false };
 		RichText::InlineFloat floatType{ RichText::InlineFloat::None };
 		RichText::InlineClear clearType{ RichText::InlineClear::None };
 	};
@@ -1521,6 +1543,7 @@ class RichTextInlineLayouter {
 		run.payload.clearType = box.clearType;
 		run.payload.isLineBreak = box.isLineBreak;
 		run.payload.isBlock = box.isBlock;
+		run.payload.isBlockFormattingContext = box.isBlockFormattingContext;
 		run.payload.baselineAlign = box.baselineAlign;
 		run.payload.inlinePath = path;
 		run.payload._leafIndex = nextLeafIndex++;
@@ -1651,6 +1674,7 @@ class RichTextInlineLayouter {
 			metrics.baseline = payload.baseline;
 			metrics.isLineBreak = payload.isLineBreak;
 			metrics.isBlock = payload.isBlock;
+			metrics.isBlockFormattingContext = payload.isBlockFormattingContext;
 			metrics.floatType = payload.floatType;
 			metrics.clearType = payload.clearType;
 		}
@@ -1860,7 +1884,7 @@ void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
 
 void RichText::addCustomSize( const Sizef& size, InlineFloat floatType, InlineClear clearType,
 							  Float baseline, const BaselineAlignValue& baselineAlign,
-							  InlineSource source, bool isBlock ) {
+							  InlineSource source, bool isBlock, bool isBlockFormattingContext ) {
 	Float usedBaseline = baseline >= 0.f ? baseline : size.getHeight();
 
 	InlineItem item;
@@ -1871,6 +1895,7 @@ void RichText::addCustomSize( const Sizef& size, InlineFloat floatType, InlineCl
 	box.floatType = floatType;
 	box.clearType = clearType;
 	box.isBlock = isBlock;
+	box.isBlockFormattingContext = isBlockFormattingContext;
 	box.baselineAlign = baselineAlign;
 	item.data = std::move( box );
 	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
@@ -2011,6 +2036,15 @@ void RichText::setMaxWidth( Float width ) {
 	}
 }
 
+bool RichText::setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions ) {
+	if ( mExternalFloatExclusions == exclusions )
+		return false;
+
+	mExternalFloatExclusions = exclusions;
+	invalidateLayout();
+	return true;
+}
+
 void RichText::invalidate() {
 	invalidateLayout();
 	invalidateInlineItemText( mInlineItems );
@@ -2028,7 +2062,8 @@ void RichText::updateLayout() {
 	if ( !mNeedsLayoutUpdate )
 		return;
 
-	bool hasFloats = RichTextInlineLayouter::needsFloatAwareLayout( mInlineItems );
+	bool hasFloats = !mExternalFloatExclusions.empty() ||
+					 RichTextInlineLayouter::needsFloatAwareLayout( mInlineItems );
 
 	// ─── Inline layouter fast path: no floats or clears ─────────────
 	if ( !hasFloats ) {
@@ -2043,7 +2078,8 @@ void RichText::updateLayout() {
 	}
 
 	auto result = RichTextInlineLayouter::layoutWithFloats( mInlineItems, mMaxWidth, mTextIndent,
-															mAlign, mLineHeight, mDefaultStyle );
+															mAlign, mLineHeight, mDefaultStyle,
+															mExternalFloatExclusions );
 	mLines = std::move( result.lines );
 	mSize = result.size;
 	mTotalCharacterCount = result.totalCharacterCount;

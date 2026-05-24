@@ -21,9 +21,14 @@
 #include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextspan.hpp>
+#include <eepp/ui/uitheme.hpp>
 #include <eepp/ui/uithememanager.hpp>
+#include <eepp/ui/uiwebview.hpp>
 #include <eepp/window/engine.hpp>
 #include <eepp/window/input.hpp>
+
+#include <cstdlib>
+#include <iostream>
 
 using namespace EE;
 using namespace EE::Graphics;
@@ -44,6 +49,7 @@ static void init_ui_test() {
 
 	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
 	SceneManager::instance()->add( sceneNode );
+	sceneNode->setColorSchemePreference( ColorSchemePreference::Light );
 	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
 	themeManager->setDefaultFont( font );
 }
@@ -155,6 +161,93 @@ UTEST( UIHTMLTable, complexLayout2 ) {
 	EXPECT_STDSTREQ( hnMain->getBackgroundColor().toHexString(), expectedMainBg.toHexString() );
 
 	compareImages( utest_state, utest_result, win, "eepp-uihtmltable-complex-layout-2", "html" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
+	if ( std::getenv( "EEPP_REDDIT_OLD_THREAD_VISUAL" ) == nullptr )
+		UTEST_SKIP( "set EEPP_REDDIT_OLD_THREAD_VISUAL=1 to render the old Reddit fixture" );
+
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 1000, "Old Reddit Thread Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	if ( !FileSystem::fileExists( "assets/html/reddit_old_thread_files/reddit.ETA_etA2z5U.css" ) ) {
+		Engine::destroySingleton();
+		UTEST_SKIP( "old Reddit fixture CSS asset is not readable" );
+	}
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
+	UITheme* theme = UITheme::load( "breeze", "breeze", "", font, "assets/ui/breeze.css" );
+	ASSERT_TRUE( theme != nullptr );
+	sceneNode->setStyleSheet( theme->getStyleSheet() );
+	themeManager->setDefaultFont( font )->setDefaultTheme( theme )->add( theme );
+
+	UIWebView* webView = UIWebView::New();
+	webView->setParent( sceneNode->getRoot() );
+	webView->setPixelsSize( win->getWidth(), win->getHeight() );
+	webView->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	webView->loadURI(
+		URI( "file://" + Sys::getProcessPath() + "assets/html/reddit_old_thread.html" ) );
+
+	win->setClearColor( Color::White );
+	for ( int i = 0; i < 8; i++ ) {
+		win->getInput()->update();
+		SceneManager::instance()->update();
+		win->clear();
+		SceneManager::instance()->draw();
+		win->display();
+	}
+
+	auto side = sceneNode->getRoot()->findByClass( "side" );
+	auto siteTable = sceneNode->getRoot()->find( "siteTable" );
+	auto midcol = sceneNode->getRoot()->findByClass( "midcol" );
+	auto entry = sceneNode->getRoot()->findByClass( "entry" );
+	auto arrow = sceneNode->getRoot()->findByClass( "arrow" );
+
+	ASSERT_TRUE( side != nullptr );
+	ASSERT_TRUE( siteTable != nullptr );
+	ASSERT_TRUE( midcol != nullptr );
+	ASSERT_TRUE( entry != nullptr );
+	ASSERT_TRUE( arrow != nullptr );
+
+	UIWidget* content =
+		siteTable->getParent()->isWidget() ? siteTable->getParent()->asType<UIWidget>() : nullptr;
+	ASSERT_TRUE( content != nullptr );
+
+	Vector2f sidePos = side->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f contentPos = content->convertToWorldSpace( { 0, 0 } );
+	Vector2f midcolPos = midcol->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f entryPos = entry->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+
+	std::cerr << "old reddit rects: "
+			  << "side=(" << sidePos.x << "," << sidePos.y << " "
+			  << side->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << side->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "content=(" << contentPos.x << "," << contentPos.y << " "
+			  << content->getPixelsSize().getWidth() << "x" << content->getPixelsSize().getHeight()
+			  << ") "
+			  << "midcol=(" << midcolPos.x << "," << midcolPos.y << " "
+			  << midcol->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << midcol->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "entry=(" << entryPos.x << "," << entryPos.y << " "
+			  << entry->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << entry->asType<UIWidget>()->getPixelsSize().getHeight() << ")" << std::endl;
+
+	if ( !FileSystem::fileExists( "output" ) )
+		FileSystem::makeDir( "output" );
+	win->getFrontBufferImage().saveToFile( "output/eepp-reddit-old-thread-current.webp",
+										   Image::SaveType::WEBP );
 
 	Engine::destroySingleton();
 }

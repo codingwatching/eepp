@@ -64,7 +64,10 @@ void BlockLayouter::updateLayout() {
 
 	mContainer->beginAttributesTransaction();
 
-	setMatchParentIfNeededVerticalGrowth();
+	bool preserveFloatConstrainedBFCWidth =
+		widget->establishesBlockFormattingContext() && !rt->getExternalFloatExclusions().empty();
+	if ( !preserveFloatConstrainedBFCWidth )
+		setMatchParentIfNeededVerticalGrowth();
 
 	const StyleSheetProperty* prop = nullptr;
 	if ( mContainer->getLayoutWidthPolicy() == SizePolicy::Fixed && mContainer->getUIStyle() &&
@@ -219,6 +222,98 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 	auto isFloatingWidget = []( UIWidget* widget ) {
 		return widget->isType( UI_TYPE_HTML_WIDGET ) &&
 			   widget->asType<UIHTMLWidget>()->getCSSFloat() != CSSFloat::None;
+	};
+
+	auto establishesBlockFormattingContext = []( UIWidget* widget ) {
+		return widget->isType( UI_TYPE_HTML_WIDGET ) &&
+			   widget->asType<UIHTMLWidget>()->establishesBlockFormattingContext();
+	};
+
+	auto toRichTextFloat = []( CSSFloat val ) {
+		switch ( val ) {
+			case CSSFloat::Left:
+				return RichText::InlineFloat::Left;
+			case CSSFloat::Right:
+				return RichText::InlineFloat::Right;
+			case CSSFloat::None:
+			default:
+				return RichText::InlineFloat::None;
+		}
+	};
+
+	auto buildExternalFloatExclusions = [&]( UIWidget* widget, const Vector2f& targetPos ) {
+		std::vector<RichText::FloatExclusion> exclusions;
+		Rectf childContentOffset = widget->getPixelsContentOffset();
+		Vector2f richTextOrigin( targetPos.x + childContentOffset.Left,
+								 targetPos.y + childContentOffset.Top );
+		Float childContentHeight = widget->getPixelsSize().getHeight() - childContentOffset.Top -
+								   childContentOffset.Bottom;
+		Float childContentWidth =
+			widget->getPixelsSize().getWidth() - childContentOffset.Left - childContentOffset.Right;
+		bool filtersHorizontally =
+			widget->getLayoutWidthPolicy() != SizePolicy::MatchParent && childContentWidth > 0;
+
+		auto addExclusionIfRelevant = [&]( Rectf rect, RichText::InlineFloat type ) {
+			if ( rect.Bottom <= 0 )
+				return;
+			if ( childContentHeight > 0 && rect.Top >= childContentHeight )
+				return;
+			if ( filtersHorizontally && ( rect.Right <= 0 || rect.Left >= childContentWidth ) )
+				return;
+			exclusions.push_back( { rect, type } );
+		};
+
+		if ( mContainer->isType( UI_TYPE_HTML_WIDGET ) ) {
+			if ( RichText* containerRt = mContainer->asType<UIHTMLWidget>()->getRichTextPtr() ) {
+				for ( const auto& inherited : containerRt->getExternalFloatExclusions() ) {
+					Rectf rect = inherited.rect;
+					rect.move( { contentOffset.Left, contentOffset.Top } );
+					rect.move( -richTextOrigin );
+					addExclusionIfRelevant( rect, inherited.type );
+				}
+			}
+		}
+
+		for ( const auto& bucket : mWidgetFragments ) {
+			if ( bucket.first == widget )
+				continue;
+
+			auto* floatWidget = static_cast<UIWidget*>( bucket.first );
+			if ( floatWidget == nullptr || !floatWidget->isType( UI_TYPE_HTML_WIDGET ) )
+				continue;
+
+			CSSFloat floatType = floatWidget->asType<UIHTMLWidget>()->getCSSFloat();
+			if ( floatType == CSSFloat::None )
+				continue;
+
+			for ( const auto* fragment : bucket.second.atomicBoxes ) {
+				Rectf rect = toContainerBounds( fragment->bounds );
+				rect.move( -richTextOrigin );
+				addExclusionIfRelevant( rect, toRichTextFloat( floatType ) );
+			}
+		}
+
+		return exclusions;
+	};
+
+	auto applyExternalFloatExclusions = [&]( UIWidget* widget, const Vector2f& targetPos ) {
+		if ( !widget->isType( UI_TYPE_HTML_WIDGET ) )
+			return;
+
+		auto* htmlWidget = widget->asType<UIHTMLWidget>();
+		RichText* childRt = htmlWidget->getRichTextPtr();
+		if ( childRt == nullptr )
+			return;
+
+		std::vector<RichText::FloatExclusion> exclusions;
+		if ( htmlWidget->getCSSFloat() == CSSFloat::None && !htmlWidget->isOutOfFlow() )
+			exclusions = buildExternalFloatExclusions( widget, targetPos );
+
+		if ( childRt->setExternalFloatExclusions( exclusions ) ) {
+			if ( htmlWidget->getLayouter() )
+				htmlWidget->getLayouter()->updateLayout();
+			mResizedCount++;
+		}
 	};
 
 	auto expandBounds = [&]( Rectf& bounds, bool& valid, const Rectf& rect ) {
@@ -448,6 +543,17 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 										atomicBounds.Top + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
+					if ( establishesBlockFormattingContext( widget ) &&
+						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent ) {
+						Float contentWidth =
+							eemax( 0.f, atomicBounds.getWidth() - margin.Left - margin.Right );
+						if ( eeabs( widget->getPixelsSize().getWidth() - contentWidth ) > 0.01f ) {
+							widget->setPixelsSize( contentWidth,
+												   widget->getPixelsSize().getHeight() );
+							mResizedCount++;
+						}
+					}
+					applyExternalFloatExclusions( widget, targetPos );
 					if ( !isFloatingWidget( widget ) &&
 						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
 						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
@@ -477,6 +583,17 @@ void BlockLayouter::positionRichTextChildren( Graphics::RichText* rt ) {
 										contentOffset.Top + lineY + span->position.y + margin.Top );
 
 					widget->setPixelsPosition( targetPos - offset );
+					if ( establishesBlockFormattingContext( widget ) &&
+						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent ) {
+						Float contentWidth =
+							eemax( 0.f, span->size.getWidth() - margin.Left - margin.Right );
+						if ( eeabs( widget->getPixelsSize().getWidth() - contentWidth ) > 0.01f ) {
+							widget->setPixelsSize( contentWidth,
+												   widget->getPixelsSize().getHeight() );
+							mResizedCount++;
+						}
+					}
+					applyExternalFloatExclusions( widget, targetPos );
 					if ( !isFloatingWidget( widget ) &&
 						 widget->getLayoutWidthPolicy() == SizePolicy::MatchParent &&
 						 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {

@@ -5,6 +5,7 @@
 #include <eepp/ui/uilayoutermanager.hpp>
 #include <eepp/ui/uiscrollablewidget.hpp>
 #include <eepp/ui/uiscrollview.hpp>
+#include <eepp/ui/uistyle.hpp>
 
 namespace EE { namespace UI {
 
@@ -247,6 +248,12 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::Clear: {
 			setCSSClear( CSSClearHelper::fromString( attribute.asString() ) );
 			return true;
+		}
+		case PropertyId::Overflow: {
+			std::string val = attribute.asString();
+			String::toLowerInPlace( val );
+			mOverflowCreatesBlockFormattingContext = val != "visible";
+			return UILayout::applyProperty( attribute );
 		}
 		case PropertyId::ZIndex: {
 			setZIndex( attribute.asInt() );
@@ -544,6 +551,13 @@ void UIHTMLWidget::invalidateIntrinsicSize() {
 
 bool UIHTMLWidget::isOutOfFlow() const {
 	return mPosition == CSSPosition::Absolute || mPosition == CSSPosition::Fixed;
+}
+
+bool UIHTMLWidget::establishesBlockFormattingContext() const {
+	if ( mFloat != CSSFloat::None || isOutOfFlow() || mDisplay == CSSDisplay::InlineBlock )
+		return true;
+
+	return mOverflowCreatesBlockFormattingContext;
 }
 
 bool UIHTMLWidget::hasDataProperty( const std::string& name ) const {

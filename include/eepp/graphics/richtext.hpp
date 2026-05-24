@@ -23,6 +23,17 @@ class EE_API RichText : public Drawable {
 
 	enum class InlineClear { None, Left, Right, Both };
 
+	struct FloatExclusion {
+		Rectf rect;
+		InlineFloat type{ InlineFloat::None };
+
+		bool operator==( const FloatExclusion& other ) const {
+			return rect == other.rect && type == other.type;
+		}
+
+		bool operator!=( const FloatExclusion& other ) const { return !( *this == other ); }
+	};
+
 	enum class BaselineAlignment {
 		Baseline,
 		Sub,
@@ -124,6 +135,12 @@ class EE_API RichText : public Drawable {
 	/** @return The maximum width for wrapping. */
 	Float getMaxWidth() const { return mMaxWidth; }
 
+	bool setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions );
+
+	const std::vector<FloatExclusion>& getExternalFloatExclusions() const {
+		return mExternalFloatExclusions;
+	}
+
 	/** @return The minimum intrinsic width of the text block. */
 	Float getMinIntrinsicWidth();
 
@@ -143,7 +160,7 @@ class EE_API RichText : public Drawable {
 	void addCustomSize( const Sizef& size, InlineFloat floatType = InlineFloat::None,
 						InlineClear clearType = InlineClear::None, Float baseline = -1.f,
 						const BaselineAlignValue& baselineAlign = {}, InlineSource source = {},
-						bool isBlock = false );
+						bool isBlock = false, bool isBlockFormattingContext = false );
 
 	/** @brief Adds a virtual line break that is not associated with a DOM text character. */
 	void addLineBreak();
@@ -187,6 +204,7 @@ class EE_API RichText : public Drawable {
 		InlineClear clearType{ InlineClear::None };
 		bool isLineBreak{ false };
 		bool isBlock{ false };
+		bool isBlockFormattingContext{ false };
 		InlinePath inlinePath;
 		Vector2f position; // Local position relative to RichText origin
 		Sizef size;
@@ -301,6 +319,7 @@ class EE_API RichText : public Drawable {
 			InlineClear clearType{ InlineClear::None };
 			bool isLineBreak{ false };
 			bool isBlock{ false };
+			bool isBlockFormattingContext{ false };
 			BaselineAlignValue baselineAlign;
 		};
 
@@ -386,6 +405,7 @@ class EE_API RichText : public Drawable {
 	std::vector<InlineItem> mInlineItems;
 	RenderSpan::InlinePath mInlinePath; // Path into the inline tree for the stack-based builder
 	std::vector<InlineFragment> mInlineFragments;
+	std::vector<FloatExclusion> mExternalFloatExclusions;
 	std::vector<RenderParagraph> mLines;
 	FontStyleConfig mDefaultStyle;
 	TextSelectionRange mSelection{ 0, 0 };

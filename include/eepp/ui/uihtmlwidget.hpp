@@ -93,6 +93,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	bool isOutOfFlow() const;
 
+	bool establishesBlockFormattingContext() const;
+
 	bool hasDataProperty( const std::string& name ) const;
 
 	const StyleSheetProperty* getDataProperty( const std::string& name ) const;
@@ -122,6 +124,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	std::string mLeftEq{ "auto" };
 	Rectf mOffsets{ 0, 0, 0, 0 };
 	int mZIndex{ 0 };
+	bool mOverflowCreatesBlockFormattingContext{ false };
 	UILayouter* mLayouter{ nullptr };
 	UnorderedMap<std::string, StyleSheetProperty> mDataProperties;
 

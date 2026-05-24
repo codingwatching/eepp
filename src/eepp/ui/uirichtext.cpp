@@ -1413,6 +1413,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				}
 				bool isFloating = floatType != CSSFloat::None;
 				bool isNormalFlowBlock = isBlock && !isFloating;
+				bool isBlockFormattingContext =
+					isNormalFlowBlock && widget->isType( UI_TYPE_HTML_WIDGET ) &&
+					widget->asType<UIHTMLWidget>()->establishesBlockFormattingContext();
 				bool shrinkToFitFloat =
 					isFloating && widget->getLayoutWidthPolicy() == SizePolicy::MatchParent;
 
@@ -1440,11 +1443,11 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 				Sizef customSize( w + margin.Left + margin.Right,
 								  size.getHeight() + margin.Top + margin.Bottom );
-				richText.addCustomSize( customSize, toRichTextFloat( floatType ),
-										toRichTextClear( clearType ),
-										getAtomicInlineBoxBaseline( widget, size, margin ),
-										toRichTextBaselineAlign( getWidgetBaselineAlign( widget ) ),
-										toRichTextWidgetSource( widget ), isNormalFlowBlock );
+				richText.addCustomSize(
+					customSize, toRichTextFloat( floatType ), toRichTextClear( clearType ),
+					getAtomicInlineBoxBaseline( widget, size, margin ),
+					toRichTextBaselineAlign( getWidgetBaselineAlign( widget ) ),
+					toRichTextWidgetSource( widget ), isNormalFlowBlock, isBlockFormattingContext );
 
 				if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 					 widget->asType<UITextSpan>()->isInlineBlock() &&
