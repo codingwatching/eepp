@@ -307,6 +307,7 @@ class EE_API RichText : public Drawable {
 			Color backgroundColor{ Color::Transparent };
 			Float borderWidth{ 0 };
 			Color borderColor{ Color::Transparent };
+			Drawable* backgroundColorDrawable{ nullptr };
 			Drawable* backgroundDrawable{ nullptr };
 			Drawable* borderDrawable{ nullptr };
 			bool backgroundDrawableUsesFragmentColor{ false };
@@ -370,6 +371,7 @@ class EE_API RichText : public Drawable {
 		Color backgroundColor{ Color::Transparent };
 		Float borderWidth{ 0 };
 		Color borderColor{ Color::Transparent };
+		Drawable* backgroundColorDrawable{ nullptr };
 		Drawable* backgroundDrawable{ nullptr };
 		Drawable* borderDrawable{ nullptr };
 		bool backgroundDrawableUsesFragmentColor{ false };
@@ -388,8 +390,8 @@ class EE_API RichText : public Drawable {
 						const BaselineAlignValue& baselineAlign,
 						const Color& backgroundColor = Color::Transparent, Float borderWidth = 0,
 						const Color& borderColor = Color::Transparent, Uint32 textDecoration = 0,
-						InlineSource source = {}, Drawable* backgroundDrawable = nullptr,
-						Drawable* borderDrawable = nullptr,
+						InlineSource source = {}, Drawable* backgroundColorDrawable = nullptr,
+						Drawable* backgroundDrawable = nullptr, Drawable* borderDrawable = nullptr,
 						bool backgroundDrawableUsesFragmentColor = false );
 
 	/** Close the current inline box scope. */

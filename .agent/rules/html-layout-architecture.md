@@ -61,6 +61,16 @@ Layout math is separated from widgets into `UILayouter` implementations:
 
 `RichText::updateLayout()` performs line wrapping and inline formatting. `BlockLayouter::positionRichTextChildren()` then consumes `RichText::RenderSpan`s and assigns pixel positions/sizes back to DOM widgets.
 
+### Inline Paint Ownership
+
+Inline text-span CSS is split across three layers:
+
+- `UITextSpan::applyProperty()` owns CSS-to-style mapping for inline text properties. For `background-color` it sets the span font background color because inline spans are normally painted by the parent rich-text stream, not by `UITextSpan::draw()`.
+- `UIRichText::rebuildRichText()` is the DOM-to-rich-text bridge. It converts inline `UITextSpan` widgets into `RichText::InlineItem::Box` entries, carrying margin, padding, border, text decoration, background color, optional background image/layers, and optional rounded `UIBackgroundDrawable`.
+- `Graphics::RichText::draw()` owns the actual inline fragment painting. It paints box background color first, then background image/layers, then borders, and finally text/atomic content. When a span has both `background-color` and `background-image`, the color fill must still render behind the image layer. When the span has `border-radius`, use the span `UIBackgroundDrawable` for the color fill so rounded corners are preserved.
+
+Atomic inline widgets (`RichText::RenderSpan::Type::AtomicBox`) do not call `UITextSpan::draw()`. Any visual style that belongs to an atomic inline-level box must therefore be carried through the `UIRichText::rebuildRichText()` metadata and painted by `RichText`, or it will be lost.
+
 ### UITextNode
 
 `UITextNode` is a lightweight non-rendering node for raw parsed text (`node_pcdata`). Its text is extracted during `rebuildRichText()` and rendered by the parent `UIRichText`. After wrapping, `BlockLayouter` assigns it position and size for debugging and hit-box accounting, but `UITextNode::draw()` remains a no-op.

@@ -1033,6 +1033,7 @@ static Color getInlineBorderColor( UIWidget* widget ) {
 }
 
 struct InlineBackgroundDrawable {
+	Drawable* colorDrawable{ nullptr };
 	Drawable* drawable{ nullptr };
 	bool usesFragmentColor{ false };
 };
@@ -1044,11 +1045,16 @@ static InlineBackgroundDrawable getInlineBackgroundDrawable( UIWidget* widget,
 		return {};
 
 	UINodeDrawable* background = widget->getBackground();
-	if ( background->getBackgroundColor() != Color::Transparent || background->hasDrawableLayers() )
-		return { background, false };
+	const bool hasRoundedColorBackground =
+		backgroundColor != Color::Transparent && background->getBackgroundDrawable().hasRadius();
+	if ( background->hasDrawableLayers() )
+		return { hasRoundedColorBackground ? &background->getBackgroundDrawable() : nullptr,
+				 background, false };
+	if ( background->getBackgroundColor() != Color::Transparent )
+		return { nullptr, background, false };
 
-	if ( backgroundColor != Color::Transparent && background->getBackgroundDrawable().hasRadius() )
-		return { &background->getBackgroundDrawable(), true };
+	if ( hasRoundedColorBackground )
+		return { nullptr, &background->getBackgroundDrawable(), true };
 
 	return {};
 }
@@ -1297,13 +1303,13 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 			auto backgroundDrawable =
 				getInlineBackgroundDrawable( span, span->getFontStyleConfig().BackgroundColor );
-			richText.pushInlineBox( margin, padding, spanLineHeight,
-									toRichTextBaselineAlign( span->getBaselineAlign() ),
-									span->getFontStyleConfig().BackgroundColor, borderWidth,
-									borderColor, span->getTextDecoration(),
-									toRichTextWidgetSource( span ), backgroundDrawable.drawable,
-									getInlineBorderDrawable( span ),
-									backgroundDrawable.usesFragmentColor );
+			richText.pushInlineBox(
+				margin, padding, spanLineHeight,
+				toRichTextBaselineAlign( span->getBaselineAlign() ),
+				span->getFontStyleConfig().BackgroundColor, borderWidth, borderColor,
+				span->getTextDecoration(), toRichTextWidgetSource( span ),
+				backgroundDrawable.colorDrawable, backgroundDrawable.drawable,
+				getInlineBorderDrawable( span ), backgroundDrawable.usesFragmentColor );
 			inlineBoxDepth++;
 
 			if ( hasOwnText ) {

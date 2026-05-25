@@ -86,6 +86,25 @@ RichText::RichText() : Drawable( Drawable::RICHTEXT ) {}
 
 RichText::~RichText() {}
 
+static void drawInlineFragmentBackgroundColor( const RichText::InlineFragment& fragment,
+											   const Rectf& rect, Float rotation ) {
+	if ( fragment.backgroundColor == Color::Transparent ||
+		 fragment.backgroundDrawableUsesFragmentColor )
+		return;
+
+	if ( fragment.backgroundColorDrawable != nullptr ) {
+		const Color oldColor = fragment.backgroundColorDrawable->getColor();
+		fragment.backgroundColorDrawable->setColor( fragment.backgroundColor );
+		fragment.backgroundColorDrawable->draw( rect.getPosition(), rect.getSize() );
+		fragment.backgroundColorDrawable->setColor( oldColor );
+		return;
+	}
+
+	Primitives p;
+	p.setColor( fragment.backgroundColor );
+	p.drawRectangle( rect, rotation, Vector2f::One );
+}
+
 void RichText::draw() {
 	draw( mPosition.x, mPosition.y );
 }
@@ -125,6 +144,7 @@ void RichText::draw( const Float& X, const Float& Y, const Vector2f& scale, cons
 			fragment.paintBounds != Rectf::Zero ? fragment.paintBounds : fragment.bounds;
 		Rectf rect( localPaintBounds.getPosition() * scale + Vector2f( X, Y ),
 					localPaintBounds.getSize() * scale );
+		drawInlineFragmentBackgroundColor( fragment, rect, rotation );
 		if ( fragment.backgroundDrawable != nullptr ) {
 			if ( fragment.backgroundDrawableUsesFragmentColor &&
 				 fragment.backgroundColor != Color::Transparent ) {
@@ -135,10 +155,6 @@ void RichText::draw( const Float& X, const Float& Y, const Vector2f& scale, cons
 			} else {
 				fragment.backgroundDrawable->draw( rect.getPosition(), rect.getSize() );
 			}
-		} else if ( fragment.backgroundColor != Color::Transparent ) {
-			Primitives p;
-			p.setColor( fragment.backgroundColor );
-			p.drawRectangle( rect, rotation, Vector2f::One );
 		}
 		if ( fragment.borderDrawable != nullptr ) {
 			fragment.borderDrawable->draw( rect.getPosition(), rect.getSize() );
@@ -1828,6 +1844,7 @@ class RichTextInlineLayouter {
 			fragment.backgroundColor = acc.box->backgroundColor;
 			fragment.borderWidth = acc.box->borderWidth;
 			fragment.borderColor = acc.box->borderColor;
+			fragment.backgroundColorDrawable = acc.box->backgroundColorDrawable;
 			fragment.backgroundDrawable = acc.box->backgroundDrawable;
 			fragment.borderDrawable = acc.box->borderDrawable;
 			fragment.backgroundDrawableUsesFragmentColor =
@@ -1924,8 +1941,9 @@ void RichText::addLineBreak() {
 void RichText::pushInlineBox( const Rectf& margin, const Rectf& padding, Float lineHeight,
 							  const BaselineAlignValue& baselineAlign, const Color& backgroundColor,
 							  Float borderWidth, const Color& borderColor, Uint32 textDecoration,
-							  InlineSource source, Drawable* backgroundDrawable,
-							  Drawable* borderDrawable, bool backgroundDrawableUsesFragmentColor ) {
+							  InlineSource source, Drawable* backgroundColorDrawable,
+							  Drawable* backgroundDrawable, Drawable* borderDrawable,
+							  bool backgroundDrawableUsesFragmentColor ) {
 	InlineItem item;
 	InlineItem::Box box;
 	box.source = source;
@@ -1936,6 +1954,7 @@ void RichText::pushInlineBox( const Rectf& margin, const Rectf& padding, Float l
 	box.backgroundColor = backgroundColor;
 	box.borderWidth = borderWidth;
 	box.borderColor = borderColor;
+	box.backgroundColorDrawable = backgroundColorDrawable;
 	box.backgroundDrawable = backgroundDrawable;
 	box.borderDrawable = borderDrawable;
 	box.backgroundDrawableUsesFragmentColor = backgroundDrawableUsesFragmentColor;

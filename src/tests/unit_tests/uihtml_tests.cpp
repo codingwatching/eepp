@@ -2390,6 +2390,76 @@ UTEST( UIBackground, imageAtlasPositioning ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIBackground, inlineSpanColorRendersBehindBackgroundImage ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 320, 160, "Inline Background Color Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	UI::UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/ensoft/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/ensoft/background.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	win->setClearColor( Color::White );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	auto anchors = sceneNode->getRoot()->querySelectorAll( "#rss a" );
+	ASSERT_EQ( anchors.size(), (size_t)1 );
+	auto* anchor = anchors.front()->asType<UITextSpan>();
+	ASSERT_TRUE( anchor != nullptr );
+	EXPECT_EQ( anchor->getFontBackgroundColor().getValue(),
+			   Color::fromString( "#d0d0d0" ).getValue() );
+	ASSERT_TRUE( anchor->getBackground() != nullptr );
+	ASSERT_TRUE( anchor->getBackground()->hasDrawableLayers() );
+	ASSERT_TRUE( anchor->getBackground()->getBackgroundDrawable().hasRadius() );
+
+	bool foundRoundedLayeredFragment = false;
+	sceneNode->getRoot()->forEachNode( [&]( Node* node ) {
+		if ( foundRoundedLayeredFragment || !node->isType( UI_TYPE_RICHTEXT ) )
+			return;
+		for ( const auto& fragment :
+			  node->asType<UIRichText>()->getRichText().getInlineFragments() ) {
+			if ( fragment.type == RichText::InlineFragment::Type::Box &&
+				 fragment.source.type == RichText::InlineSourceType::Widget &&
+				 fragment.source.ptr == anchor ) {
+				foundRoundedLayeredFragment = true;
+				EXPECT_TRUE( fragment.backgroundColorDrawable != nullptr );
+				EXPECT_TRUE( fragment.backgroundDrawable != nullptr );
+				EXPECT_EQ( fragment.backgroundColor.getValue(),
+						   Color::fromString( "#d0d0d0" ).getValue() );
+				break;
+			}
+		}
+	} );
+	EXPECT_TRUE( foundRoundedLayeredFragment );
+
+	const Rectf rect = anchor->getScreenRect();
+	ASSERT_GT( rect.getWidth(), 12.f );
+	ASSERT_GT( rect.getHeight(), 4.f );
+
+	Image image = win->getFrontBufferImage();
+	const Uint32 sampleX = static_cast<Uint32>( eefloor( rect.Right - 5.f ) );
+	const Uint32 sampleY = static_cast<Uint32>( eefloor( rect.Top + rect.getHeight() * 0.5f ) );
+	ASSERT_LT( sampleX, image.getWidth() );
+	ASSERT_LT( sampleY, image.getHeight() );
+
+	const Color pixel = image.getPixel( sampleX, sampleY );
+	EXPECT_NEAR( pixel.r, 0xd0, 4 );
+	EXPECT_NEAR( pixel.g, 0xd0, 4 );
+	EXPECT_NEAR( pixel.b, 0xd0, 4 );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
 	auto win = Engine::instance()->createWindow(
 		WindowSettings( 1024, 653, "Background Atlas Test PD2", WindowStyle::Default,

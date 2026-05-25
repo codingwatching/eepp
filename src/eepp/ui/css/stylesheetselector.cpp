@@ -33,6 +33,10 @@ void removeExtraSpaces( std::string& string ) {
 	String::replaceAll( string, " | ", "|" );
 	String::replaceAll( string, " + ", "+" );
 	String::replaceAll( string, " ~ ", "~" );
+	String::replaceAll( string, " >", ">" );
+	String::replaceAll( string, " |", "|" );
+	String::replaceAll( string, " +", "+" );
+	String::replaceAll( string, " ~", "~" );
 }
 
 void StyleSheetSelector::addSelectorRule(
