@@ -216,6 +216,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	auto redesignButton = sceneNode->getRoot()->find( "redesign-beta-optin-btn" );
 	auto srDrop = sceneNode->getRoot()->querySelector( "#sr-header-area .dropdown.srdrop" );
 	auto srList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list" );
+	auto srFlatList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list .flat-list" );
 	auto headerBottomLeft = sceneNode->getRoot()->find( "header-bottom-left" );
 	auto dropChoices = sceneNode->getRoot()->querySelector( ".drop-choices.srdrop" );
 
@@ -228,6 +229,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	ASSERT_TRUE( redesignButton != nullptr );
 	ASSERT_TRUE( srDrop != nullptr );
 	ASSERT_TRUE( srList != nullptr );
+	ASSERT_TRUE( srFlatList != nullptr );
 	ASSERT_TRUE( headerBottomLeft != nullptr );
 	ASSERT_TRUE( dropChoices != nullptr );
 
@@ -245,6 +247,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 		redesignButton->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f srDropPos = srDrop->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f srListPos = srList->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f srFlatListPos = srFlatList->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f headerBottomLeftPos =
 		headerBottomLeft->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f dropChoicesPos = dropChoices->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
@@ -295,6 +298,20 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	const Float arrowCenter =
 		arrowPos.x + arrow->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
 	EXPECT_NEAR( midcolCenter, arrowCenter, 1.f );
+	EXPECT_NEAR( srListPos.y, srHeaderPos.y, 1.f );
+	EXPECT_GE( srListPos.x,
+			   srDropPos.x + srDrop->asType<UIWidget>()->getPixelsSize().getWidth() - 1.f );
+	EXPECT_LE( srList->asType<UIWidget>()->getPixelsSize().getWidth(),
+			   win->getWidth() - srListPos.x + 1.f );
+	EXPECT_LE( srList->asType<UIWidget>()->getPixelsSize().getHeight(),
+			   srHeader->asType<UIWidget>()->getPixelsSize().getHeight() + 1.f );
+	EXPECT_EQ( srFlatList->asType<UIRichText>()->getRichTextPtr()->getLines().size(),
+			   (size_t)1 );
+	EXPECT_NEAR( srFlatListPos.y, srHeaderPos.y, 1.f );
+	EXPECT_GE( headerBottomLeftPos.y,
+			   srHeaderPos.y + srHeader->asType<UIWidget>()->getPixelsSize().getHeight() - 1.f );
+	EXPECT_FALSE( dropChoices->asType<UIWidget>()->isVisible() );
+	EXPECT_EQ( dropChoices->asType<UIHTMLWidget>()->getDisplay(), CSSDisplay::None );
 
 	auto* arrowBackground = arrow->asType<UIWidget>()->getBackground();
 	ASSERT_TRUE( arrowBackground != nullptr );
@@ -390,7 +407,54 @@ UTEST( UIHTML, WhiteSpaceNowrapKeepsInlineListOnOneLine ) {
 
 	EXPECT_EQ( bar->getRichTextPtr()->getLines().size(), (size_t)1 );
 	EXPECT_FALSE( bar->getLineWrap() );
+	EXPECT_EQ( list->getRichTextPtr()->getLines().size(), (size_t)1 );
 	EXPECT_FALSE( list->getLineWrap() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceNowrapContinuesInlineContentAfterOverflow ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<div id="bar" style="width: 140px; white-space: nowrap; overflow: hidden">
+				<ul id="first" style="display: inline; list-style: none; margin: 0; padding: 0">
+					<li style="display: inline">home</li>
+					<li style="display: inline"> - popular</li>
+					<li style="display: inline"> - all</li>
+					<li style="display: inline"> - friends</li>
+				</ul>
+				<span>|</span>
+				<ul id="second" style="display: inline; list-style: none; margin: 0; padding: 0">
+					<li style="display: inline">movies</li>
+					<li style="display: inline"> - videos</li>
+					<li style="display: inline"> - pcgaming</li>
+					<li style="display: inline"> - gamedev</li>
+					<li style="display: inline"> - science</li>
+					<li style="display: inline"> - space</li>
+				</ul>
+			</div>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* bar = sceneNode->getRoot()->find( "bar" )->asType<UIRichText>();
+	auto* first = sceneNode->getRoot()->find( "first" )->asType<UIRichText>();
+	auto* second = sceneNode->getRoot()->find( "second" )->asType<UIRichText>();
+	ASSERT_TRUE( bar != nullptr );
+	ASSERT_TRUE( first != nullptr );
+	ASSERT_TRUE( second != nullptr );
+
+	EXPECT_FALSE( bar->getLineWrap() );
+	EXPECT_FALSE( first->getLineWrap() );
+	EXPECT_FALSE( second->getLineWrap() );
+	EXPECT_EQ( bar->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_EQ( first->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_EQ( second->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_NEAR( first->convertToWorldSpace( { 0, 0 } ).y,
+				 second->convertToWorldSpace( { 0, 0 } ).y, 1.f );
 
 	Engine::destroySingleton();
 }

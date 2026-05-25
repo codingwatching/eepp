@@ -909,7 +909,7 @@ class RichTextInlineLayouter {
 					if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
 						addInlineSpacingToCurrentLine( result, curX,
 													   inlineEndSpacing( payload, inlineItems ) );
-						if ( maxLayoutWidth > 0 && curX > maxLayoutWidth ) {
+						if ( lineWrap && maxLayoutWidth > 0 && curX > maxLayoutWidth ) {
 							maxWidth = std::max( maxWidth, curX );
 							result.lines.push_back( RichText::RenderParagraph() );
 							curX = 0;
@@ -1121,7 +1121,7 @@ class RichTextInlineLayouter {
 					if ( i == wrapInfo.wraps.size() - 2 && !isNewline ) {
 						addInlineSpacingToCurrentLine( result, curX,
 													   inlineEndSpacing( payload, inlineItems ) );
-						if ( effW > 0 && effW < 1e9f && curX > effW ) {
+						if ( lineWrap && effW > 0 && effW < 1e9f && curX > effW ) {
 							maxWidth = std::max( maxWidth, curX );
 							result.lines.push_back( RichText::RenderParagraph() );
 							curX = 0;

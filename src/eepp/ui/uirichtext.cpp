@@ -1214,9 +1214,16 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			Node* next = findLogicalNext( node );
 			bool nextIsInline =
 				next && next->isWidget() && next->asType<UIWidget>()->isInlineDisplay();
+			auto isFloatingOrOutOfFlow = []( Node* n ) {
+				if ( n == nullptr || !n->isType( UI_TYPE_HTML_WIDGET ) )
+					return false;
+				auto* htmlWidget = n->asType<UIHTMLWidget>();
+				return htmlWidget->getCSSFloat() != CSSFloat::None || htmlWidget->isOutOfFlow();
+			};
 
-			if ( shouldCollapse && textNode->isWhitespaceOnly() && !prevIsInline &&
-				 !nextIsInline ) {
+			if ( shouldCollapse && textNode->isWhitespaceOnly() &&
+				 ( !prevIsInline || isFloatingOrOutOfFlow( prev ) ) &&
+				 ( !nextIsInline || isFloatingOrOutOfFlow( next ) ) ) {
 				textNode->setLayoutCharCount( 0 );
 				return;
 			}

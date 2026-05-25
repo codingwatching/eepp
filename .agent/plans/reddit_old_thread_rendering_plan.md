@@ -42,11 +42,13 @@ Current progress:
 - Legacy `<strike>` is registered as an HTML phrasing element and receives default `line-through` styling, removing a missing-element warning from the fixture.
 - Horizontal `auto` margins are recomputed at RichText/block layout read points, and the old Reddit vote arrow is centered inside `.midcol` (`arrow.x=17`, `midcol.x=15`, `arrow.width=15`, `midcol.width=19` in the current smoke run).
 - Vote arrow sprite CSS now resolves relative to the stylesheet file, preserves negative `background-position`, and is asserted in both a reduced sprite test and the old Reddit smoke test.
-- CSS `white-space` now maps browser values such as `normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line`, and `break-spaces` into RichText whitespace-collapse and soft-wrap behavior. `nowrap` suppresses soft wrapping for text and atomic inline boxes, including old Reddit-style inline flat lists.
+- CSS `white-space` now maps browser values such as `normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line`, and `break-spaces` into RichText whitespace-collapse and soft-wrap behavior. `nowrap` suppresses soft wrapping for text and atomic inline boxes, including old Reddit-style inline flat lists, and overflowing text runs no longer force following inline content onto a new line.
 - Collapsed whitespace-only text nodes between non-inline boxes no longer create a spurious line box in RichText layout.
 - HTML `<button>` is created as an HTML rich-text element with browser-like inline-block defaults so it can participate in CSS display/float layout while still rendering child text. This fixes the top-row placement of old Reddit's `#redesign-beta-optin-btn`.
 - RichText virtual block breaks no longer split a line that contains only floats, allowing a following BFC to remain beside those floats in reduced cases.
-- Remaining visible blockers: the old Reddit subreddit list `.sr-list` still lands at `y=18` and overlaps `#header-bottom-left` despite now being `white-space: nowrap`; the comment form spacing is too large; footer/comments vertical spacing still diverges from Chrome; additional form-control and header sprite details still need visual tightening.
+- Collapsed whitespace-only text between floated inline-display boxes no longer creates in-flow line content. This fixes the old Reddit `#sr-header-area .sr-list` placement: it now sits in the top row beside the floated redesign button and subreddit dropdown, instead of landing at `y=18` and overlapping `#header-bottom-left`.
+- The old Reddit subreddit bar now remains a single clipped 18px row under `white-space: nowrap`; the current smoke run reports `srList=(255,0 769x18)`.
+- Remaining visible blockers: the comment form spacing is too large; footer/comments vertical spacing still diverges from Chrome; additional form-control and header sprite details still need visual tightening.
 
 ## Reference Layout Invariants
 
@@ -334,7 +336,7 @@ Exit criteria:
 - Vote arrows draw from the sprite and are centered in `.midcol`. (Reduced and old Reddit smoke coverage exists.)
 - Header/logo sprite regions render.
 - Submit button strips and nubs render close to reference.
-- The `#sr-header-area .sr-list` BFC sits in the top row beside the floated redesign button and subreddit dropdown, instead of overlapping `#header-bottom-left`.
+- The `#sr-header-area .sr-list` BFC sits in one clipped topbar row beside the floated redesign button and subreddit dropdown, instead of overlapping `#header-bottom-left` or wrapping through later header rows.
 
 ### Phase 4: Defaults And Form Controls
 
