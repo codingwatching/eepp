@@ -2562,7 +2562,8 @@ void LLMChatUI::doRequest() {
 	mRequest->streamedResponseCb = [this, editor, thinking, thinkingID]( const std::string& chunk,
 																		 bool fromReasoning ) {
 		if ( fromReasoning && !mDisplayReasoning ) {
-			runOnMainThread( [this, chunk] { updateThinkingBubble( chunk ); } );
+			if ( mIsAgentMode )
+				runOnMainThread( [this, chunk] { updateThinkingBubble( chunk ); } );
 			return;
 		}
 
