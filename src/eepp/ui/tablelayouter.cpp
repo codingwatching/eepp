@@ -58,7 +58,8 @@ void TableLayouter::computeIntrinsicWidths() {
 	auto collectRows = [&]( auto&& self, Node* node ) -> void {
 		for ( Node* child = node->getFirstChild(); child; child = child->getNextNode() ) {
 			if ( child->getType() == UI_TYPE_HTML_TABLE_ROW ) {
-				mRows.push_back( child->asType<UIHTMLTableRow>() );
+				if ( child->isVisible() )
+					mRows.push_back( child->asType<UIHTMLTableRow>() );
 			} else if ( child->getType() != UI_TYPE_HTML_TABLE ) {
 				if ( child->getType() == UI_TYPE_HTML_TABLE_HEAD )
 					mHead = child->asType<UIHTMLTableHead>();
