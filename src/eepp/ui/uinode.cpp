@@ -1711,21 +1711,21 @@ Float UINode::lengthFromValue( const StyleSheetProperty& property,
 			std::string_view keyword = *it;
 			StyleSheetLength res;
 			if ( keyword == "xx-small" ) {
-				res.setValue( 0.6f, StyleSheetLength::Unit::Rem );
+				res.setValue( 9.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "x-small" ) {
-				res.setValue( 0.75f, StyleSheetLength::Unit::Rem );
+				res.setValue( 10.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "small" ) {
-				res.setValue( 0.89f, StyleSheetLength::Unit::Rem );
+				res.setValue( 13.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "medium" ) {
-				res.setValue( 1.0f, StyleSheetLength::Unit::Rem );
+				res.setValue( 16.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "large" ) {
-				res.setValue( 1.2f, StyleSheetLength::Unit::Rem );
+				res.setValue( 18.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "x-large" ) {
-				res.setValue( 1.5f, StyleSheetLength::Unit::Rem );
+				res.setValue( 24.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "xx-large" ) {
-				res.setValue( 2.0f, StyleSheetLength::Unit::Rem );
+				res.setValue( 32.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "xxx-large" ) {
-				res.setValue( 3.0f, StyleSheetLength::Unit::Rem );
+				res.setValue( 48.f, StyleSheetLength::Unit::Px );
 			} else if ( keyword == "smaller" ) {
 				res.setValue( 0.85f, StyleSheetLength::Unit::Em );
 			} else if ( keyword == "larger" ) {

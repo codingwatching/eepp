@@ -47,8 +47,12 @@ Current progress:
 - HTML `<button>` is created as an HTML rich-text element with browser-like inline-block defaults so it can participate in CSS display/float layout while still rendering child text. This fixes the top-row placement of old Reddit's `#redesign-beta-optin-btn`.
 - RichText virtual block breaks no longer split a line that contains only floats, allowing a following BFC to remain beside those floats in reduced cases.
 - Collapsed whitespace-only text between floated inline-display boxes no longer creates in-flow line content. This fixes the old Reddit `#sr-header-area .sr-list` placement: it now sits in the top row beside the floated redesign button and subreddit dropdown, instead of landing at `y=18` and overlapping `#header-bottom-left`.
-- The old Reddit subreddit bar now remains a single clipped 18px row under `white-space: nowrap`; the current smoke run reports `srList=(255,0 769x18)`.
-- Remaining visible blockers: the comment form spacing is too large; footer/comments vertical spacing still diverges from Chrome; additional form-control and header sprite details still need visual tightening.
+- The old Reddit subreddit bar now remains a single clipped 18px row under `white-space: nowrap`; the current smoke run reports `srList=(252,0 772x18)`.
+- CSS absolute font-size keywords now use the browser scale (`medium` = 16px, `small` = 13px, `x-small` = 10px) instead of the app theme's 12px UI default. This fixes old Reddit title and metadata sizing rules such as `.link .title { font-size: medium }` and `.tagline { font-size: x-small }`.
+- Floated inline text elements now follow CSS blockification: once `float` is not `none`, inline spans/anchors stop being rebuilt as inline text and enter the atomic float path. This fixes old Reddit's comment form footer links (`.help-toggle` and `a.reddiquette`) so they align to the right under the textarea.
+- `vertical-align` on an inline-block `UITextSpan` now applies to the inline-block box in the parent line, not to its own internal self text. This keeps old Reddit's `.domain a { display:inline-block; vertical-align:middle }` from inflating the anchor's own line box while preserving parent-line alignment semantics.
+- `clear` now ignores external float exclusions inherited from an outer formatting context. This matches the old Reddit `.entry { overflow:hidden }` BFC case: its child `.expando { clear:left }` must not clear the sibling `.midcol` float outside `.entry`. The current smoke run moves `.expando` from `y=126` to `y=119.609` and `.usertext-body .md` from `y=131` to `y=124.609`.
+- Remaining visible blockers: the main selftext and comment form still start lower than the Chrome reference; footer/comments vertical spacing still diverges from Chrome; additional form-control and header sprite details still need visual tightening.
 
 ## Reference Layout Invariants
 
@@ -84,6 +88,7 @@ Important behavior:
 - A block formatting context next to a float must not overlap the float. If there is enough horizontal space, it should sit beside the float; otherwise it moves below.
 - `overflow` values other than `visible` create a block formatting context for block boxes.
 - Floats participate in the current formatting context and must be visible to later sibling line layout until cleared or until their bottom is passed.
+- A `clear` inside a nested block formatting context clears floats from that same formatting context, not external float exclusions inherited only for line avoidance and BFC placement.
 
 Implementation gaps to investigate:
 
@@ -98,6 +103,7 @@ Reduced tests to add before the full-page comparison:
 - Left float plus following `overflow:hidden` block: old Reddit `.midcol` and `.entry` pattern, with `.entry.x >= midcol.right + margin`.
 - Left and right floats on the same line: following inline content uses the remaining middle strip.
 - Clear behavior inside a mixed float context: `.clearleft` lands below left floats but not necessarily right floats.
+- Clear behavior inside a nested BFC: a child with `clear:left` does not jump below an external sibling float from the parent formatting context.
 
 ### 2. Float Width Resolution
 
@@ -237,6 +243,7 @@ The screenshot is text-heavy. Issues here may look like float bugs even when pos
 Needs:
 
 - Old Reddit font sizing: `font-size: x-small`, percentages, and inherited line-height.
+- Inline-block `vertical-align` must align the atomic inline-block box in the parent line without changing the inline-block's own internal text line metrics.
 - Paragraph margin collapse or equivalent spacing close enough for old Reddit.
 - `textarea` dimensions from CSS and attributes: comment box should be large and aligned.
 - `input type=text` shortlink field width/height and border.
@@ -244,6 +251,8 @@ Needs:
 
 Reduced tests:
 
+- Absolute `font-size` keywords use the browser scale, while `smaller`/`larger` remain relative to the parent.
+- Inline-block with `vertical-align: middle` has the same own text line height as the baseline-aligned inline-block, while the parent line still applies the middle alignment.
 - `font-size:x-small` and percentage font-size inheritance.
 - Paragraph margins inside `.md`.
 - `textarea` with CSS width/height and `rows/cols`.

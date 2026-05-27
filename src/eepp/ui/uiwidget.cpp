@@ -1019,7 +1019,10 @@ bool UIWidget::isInlineDisplay() const {
 	if ( isTextNode() )
 		return true;
 	if ( isType( UI_TYPE_HTML_WIDGET ) ) {
-		CSSDisplay d = static_cast<const UIHTMLWidget*>( this )->getDisplay();
+		auto* htmlWidget = static_cast<const UIHTMLWidget*>( this );
+		if ( htmlWidget->getCSSFloat() != CSSFloat::None || htmlWidget->isOutOfFlow() )
+			return false;
+		CSSDisplay d = htmlWidget->getDisplay();
 		return d == CSSDisplay::Inline || d == CSSDisplay::InlineBlock;
 	}
 	return false;

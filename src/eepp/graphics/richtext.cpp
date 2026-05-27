@@ -1054,7 +1054,8 @@ class RichTextInlineLayouter {
 			bool advanced = false;
 			if ( clearType == RichText::InlineClear::Left ||
 				 clearType == RichText::InlineClear::Both ) {
-				for ( auto& f : leftFloats ) {
+				for ( size_t i = externalLeftFloatCount; i < leftFloats.size(); ++i ) {
+					auto& f = leftFloats[i];
 					if ( f.Bottom > curY ) {
 						curY = f.Bottom;
 						advanced = true;
@@ -1063,7 +1064,8 @@ class RichTextInlineLayouter {
 			}
 			if ( clearType == RichText::InlineClear::Right ||
 				 clearType == RichText::InlineClear::Both ) {
-				for ( auto& f : rightFloats ) {
+				for ( size_t i = externalRightFloatCount; i < rightFloats.size(); ++i ) {
+					auto& f = rightFloats[i];
 					if ( f.Bottom > curY ) {
 						curY = f.Bottom;
 						advanced = true;

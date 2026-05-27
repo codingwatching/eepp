@@ -219,6 +219,18 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	auto srFlatList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list .flat-list" );
 	auto headerBottomLeft = sceneNode->getRoot()->find( "header-bottom-left" );
 	auto dropChoices = sceneNode->getRoot()->querySelector( ".drop-choices.srdrop" );
+	auto selftextMd = sceneNode->getRoot()->querySelector( ".link .usertext-body .md" );
+	auto selftextFirstP = sceneNode->getRoot()->querySelector( ".link .usertext-body .md p" );
+	auto postTitle = sceneNode->getRoot()->querySelector( ".link .top-matter > p.title" );
+	auto postTagline = sceneNode->getRoot()->querySelector( ".link .top-matter > p.tagline" );
+	auto postExpando = sceneNode->getRoot()->querySelector( ".link .expando" );
+	auto postUsertext = sceneNode->getRoot()->querySelector( ".link .expando > form.usertext" );
+	auto commentArea = sceneNode->getRoot()->querySelector( ".commentarea" );
+	auto commentForm = sceneNode->getRoot()->find( "form-t3_1tk9dgh5ov" );
+	auto commentEdit = sceneNode->getRoot()->querySelector( ".commentarea .usertext-edit" );
+	auto commentTextarea = sceneNode->getRoot()->querySelector( ".commentarea textarea" );
+	auto commentHelpToggle = sceneNode->getRoot()->querySelector( ".commentarea .help-toggle" );
+	auto commentContentPolicy = sceneNode->getRoot()->querySelector( ".commentarea a.reddiquette" );
 
 	ASSERT_TRUE( side != nullptr );
 	ASSERT_TRUE( siteTable != nullptr );
@@ -232,6 +244,18 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	ASSERT_TRUE( srFlatList != nullptr );
 	ASSERT_TRUE( headerBottomLeft != nullptr );
 	ASSERT_TRUE( dropChoices != nullptr );
+	ASSERT_TRUE( selftextMd != nullptr );
+	ASSERT_TRUE( selftextFirstP != nullptr );
+	ASSERT_TRUE( postTitle != nullptr );
+	ASSERT_TRUE( postTagline != nullptr );
+	ASSERT_TRUE( postExpando != nullptr );
+	ASSERT_TRUE( postUsertext != nullptr );
+	ASSERT_TRUE( commentArea != nullptr );
+	ASSERT_TRUE( commentForm != nullptr );
+	ASSERT_TRUE( commentEdit != nullptr );
+	ASSERT_TRUE( commentTextarea != nullptr );
+	ASSERT_TRUE( commentHelpToggle != nullptr );
+	ASSERT_TRUE( commentContentPolicy != nullptr );
 
 	UIWidget* content =
 		siteTable->getParent()->isWidget() ? siteTable->getParent()->asType<UIWidget>() : nullptr;
@@ -251,6 +275,26 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	Vector2f headerBottomLeftPos =
 		headerBottomLeft->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f dropChoicesPos = dropChoices->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f selftextMdPos = selftextMd->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f selftextFirstPPos =
+		selftextFirstP->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f postTitlePos = postTitle->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f postTaglinePos = postTagline->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f postExpandoPos = postExpando->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f postUsertextPos = postUsertext->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentAreaPos = commentArea->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentFormPos = commentForm->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentEditPos = commentEdit->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentTextareaPos =
+		commentTextarea->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentHelpTogglePos =
+		commentHelpToggle->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f commentContentPolicyPos =
+		commentContentPolicy->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+
+	auto fontSizeOf = []( Node* node ) -> Uint32 {
+		return node->isType( UI_TYPE_RICHTEXT ) ? node->asType<UIRichText>()->getFontSize() : 0;
+	};
 
 	std::cerr << "old reddit rects: "
 			  << "side=(" << sidePos.x << "," << sidePos.y << " "
@@ -291,7 +335,49 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			  << dropChoices->asType<UIWidget>()->getPixelsSize().getHeight()
 			  << " visible=" << dropChoices->asType<UIWidget>()->isVisible() << " display="
 			  << CSSDisplayHelper::toString( dropChoices->asType<UIHTMLWidget>()->getDisplay() )
-			  << ")" << std::endl;
+			  << ") "
+			  << "selftextMd=(" << selftextMdPos.x << "," << selftextMdPos.y << " "
+			  << selftextMd->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << selftextMd->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " font=" << fontSizeOf( selftextMd ) << ") "
+			  << "selftextFirstP=(" << selftextFirstPPos.x << "," << selftextFirstPPos.y << " "
+			  << selftextFirstP->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << selftextFirstP->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " font=" << fontSizeOf( selftextFirstP ) << ") "
+			  << "postTitle=(" << postTitlePos.x << "," << postTitlePos.y << " "
+			  << postTitle->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << postTitle->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " font=" << fontSizeOf( postTitle ) << ") "
+			  << "postTagline=(" << postTaglinePos.x << "," << postTaglinePos.y << " "
+			  << postTagline->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << postTagline->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " font=" << fontSizeOf( postTagline ) << ") "
+			  << "postExpando=(" << postExpandoPos.x << "," << postExpandoPos.y << " "
+			  << postExpando->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << postExpando->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "postUsertext=(" << postUsertextPos.x << "," << postUsertextPos.y << " "
+			  << postUsertext->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << postUsertext->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentArea=(" << commentAreaPos.x << "," << commentAreaPos.y << " "
+			  << commentArea->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentArea->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentForm=(" << commentFormPos.x << "," << commentFormPos.y << " "
+			  << commentForm->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentForm->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentEdit=(" << commentEditPos.x << "," << commentEditPos.y << " "
+			  << commentEdit->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentEdit->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentTextarea=(" << commentTextareaPos.x << "," << commentTextareaPos.y << " "
+			  << commentTextarea->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentTextarea->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentContentPolicy=(" << commentContentPolicyPos.x << ","
+			  << commentContentPolicyPos.y << " "
+			  << commentContentPolicy->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentContentPolicy->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "commentHelpToggle=(" << commentHelpTogglePos.x << "," << commentHelpTogglePos.y
+			  << " " << commentHelpToggle->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << commentHelpToggle->asType<UIWidget>()->getPixelsSize().getHeight() << ")"
+			  << std::endl;
 
 	const Float midcolCenter =
 		midcolPos.x + midcol->asType<UIWidget>()->getPixelsSize().getWidth() / 2.f;
@@ -305,13 +391,19 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			   win->getWidth() - srListPos.x + 1.f );
 	EXPECT_LE( srList->asType<UIWidget>()->getPixelsSize().getHeight(),
 			   srHeader->asType<UIWidget>()->getPixelsSize().getHeight() + 1.f );
-	EXPECT_EQ( srFlatList->asType<UIRichText>()->getRichTextPtr()->getLines().size(),
-			   (size_t)1 );
+	EXPECT_EQ( srFlatList->asType<UIRichText>()->getRichTextPtr()->getLines().size(), (size_t)1 );
 	EXPECT_NEAR( srFlatListPos.y, srHeaderPos.y, 1.f );
 	EXPECT_GE( headerBottomLeftPos.y,
 			   srHeaderPos.y + srHeader->asType<UIWidget>()->getPixelsSize().getHeight() - 1.f );
 	EXPECT_FALSE( dropChoices->asType<UIWidget>()->isVisible() );
 	EXPECT_EQ( dropChoices->asType<UIHTMLWidget>()->getDisplay(), CSSDisplay::None );
+	EXPECT_NEAR(
+		commentHelpTogglePos.x + commentHelpToggle->asType<UIWidget>()->getPixelsSize().getWidth(),
+		commentEditPos.x + commentEdit->asType<UIWidget>()->getPixelsSize().getWidth(), 1.f );
+	EXPECT_LE( commentContentPolicyPos.x +
+				   commentContentPolicy->asType<UIWidget>()->getPixelsSize().getWidth(),
+			   commentHelpTogglePos.x -
+				   commentHelpToggle->asType<UIWidget>()->getLayoutPixelsMargin().Left + 1.f );
 
 	auto* arrowBackground = arrow->asType<UIWidget>()->getBackground();
 	ASSERT_TRUE( arrowBackground != nullptr );
@@ -344,6 +436,40 @@ UTEST( UIHTML, StrikeElementUsesDefaultLineThrough ) {
 	auto* strike = sceneNode->getRoot()->find( "strike" )->asType<UITextSpan>();
 	ASSERT_TRUE( strike != nullptr );
 	EXPECT_TRUE( 0 != ( strike->getTextDecoration() & Text::StrikeThrough ) );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FontSizeAbsoluteKeywordsUseBrowserScale ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<div id="xsmall" style="font-size: x-small">x-small</div>
+			<div id="small" style="font-size: small">small</div>
+			<div id="medium" style="font-size: medium">medium</div>
+			<div id="large" style="font-size: large">large</div>
+			<div id="parent" style="font-size: 20px">
+				<span id="smaller" style="font-size: smaller">smaller</span>
+				<span id="larger" style="font-size: larger">larger</span>
+			</div>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto fontSize = [sceneNode]( const std::string& id ) {
+		auto* node = sceneNode->getRoot()->find( id );
+		return node->isType( UI_TYPE_TEXTSPAN ) ? node->asType<UITextSpan>()->getFontSize()
+												: node->asType<UIRichText>()->getFontSize();
+	};
+
+	EXPECT_EQ( fontSize( "xsmall" ), 10u );
+	EXPECT_EQ( fontSize( "small" ), 13u );
+	EXPECT_EQ( fontSize( "medium" ), 16u );
+	EXPECT_EQ( fontSize( "large" ), 18u );
+	EXPECT_EQ( fontSize( "smaller" ), 17u );
+	EXPECT_EQ( fontSize( "larger" ), 24u );
 
 	Engine::destroySingleton();
 }
@@ -664,6 +790,55 @@ UTEST( UIHTML, InlineBaselineAlignmentProperties ) {
 	EXPECT_EQ( middleBox->getBaselineAlign().type, CSSBaselineAlignment::Middle );
 	EXPECT_EQ( middleChild->getBaselineAlign().type, CSSBaselineAlignment::Baseline );
 	EXPECT_EQ( alignmentBox->getBaselineAlign().type, CSSBaselineAlignment::Middle );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, InlineBlockVerticalAlignDoesNotInflateOwnTextLine ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "Inline Block Vertical Align Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font != nullptr && font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
+	SceneManager::instance()->add( sceneNode );
+	sceneNode->getUIThemeManager()->setDefaultFont( font );
+	sceneNode->loadLayoutFromString( R"html(
+		<vbox layout_width="wrap_content" layout_height="wrap_content">
+			<RichText id="baseline" font-size="16dp" layout_width="wrap_content" layout_height="wrap_content">
+				A<span id="base_box" display="inline-block" font-size="10dp" vertical-align="baseline">self.cpp</span>
+			</RichText>
+			<RichText id="middle" font-size="16dp" layout_width="wrap_content" layout_height="wrap_content">
+				A<span id="middle_box" display="inline-block" font-size="10dp" vertical-align="middle">self.cpp</span>
+			</RichText>
+		</vbox>
+	)html" );
+	sceneNode->updateDirtyLayouts();
+
+	auto* baseline = sceneNode->getRoot()->find( "baseline" )->asType<UIRichText>();
+	auto* middle = sceneNode->getRoot()->find( "middle" )->asType<UIRichText>();
+	auto* baselineBox = sceneNode->getRoot()->find( "base_box" )->asType<UITextSpan>();
+	auto* middleBox = sceneNode->getRoot()->find( "middle_box" )->asType<UITextSpan>();
+	ASSERT_TRUE( baseline != nullptr );
+	ASSERT_TRUE( middle != nullptr );
+	ASSERT_TRUE( baselineBox != nullptr );
+	ASSERT_TRUE( middleBox != nullptr );
+
+	ASSERT_EQ( baselineBox->getRichTextPtr()->getLines().size(), (size_t)1 );
+	ASSERT_EQ( middleBox->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_NEAR( middleBox->getPixelsSize().getHeight(), baselineBox->getPixelsSize().getHeight(),
+				 0.5f );
+	EXPECT_NEAR( middleBox->getRichTextPtr()->getLines().front().height,
+				 baselineBox->getRichTextPtr()->getLines().front().height, 0.5f );
+	EXPECT_EQ( middleBox->getBaselineAlign().type, CSSBaselineAlignment::Middle );
+	EXPECT_GE( middle->getRichTextPtr()->getLines().front().height,
+			   baseline->getRichTextPtr()->getLines().front().height );
 
 	Engine::destroySingleton();
 }

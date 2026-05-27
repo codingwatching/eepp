@@ -63,11 +63,11 @@ bool UITextSpan::isType( const Uint32& type ) const {
 }
 
 bool UITextSpan::isInline() const {
-	return mDisplay == CSSDisplay::Inline;
+	return mDisplay == CSSDisplay::Inline && getCSSFloat() == CSSFloat::None && !isOutOfFlow();
 }
 
 bool UITextSpan::isInlineBlock() const {
-	return mDisplay == CSSDisplay::InlineBlock;
+	return mDisplay == CSSDisplay::InlineBlock && getCSSFloat() == CSSFloat::None && !isOutOfFlow();
 }
 
 void UITextSpan::draw() {

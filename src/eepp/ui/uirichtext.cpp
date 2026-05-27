@@ -1158,8 +1158,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			}
 			FontStyleConfig style = selfSpan->getFontStyleConfig();
 			style.BackgroundColor = Color::Transparent;
-			richText.addSpan( selfText, style, Rectf::Zero, Rectf::Zero, 0,
-							  toRichTextBaselineAlign( selfSpan->getBaselineAlign() ) );
+			richText.addSpan( selfText, style, Rectf::Zero, Rectf::Zero, 0, {} );
 			if ( shouldCollapse )
 				lastSpanEndsWithSpace = !selfText.empty() && selfText.back() == ' ';
 		}
@@ -1283,7 +1282,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 		bool handled = false;
 
-		if ( widget->isType( UI_TYPE_HTML_WIDGET ) && widget->asType<UIHTMLWidget>()->isInline() ) {
+		if ( widget->isType( UI_TYPE_HTML_WIDGET ) && widget->asType<UIHTMLWidget>()->isInline() &&
+			 widget->asType<UIHTMLWidget>()->getCSSFloat() == CSSFloat::None &&
+			 !widget->asType<UIHTMLWidget>()->isOutOfFlow() ) {
 			UITextSpan* span = widget->asType<UITextSpan>();
 			span->setLayoutCharCount( 0 );
 			Rectf margin = span->getLayoutPixelsMargin();

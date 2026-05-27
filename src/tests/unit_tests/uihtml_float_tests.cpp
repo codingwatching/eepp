@@ -508,6 +508,50 @@ UTEST( UIHTMLFloat, whitespaceBetweenInlineFloatsDoesNotPushFollowingBfc ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTMLFloat, rightFloatedInlineSpansAlignAtContainerRightAfterBlock ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body style="margin:0">
+			<div id="editor" style="width:500px">
+				<textarea id="textarea" style="display:block;width:500px;height:100px"></textarea>
+				<div id="bottom" style="overflow:hidden;width:100%">
+					<span id="help" style="float:right;margin-left:10px">formatting help</span>
+					<a id="policy" style="float:right;margin-left:10px">content policy</a>
+				</div>
+			</div>
+		</body>
+	)html" ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* editor = sceneNode->find<UIWidget>( "editor" );
+	auto* bottom = sceneNode->find<UIWidget>( "bottom" );
+	auto* help = sceneNode->find<UIWidget>( "help" );
+	auto* policy = sceneNode->find<UIWidget>( "policy" );
+	ASSERT_TRUE( editor != nullptr );
+	ASSERT_TRUE( bottom != nullptr );
+	ASSERT_TRUE( help != nullptr );
+	ASSERT_TRUE( policy != nullptr );
+	ASSERT_TRUE( help->isType( UI_TYPE_HTML_WIDGET ) );
+	ASSERT_TRUE( policy->isType( UI_TYPE_HTML_WIDGET ) );
+	EXPECT_EQ( help->asType<UIHTMLWidget>()->getCSSFloat(), CSSFloat::Right );
+	EXPECT_EQ( policy->asType<UIHTMLWidget>()->getCSSFloat(), CSSFloat::Right );
+
+	Vector2f bottomPos = bottom->convertToWorldSpace( { 0, 0 } );
+	Vector2f helpPos = help->convertToWorldSpace( { 0, 0 } );
+	Vector2f policyPos = policy->convertToWorldSpace( { 0, 0 } );
+	Float bottomRight = bottomPos.x + bottom->getPixelsSize().getWidth();
+	Float helpRight = helpPos.x + help->getPixelsSize().getWidth();
+	Float policyRight = policyPos.x + policy->getPixelsSize().getWidth();
+
+	EXPECT_NEAR( helpRight, bottomRight, 1.f );
+	EXPECT_LE( policyRight, helpPos.x - help->getLayoutPixelsMargin().Left + 1.f );
+	EXPECT_NEAR( helpPos.y, policyPos.y, 1.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTMLFloat, autoHorizontalMarginsCenterBlockInsideFloat ) {
 	init_float_test();
 	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
@@ -800,6 +844,54 @@ UTEST( UIHTMLFloat, clearRight_RespectsRightFloats ) {
 	Vector2f clearPos = clearRightChild->convertToWorldSpace( { 0, 0 } );
 
 	EXPECT_GE( clearPos.y, fpos.y + floatRight->getPixelsSize().getHeight() - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTMLFloat, clearInsideBlockFormattingContextIgnoresExternalFloat ) {
+	init_float_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* container = UIRichText::New();
+	container->setParent( sceneNode->getRoot() );
+	container->setPixelsSize( 600, 400 );
+	container->setPixelsPosition( 10, 10 );
+	container->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::WrapContent );
+
+	UIHTMLWidget* leftFloat = UIHTMLWidget::New();
+	leftFloat->setParent( container );
+	leftFloat->setPixelsSize( 100, 80 );
+	leftFloat->setCSSFloat( CSSFloat::Left );
+	leftFloat->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIRichText* bfc = UIRichText::New();
+	bfc->setParent( container );
+	bfc->setDisplay( CSSDisplay::Block );
+	bfc->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::WrapContent );
+	bfc->applyProperty( StyleSheetProperty( "overflow", "hidden" ) );
+
+	UIHTMLWidget* beforeClear = UIHTMLWidget::New();
+	beforeClear->setParent( bfc );
+	beforeClear->setPixelsSize( 120, 20 );
+	beforeClear->setDisplay( CSSDisplay::Block );
+	beforeClear->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* clearLeft = UIHTMLWidget::New();
+	clearLeft->setParent( bfc );
+	clearLeft->setPixelsSize( 120, 20 );
+	clearLeft->setDisplay( CSSDisplay::Block );
+	clearLeft->setCSSClear( CSSClear::Left );
+	clearLeft->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	Vector2f floatPos = leftFloat->convertToWorldSpace( { 0, 0 } );
+	Vector2f bfcPos = bfc->convertToWorldSpace( { 0, 0 } );
+	Vector2f clearPos = clearLeft->convertToWorldSpace( { 0, 0 } );
+
+	EXPECT_GE( bfcPos.x, floatPos.x + leftFloat->getPixelsSize().getWidth() - 1.f );
+	EXPECT_LT( clearPos.y, floatPos.y + leftFloat->getPixelsSize().getHeight() - 1.f );
+	EXPECT_NEAR( clearPos.y, bfcPos.y + beforeClear->getPixelsSize().getHeight(), 1.f );
 
 	Engine::destroySingleton();
 }
