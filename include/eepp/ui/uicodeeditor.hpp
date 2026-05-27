@@ -267,6 +267,10 @@ class EE_API UICodeEditor : public UIWidget, public TextDocument::Client {
 
 	const Uint32& getFontStyle() const;
 
+	FontWeight getFontWeight() const;
+
+	UICodeEditor* setFontWeight( const FontWeight& weight );
+
 	Uint32 getTextDecoration() const;
 
 	UICodeEditor* setTextDecoration( const Uint32& textDecoration );

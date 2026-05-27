@@ -2924,8 +2924,32 @@ UICodeEditor* UICodeEditor::setFontStyle( const Uint32& fontStyle ) {
 		invalidateDraw();
 		onFontStyleChanged();
 
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mFontStyleConfig.Font, fontStyle,
+				 ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal ) )
+			setFont( newFont );
+	}
+
+	return this;
+}
+
+FontWeight UICodeEditor::getFontWeight() const {
+	return mFontStyleConfig.Weight;
+}
+
+UICodeEditor* UICodeEditor::setFontWeight( const FontWeight& weight ) {
+	mFontStyleConfig.Weight = weight;
+
+	Uint32 weightStyle = ( weight >= FontWeight::SemiBold ) ? Text::Bold : 0;
+	Uint32 newStyle = ( mFontStyleConfig.Style & ~Text::Bold ) | weightStyle;
+
+	if ( mFontStyleConfig.Style != newStyle ) {
+		mFontStyleConfig.Style = newStyle;
+		invalidateDraw();
+		onFontStyleChanged();
+
 		if ( auto* newFont =
-				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, fontStyle ) )
+				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, newStyle, weight ) )
 			setFont( newFont );
 	}
 
@@ -3030,9 +3054,12 @@ bool UICodeEditor::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextDecoration:
 			setTextDecoration( attribute.asTextDecoration() );
 			break;
-		case PropertyId::FontStyle:
-		case PropertyId::FontWeight: {
+		case PropertyId::FontStyle: {
 			setFontStyle( attribute.asFontStyle() );
+			break;
+		}
+		case PropertyId::FontWeight: {
+			setFontWeight( Text::stringToFontWeight( attribute.value() ) );
 			break;
 		}
 		case PropertyId::TextStrokeWidth:
@@ -3101,8 +3128,9 @@ std::string UICodeEditor::getPropertyString( const PropertyDefinition* propertyD
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
-		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
+		case PropertyId::FontWeight:
+			return Text::fontWeightToString( mFontStyleConfig.Weight );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getOutlineThickness() ), "px" );
 		case PropertyId::TextStrokeColor:

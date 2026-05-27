@@ -372,7 +372,34 @@ UITooltip* UITooltip::setFontStyle( const Uint32& fontStyle ) {
 		autoAlign();
 		invalidateDraw();
 
-		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle( mStyleConfig.Font, fontStyle ) )
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mStyleConfig.Font, fontStyle,
+				 ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal ) )
+			setFont( newFont );
+	}
+
+	return this;
+}
+
+FontWeight UITooltip::getFontWeight() const {
+	return mStyleConfig.Weight;
+}
+
+UITooltip* UITooltip::setFontWeight( const FontWeight& weight ) {
+	mStyleConfig.Weight = weight;
+
+	Uint32 weightStyle = ( weight >= FontWeight::SemiBold ) ? Text::Bold : 0;
+	Uint32 newStyle = ( mStyleConfig.Style & ~Text::Bold ) | weightStyle;
+
+	if ( mStyleConfig.Style != newStyle ) {
+		mTextCache->setStyle( newStyle );
+		mStyleConfig.Style = newStyle;
+		onAutoSize();
+		autoAlign();
+		invalidateDraw();
+
+		if ( auto* newFont =
+				 getUISceneNode()->reevaluateFontStyle( mStyleConfig.Font, newStyle, weight ) )
 			setFont( newFont );
 	}
 
@@ -465,8 +492,9 @@ std::string UITooltip::getPropertyString( const PropertyDefinition* propertyDef,
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
-		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
+		case PropertyId::FontWeight:
+			return Text::fontWeightToString( mStyleConfig.Weight );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getOutlineThickness() ), "px" );
 		case PropertyId::TextStrokeColor:
@@ -581,8 +609,7 @@ bool UITooltip::applyProperty( const StyleSheetProperty& attribute ) {
 				mFlags &= ~UI_WORD_WRAP;
 			autoWrap();
 			break;
-		case PropertyId::FontStyle:
-		case PropertyId::FontWeight: {
+		case PropertyId::FontStyle: {
 			if ( !mUsingCustomStyling ) {
 				Uint32 flags = attribute.asFontStyle();
 
@@ -594,6 +621,11 @@ bool UITooltip::applyProperty( const StyleSheetProperty& attribute ) {
 
 				setFontStyle( flags );
 			}
+			break;
+		}
+		case PropertyId::FontWeight: {
+			if ( !mUsingCustomStyling )
+				setFontWeight( Text::stringToFontWeight( attribute.value() ) );
 			break;
 		}
 		case PropertyId::TextDecoration:

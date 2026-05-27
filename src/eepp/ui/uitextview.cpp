@@ -182,8 +182,35 @@ UITextView* UITextView::setFontStyle( const Uint32& fontStyle ) {
 		notifyLayoutAttrChange();
 		invalidateDraw();
 
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mFontStyleConfig.Font, fontStyle,
+				 ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal ) )
+			setFont( newFont );
+	}
+
+	return this;
+}
+
+FontWeight UITextView::getFontWeight() const {
+	return mFontStyleConfig.Weight;
+}
+
+UITextView* UITextView::setFontWeight( const FontWeight& weight ) {
+	mFontStyleConfig.Weight = weight;
+
+	Uint32 weightStyle = ( weight >= FontWeight::SemiBold ) ? Text::Bold : 0;
+	Uint32 newStyle = ( mFontStyleConfig.Style & ~Text::Bold ) | weightStyle;
+
+	if ( mFontStyleConfig.Style != newStyle ) {
+		mTextCache.setStyle( newStyle );
+		mFontStyleConfig.Style = newStyle;
+		recalculate();
+		onFontStyleChanged();
+		notifyLayoutAttrChange();
+		invalidateDraw();
+
 		if ( auto* newFont =
-				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, fontStyle ) )
+				 getUISceneNode()->reevaluateFontStyle( mFontStyleConfig.Font, newStyle, weight ) )
 			setFont( newFont );
 	}
 
@@ -763,8 +790,7 @@ bool UITextView::applyProperty( const StyleSheetProperty& attribute ) {
 			if ( !mUsingCustomStyling )
 				setTextDecoration( attribute.asTextDecoration() );
 			break;
-		case PropertyId::FontStyle:
-		case PropertyId::FontWeight: {
+		case PropertyId::FontStyle: {
 			if ( !mUsingCustomStyling ) {
 				Uint32 flags = attribute.asFontStyle();
 
@@ -776,6 +802,11 @@ bool UITextView::applyProperty( const StyleSheetProperty& attribute ) {
 
 				setFontStyle( flags );
 			}
+			break;
+		}
+		case PropertyId::FontWeight: {
+			if ( !mUsingCustomStyling )
+				setFontWeight( Text::stringToFontWeight( attribute.value() ) );
 			break;
 		}
 		case PropertyId::Wordwrap:
@@ -846,8 +877,9 @@ std::string UITextView::getPropertyString( const PropertyDefinition* propertyDef
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::FontStyle:
-		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
+		case PropertyId::FontWeight:
+			return Text::fontWeightToString( mFontStyleConfig.Weight );
 		case PropertyId::TextStrokeWidth:
 			return String::fromFloat( PixelDensity::dpToPx( getOutlineThickness() ), "px" );
 		case PropertyId::TextStrokeColor:

@@ -1,6 +1,7 @@
 #ifndef EE_UISCENENODE_HPP
 #define EE_UISCENENODE_HPP
 
+#include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/network/cookiemanager.hpp>
 #include <eepp/network/uri.hpp>
 #include <eepp/scene/scenenode.hpp>
@@ -734,9 +735,11 @@ class EE_API UISceneNode : public SceneNode {
 
 	Network::CookieManager& getCookieManager() { return mCookieManager; }
 
-	Font* getFontFromNamesList( std::string_view names, Uint32 fontStyle = 0 ) const;
+	Font* getFontFromNamesList( std::string_view names, Uint32 fontStyle = 0,
+								FontWeight weight = FontWeight::Normal ) const;
 
-	Font* reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) const;
+	Font* reevaluateFontStyle( Font* currentFont, Uint32 fontStyle,
+							   FontWeight weight = FontWeight::Normal ) const;
 
 	void loadFontStyleVariants( Font* font, const std::string& family ) const;
 

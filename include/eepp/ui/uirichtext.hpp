@@ -100,6 +100,10 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	UIRichText* setFontStyle( const Uint32& fontStyle );
 
+	FontWeight getFontWeight() const;
+
+	UIRichText* setFontWeight( const FontWeight& weight );
+
 	const Color& getFontColor() const;
 
 	UIRichText* setFontColor( const Color& color );

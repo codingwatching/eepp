@@ -1474,7 +1474,8 @@ void UISceneNode::navigate( const NavigationRequest& request ) {
 	Engine::instance()->openURI( request.uri.toString() );
 }
 
-Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyle ) const {
+Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyle,
+										 FontWeight weight ) const {
 	FontManager* fm = FontManager::instance();
 	Font* font = nullptr;
 	String::readBySeparatorStoppable(
@@ -1501,7 +1502,10 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 				FontQuery query;
 				query.family = fontFamily;
 				query.italic = fontStyle & Text::Italic;
-				query.weight = ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
+				query.weight =
+					weight != FontWeight::Normal
+						? weight
+						: ( ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal );
 				fontFamily = SystemFontResolver::instance()->resolve( query ).family;
 
 				if ( fontStyle )
@@ -1511,10 +1515,12 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 			}
 
 			if ( font == nullptr && SystemFontResolver::isEnabled() ) {
-				FontWeight weight =
-					( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal;
+				FontWeight resolvedWeight =
+					weight != FontWeight::Normal
+						? weight
+						: ( ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal );
 				FontDesc desc = SystemFontResolver::instance()->resolveFromNamesList(
-					std::string{ names }, weight, fontStyle & Text::Italic );
+					std::string{ names }, resolvedWeight, fontStyle & Text::Italic );
 				if ( !desc.path.empty() ) {
 					std::string family = desc.family;
 					if ( fontStyle )
@@ -1551,7 +1557,8 @@ Font* UISceneNode::getFontFromNamesList( std::string_view names, Uint32 fontStyl
 	return font;
 }
 
-Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) const {
+Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle,
+										FontWeight weight ) const {
 	if ( !currentFont || !SystemFontResolver::isEnabled() )
 		return nullptr;
 
@@ -1564,7 +1571,7 @@ Font* UISceneNode::reevaluateFontStyle( Font* currentFont, Uint32 fontStyle ) co
 		name = name.substr( 0, pos );
 
 	Uint32 weightStyle = fontStyle & ( Text::Bold | Text::Italic );
-	Font* newFont = getFontFromNamesList( name, weightStyle );
+	Font* newFont = getFontFromNamesList( name, weightStyle, weight );
 	if ( newFont && newFont != currentFont )
 		return newFont;
 

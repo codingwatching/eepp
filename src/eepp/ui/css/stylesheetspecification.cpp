@@ -1498,8 +1498,12 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 
 			if ( isWeightWord( tok ) ) {
 				std::string lt = String::toLower( tok );
-				if ( lt != "normal" )
-					weightStr = "bold";
+				if ( lt != "normal" ) {
+					if ( lt == "bolder" || lt == "lighter" )
+						weightStr = "bold";
+					else
+						weightStr = lt;
+				}
 				continue;
 			}
 

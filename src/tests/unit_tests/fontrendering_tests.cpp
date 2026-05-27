@@ -33,6 +33,7 @@ using namespace EE::System;
 using namespace EE::Graphics;
 using namespace EE::Window;
 using namespace EE::UI;
+using namespace EE::UI::CSS;
 
 UTEST( FontRendering, relatedFontsDisconnectReplacedCallbacks ) {
 	FontTrueType* font = FontTrueType::New( "RelatedFontsDisconnect-Regular" );
@@ -185,8 +186,93 @@ UTEST( FontRendering, fontsTest ) {
 			runTest();
 		}
 	}
+}
 
-	Engine::destroySingleton();
+UTEST( FontRendering, fontWeighToStringRoundtrip ) {
+	std::string s;
+	s = Text::fontWeightToString( FontWeight::Bold );
+	EXPECT_STREQ( "bold", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::Normal );
+	EXPECT_STREQ( "normal", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::Light );
+	EXPECT_STREQ( "light", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::Medium );
+	EXPECT_STREQ( "medium", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::SemiBold );
+	EXPECT_STREQ( "semi-bold", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::ExtraBold );
+	EXPECT_STREQ( "extra-bold", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::Black );
+	EXPECT_STREQ( "black", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::Thin );
+	EXPECT_STREQ( "thin", s.c_str() );
+	s = Text::fontWeightToString( FontWeight::ExtraLight );
+	EXPECT_STREQ( "extra-light", s.c_str() );
+}
+
+UTEST( FontRendering, stringToFontWeight ) {
+	EXPECT_EQ( FontWeight::Bold, Text::stringToFontWeight( "bold" ) );
+	EXPECT_EQ( FontWeight::Normal, Text::stringToFontWeight( "normal" ) );
+	EXPECT_EQ( FontWeight::Light, Text::stringToFontWeight( "light" ) );
+	EXPECT_EQ( FontWeight::Medium, Text::stringToFontWeight( "medium" ) );
+	EXPECT_EQ( FontWeight::SemiBold, Text::stringToFontWeight( "semi-bold" ) );
+	EXPECT_EQ( FontWeight::Bold, Text::stringToFontWeight( "700" ) );
+	EXPECT_EQ( FontWeight::Normal, Text::stringToFontWeight( "400" ) );
+	EXPECT_EQ( FontWeight::Light, Text::stringToFontWeight( "300" ) );
+	EXPECT_EQ( FontWeight::Medium, Text::stringToFontWeight( "500" ) );
+	EXPECT_EQ( FontWeight::SemiBold, Text::stringToFontWeight( "600" ) );
+	EXPECT_EQ( FontWeight::ExtraBold, Text::stringToFontWeight( "800" ) );
+	EXPECT_EQ( FontWeight::Black, Text::stringToFontWeight( "900" ) );
+	EXPECT_EQ( FontWeight::Thin, Text::stringToFontWeight( "100" ) );
+	EXPECT_EQ( FontWeight::ExtraLight, Text::stringToFontWeight( "200" ) );
+}
+
+UTEST( FontRendering, stringToStyleFlagWeightMapping ) {
+	EXPECT_NE( 0U, Text::stringToStyleFlag( "bold" ) & Text::Bold );
+	EXPECT_EQ( 0U, Text::stringToStyleFlag( "normal" ) & Text::Bold );
+	EXPECT_EQ( 0U, Text::stringToStyleFlag( "italic" ) & Text::Bold );
+	EXPECT_NE( 0U, Text::stringToStyleFlag( "italic" ) & Text::Italic );
+
+	EXPECT_EQ( FontWeight::Bold, Text::stringToFontWeight( "bold" ) );
+	EXPECT_EQ( FontWeight::Bold, Text::stringToFontWeight( "700" ) );
+	EXPECT_EQ( FontWeight::Normal, Text::stringToFontWeight( "400" ) );
+	EXPECT_EQ( FontWeight::Light, Text::stringToFontWeight( "300" ) );
+	EXPECT_EQ( FontWeight::Medium, Text::stringToFontWeight( "500" ) );
+	EXPECT_EQ( FontWeight::SemiBold, Text::stringToFontWeight( "600" ) );
+	EXPECT_EQ( FontWeight::ExtraBold, Text::stringToFontWeight( "800" ) );
+	EXPECT_EQ( FontWeight::Black, Text::stringToFontWeight( "900" ) );
+}
+
+UTEST( FontRendering, fontSizeStyleWeightOnUITextView ) {
+	UIApplication app(
+		WindowSettings( 400, 300, "eepp - FontWeight Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+	auto* tv = UITextView::New();
+	tv->setParent( app.getUI() );
+	tv->setVisible( true );
+	tv->setEnabled( true );
+	tv->setText( "Hello World" );
+	tv->setPixelsSize( app.getUI()->getPixelsSize() );
+
+	tv->setFontStyle( Text::Bold );
+	EXPECT_NE( 0U, tv->getFontStyle() & Text::Bold );
+
+	tv->setFontStyle( Text::Regular );
+	EXPECT_EQ( 0U, tv->getFontStyle() & Text::Bold );
+
+	UIFontStyleConfig config = tv->getFontStyleConfig();
+	config.Weight = FontWeight::Medium;
+	config.Style = Text::Regular;
+	tv->setFontStyleConfig( config );
+	EXPECT_EQ( FontWeight::Medium, tv->getFontStyleConfig().Weight );
+	EXPECT_EQ( 0U, tv->getFontStyle() & Text::Bold );
+
+	config.Weight = FontWeight::Bold;
+	config.Style = ( config.Style & ~Text::Bold ) | Text::Bold;
+	tv->setFontStyleConfig( config );
+	EXPECT_EQ( FontWeight::Bold, tv->getFontStyleConfig().Weight );
+	EXPECT_NE( 0U, tv->getFontStyle() & Text::Bold );
 }
 
 UTEST( FontRendering, loadFontFaceDataURI ) {

@@ -53,6 +53,10 @@ class EE_API Text {
 
 	static Uint32 stringToStyleFlag( const std::string& str );
 
+	static std::string fontWeightToString( FontWeight weight );
+
+	static FontWeight stringToFontWeight( const std::string& str );
+
 	static Float getTextWidth( Font* font, const Uint32& fontSize, const String& string,
 							   const Uint32& style, const Uint32& tabWidth = 4,
 							   const Float& outlineThickness = 0.f, Uint32 textDrawHints = 0,

@@ -331,8 +331,10 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 			setTextDecoration( attribute.asTextDecoration() );
 			break;
 		case PropertyId::FontStyle:
-		case PropertyId::FontWeight:
 			setFontStyle( attribute.asFontStyle() );
+			break;
+		case PropertyId::FontWeight:
+			setFontWeight( Text::stringToFontWeight( attribute.value() ) );
 			break;
 		case PropertyId::Color: {
 			Color color = attribute.asColor();
@@ -412,8 +414,9 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 		case PropertyId::FontSize:
 			return String::fromFloat( PixelDensity::pxToDp( getFontSize() ), "dp" );
 		case PropertyId::FontStyle:
-		case PropertyId::FontWeight:
 			return Text::styleFlagToString( getFontStyle() );
+		case PropertyId::FontWeight:
+			return Text::fontWeightToString( mRichText.getFontStyleConfig().Weight );
 		case PropertyId::TextDecoration:
 			return Text::styleFlagToString( getTextDecoration() );
 		case PropertyId::Color:
@@ -534,9 +537,36 @@ UIRichText* UIRichText::setFontStyle( const Uint32& fontStyle ) {
 		updateDefaultSpansStyle();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
-				 mRichText.getFontStyleConfig().Font, fontStyle ) )
+				 mRichText.getFontStyleConfig().Font, fontStyle,
+				 ( fontStyle & Text::Bold ) ? FontWeight::Bold : FontWeight::Normal ) )
 			setFont( newFont );
 	}
+	return this;
+}
+
+FontWeight UIRichText::getFontWeight() const {
+	return mRichText.getFontStyleConfig().Weight;
+}
+
+UIRichText* UIRichText::setFontWeight( const FontWeight& weight ) {
+	mRichText.getFontStyleConfig().Weight = weight;
+
+	Uint32 weightStyle = ( weight >= FontWeight::SemiBold ) ? Text::Bold : 0;
+	Uint32 newStyle = ( mRichText.getFontStyleConfig().Style & ~Text::Bold ) | weightStyle;
+
+	if ( mRichText.getFontStyleConfig().Style != newStyle ) {
+		mRichText.getFontStyleConfig().Style = newStyle;
+		mRichText.invalidate();
+
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+		updateDefaultSpansStyle();
+
+		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
+				 mRichText.getFontStyleConfig().Font, newStyle, weight ) )
+			setFont( newFont );
+	}
+
 	return this;
 }
 

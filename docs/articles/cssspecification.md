@@ -679,6 +679,20 @@ Read [font-style](https://developer.mozilla.org/en-US/docs/Web/CSS/font-style) d
 
 ---
 
+### font-weight
+
+Read [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) documentation.
+
+Supported values: `normal`, `bold`, `bolder`, `lighter`, `100`, `200`, `300`, `400`, `500`, `600`,
+`700`, `800`, `900`, plus named weights `thin` (100), `extra-light` / `extralight` (200),
+`light` (300), `medium` (500), `semi-bold` / `semibold` (600), `extra-bold` / `extrabold` (800),
+`black` / `heavy` (900).
+
+Weights >= 600 (SemiBold) set the `Text::Bold` style flag and will resolve to the nearest matching
+system font variant when available. The `font` shorthand property also supports the weight token.
+
+---
+
 ### fill-color
 
 Sets the fill color of a element.

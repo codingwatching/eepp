@@ -76,6 +76,10 @@ class EE_API UITextSpan : public UIRichText {
 
 	UITextSpan* setFontStyle( const Uint32& fontStyle );
 
+	FontWeight getFontWeight() const;
+
+	UITextSpan* setFontWeight( const FontWeight& weight );
+
 	Uint32 getTextDecoration() const;
 
 	UITextSpan* setTextDecoration( const Uint32& textDecoration );
