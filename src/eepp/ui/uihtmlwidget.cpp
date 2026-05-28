@@ -133,8 +133,14 @@ void UIHTMLWidget::setCSSPosition( CSSPosition position ) {
 	if ( mPosition != position ) {
 		mPosition = position;
 		if ( position == CSSPosition::Absolute || position == CSSPosition::Fixed ) {
+			// Out-of-flow elements should not stretch to their containing block
+			// until updateOutOfFlowPosition() computes the correct size from CSS
+			// insets (top/left/right/bottom). Switch both width and height policies
+			// to WrapContent to prevent intermediate MatchParent growth.
 			if ( getLayoutWidthPolicy() == SizePolicy::MatchParent )
 				setLayoutWidthPolicy( SizePolicy::WrapContent );
+			if ( getLayoutHeightPolicy() == SizePolicy::MatchParent )
+				setLayoutHeightPolicy( SizePolicy::WrapContent );
 		}
 		updateScrollListeners();
 		onPositionChange();
@@ -296,6 +302,14 @@ void UIHTMLWidget::updateLayout() {
 		UILayout::updateLayout();
 
 	positionOutOfFlowChildren();
+
+	// The layouter (BlockLayouter) above sets size from content, but for
+	// out-of-flow elements the size should be determined by CSS insets
+	// (top/left/right/bottom). Re-apply the correct out-of-flow size after
+	// the layouter has finished. Re-entrancy is prevented because
+	// UIRichText::onSizeChange() skips tryUpdateLayout() when isOutOfFlow().
+	if ( isOutOfFlow() )
+		updateOutOfFlowPosition();
 
 	mDirtyLayout = false;
 }

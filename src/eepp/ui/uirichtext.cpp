@@ -883,9 +883,20 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 }
 
 void UIRichText::onSizeChange() {
-	UIHTMLWidget::onSizeChange();
+	if ( getCSSPosition() == CSSPosition::Fixed ) {
+		// Fixed-position elements are sized relative to the viewport. Do not
+		// trigger a self-layout pass (tryUpdateLayout via
+		// UIHTMLWidget::onSizeChange) nor propagate size changes upward
+		// (notifyLayoutAttrChangeParent): neither ancestors nor this element
+		// need to re-layout in response to a viewport-relative size change,
+		// and doing so would cause unnecessary re-layout or infinite recursion.
+		UIWidget::onSizeChange();
+	} else {
+		UIHTMLWidget::onSizeChange();
+	}
 	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	if ( getCSSPosition() != CSSPosition::Fixed )
+		notifyLayoutAttrChangeParent();
 }
 
 void UIRichText::onPaddingChange() {
@@ -1629,9 +1640,22 @@ Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 				return 1;
 			if ( Msg->getSender() != this ) {
 				invalidateIntrinsicSize();
-				notifyLayoutAttrChangeParent();
+				// Fixed-position children are sized relative to the viewport
+				// and never affect the parent's normal-flow layout. Suppress
+				// ancestor notification and parent re-layout for these; absolute
+				// children are allowed because parents like body compute their
+				// minHeight from absolute children.
+				if ( !Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) ||
+					 static_cast<const UIHTMLWidget*>( Msg->getSender() )->getCSSPosition() !=
+						 CSSPosition::Fixed ) {
+					notifyLayoutAttrChangeParent();
+				}
 			}
-			tryUpdateLayout();
+			if ( !Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) ||
+				 static_cast<const UIHTMLWidget*>( Msg->getSender() )->getCSSPosition() !=
+					 CSSPosition::Fixed ) {
+				tryUpdateLayout();
+			}
 			return 1;
 		}
 		case NodeMessage::MouseDown: {
