@@ -1,4 +1,3 @@
-#include <eepp/system/scopedop.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
@@ -352,12 +351,9 @@ void UIHTMLWidget::positionOutOfFlowChildren() {
 }
 
 void UIHTMLWidget::updateOutOfFlowPosition() {
-	if ( mPacking )
-		return;
 	UIWidget* cb = getContainingBlock();
 	if ( !cb )
 		return;
-	BoolScopedOp op( mPacking );
 
 	Rectf cbContentOffset = cb->getPixelsContentOffset();
 	Float cbContentWidth =
