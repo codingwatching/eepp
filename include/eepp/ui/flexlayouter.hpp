@@ -111,8 +111,6 @@ class EE_API FlexLayouter : public UILayouter {
 					  const Float containerWidth, const Float containerHeight,
 					  const SizePolicy widthPolicy, const SizePolicy heightPolicy );
 
-	void layoutSubtreeBottomUp( UIWidget* widget );
-
 	void measureFlexItems( const Axis& mainAxis, const Axis& crossAxis,
 						   const Float containerCrossSize, const Float containerWidth,
 						   const Float containerHeight, const Rectf& containerPadding,

@@ -3194,6 +3194,31 @@ UTEST( UIHTML, FlexCenterNoTextNodeDisplacement ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, BlockSizeInfDoesNotHang ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Block Size Inf Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/block_size_inf.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	// If we got here without hanging, the test passes.
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTML, FlexFormLayout ) {
 	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Flex Form Layout Test",
 													  WindowStyle::Default, WindowBackend::Default,
