@@ -157,6 +157,9 @@ bool UIHTMLBody::applyProperty( const StyleSheetProperty& attribute ) {
 			}
 			break;
 		}
+		case PropertyId::MinHeight:
+			mMinHeightLocal = attribute.asStyleSheetLength();
+			return true;
 		default:
 			break;
 	}
@@ -167,12 +170,16 @@ bool UIHTMLBody::applyProperty( const StyleSheetProperty& attribute ) {
 void UIHTMLBody::updateLayout() {
 	UIRichText::updateLayout();
 
-	if ( mStyle->getProperty( PropertyId::MinHeight ) )
-		return;
-
 	if ( mChild && mChild->isWidget() ) {
 		Float maxH = 0;
 		Node* child = mChild;
+		Float minHeight = std::max(
+			mMinHeightLocal.asPixels(
+				getParent()->isUINode() ? getParent()->asType<UINode>()->getPixelsSize().getHeight()
+										: getParent()->getSize().getHeight(),
+				getSceneNode()->getPixelsSize(), getSceneNode()->getDPI() ),
+			getMinSize().getHeight() );
+
 		while ( child ) {
 			if ( child->isWidget() ) {
 				UIWidget* widget = child->asType<UIWidget>();
@@ -191,7 +198,7 @@ void UIHTMLBody::updateLayout() {
 		}
 		if ( maxH > 0 ) {
 			Float dpH = std::trunc( PixelDensity::pxToDp( maxH ) );
-			if ( dpH != getMinSize().getHeight() )
+			if ( dpH != minHeight )
 				setMinHeight( dpH );
 		}
 	}
