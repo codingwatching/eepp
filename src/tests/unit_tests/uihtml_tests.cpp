@@ -3082,3 +3082,153 @@ UTEST( UIHTML, LiFloatLeft ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, FlexCenterWebViewLikeLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1280, 720, "Flex Center WebView",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_center.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto postWrapper = sceneNode->getRoot()->findByClass( "post-wrapper" );
+	auto post = sceneNode->getRoot()->findByClass( "post" );
+	ASSERT_TRUE( postWrapper != nullptr );
+	ASSERT_TRUE( post != nullptr );
+
+	auto postWrapperWidget = postWrapper->asType<UIWidget>();
+	auto postWidget = post->asType<UIWidget>();
+
+	std::cerr << "[TEST1280] post-wrapper size=" << postWrapperWidget->getPixelsSize().getWidth()
+			  << "x" << postWrapperWidget->getPixelsSize().getHeight()
+			  << " pos=" << postWrapperWidget->getPixelsPosition().x << ","
+			  << postWrapperWidget->getPixelsPosition().y
+			  << " pad=" << postWrapperWidget->getPixelsPadding().Left << ","
+			  << postWrapperWidget->getPixelsPadding().Top << ","
+			  << postWrapperWidget->getPixelsPadding().Right << ","
+			  << postWrapperWidget->getPixelsPadding().Bottom << std::endl;
+	std::cerr << "[TEST1280] post type=" << postWidget->getType()
+			  << " size=" << postWidget->getPixelsSize().getWidth() << "x"
+			  << postWidget->getPixelsSize().getHeight()
+			  << " pos=" << postWidget->getPixelsPosition().x << ","
+			  << postWidget->getPixelsPosition().y
+			  << " widthPolicy=" << (int)postWidget->getLayoutWidthPolicy()
+			  << " heightPolicy=" << (int)postWidget->getLayoutHeightPolicy()
+			  << " margin=" << postWidget->getLayoutPixelsMargin().Left << ","
+			  << postWidget->getLayoutPixelsMargin().Top << ","
+			  << postWidget->getLayoutPixelsMargin().Right << ","
+			  << postWidget->getLayoutPixelsMargin().Bottom << std::endl;
+
+	// In a real browser a div with width:100% inside a column flex container
+	// with align-items:center still spans the full cross axis because 100%
+	// resolves against the container.  The item should therefore sit flush with
+	// the container's left edge (plus any container padding).
+	EXPECT_NEAR( postWidget->getPixelsPosition().x, 0.f, 2.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexCenterNoTextNodeDisplacement ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Center Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_center.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto postWrapper = sceneNode->getRoot()->findByClass( "post-wrapper" );
+	ASSERT_TRUE( postWrapper != nullptr );
+	auto post = postWrapper->findByClass( "post" );
+	ASSERT_TRUE( post != nullptr );
+
+	// The post-wrapper is a column flex container.  Whitespace text nodes
+	// between the tags must not be treated as flex items, otherwise the
+	// .post child would be displaced downward.
+	auto postWrapperWidget = postWrapper->asType<UIWidget>();
+	auto postWidget = post->asType<UIWidget>();
+
+	Float postX = postWidget->getPixelsPosition().x;
+	Float postY = postWidget->getPixelsPosition().y;
+	Float wrapperTopPadding = postWrapperWidget->getPixelsPadding().Top;
+	Float postMarginTop = postWidget->getLayoutPixelsMargin().Top;
+	Float wrapperW = postWrapperWidget->getPixelsSize().getWidth();
+	Float postW = postWidget->getPixelsSize().getWidth();
+
+	// Debug: print children of post-wrapper
+	std::cerr << "[TEST] post-wrapper children:" << std::endl;
+	Node* c = postWrapper->getFirstChild();
+	while ( c ) {
+		std::cerr << "  type=" << c->getType() << " id=" << c->getId()
+				  << ( c->isWidget() ? " widget" : "" ) << std::endl;
+		c = c->getNextNode();
+	}
+	std::cerr << "[TEST] post pos=" << postX << "," << postY << " size=" << postW << "x"
+			  << postWidget->getPixelsSize().getHeight() << " wrapperW=" << wrapperW << std::endl;
+
+	// In a column flex container the first (and only) real flex item should
+	// sit right after the container's top padding plus its own margin-top.
+	EXPECT_NEAR( postY, wrapperTopPadding + postMarginTop, 2.f );
+
+	// The .post div has width: 100% so it should span the full cross axis.
+	// With align-items: center there is no free space, so x should be at the
+	// container's left padding (not displaced toward the right edge).
+	EXPECT_NEAR( postX, 0.f, 2.f );
+	EXPECT_GT( postW, wrapperW * 0.5f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexFormLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Flex Form Layout Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_form.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto form = sceneNode->getRoot()->findByClass( "newsletter-form" );
+	ASSERT_TRUE( form != nullptr );
+	auto formWidget = form->asType<UIWidget>();
+
+	// The form has display: flex with no explicit height; it must derive
+	// its height from the tallest flex item (the input or button).
+	EXPECT_GT( formWidget->getPixelsSize().getHeight(), 0.f );
+
+	// Find the email input and subscribe button within the form.
+	auto input = formWidget->findByTag( "input" );
+	auto button = formWidget->findByTag( "button" );
+	ASSERT_TRUE( input != nullptr );
+	ASSERT_TRUE( button != nullptr );
+	auto inputWidget = input->asType<UIWidget>();
+	auto buttonWidget = button->asType<UIWidget>();
+
+	// In a row flex container the button should sit to the right of the input.
+	Float inputRight = inputWidget->getPixelsPosition().x + inputWidget->getPixelsSize().getWidth();
+	EXPECT_GT( buttonWidget->getPixelsPosition().x, inputRight - 1.f );
+
+	Engine::destroySingleton();
+}

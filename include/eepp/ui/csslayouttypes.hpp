@@ -13,6 +13,7 @@ enum class CSSDisplay {
 	InlineBlock,
 	ListItem,
 	Flex,
+	InlineFlex,
 	None,
 	Table,
 	TableRow,
@@ -78,6 +79,56 @@ struct EE_API CSSClearHelper {
 	static std::string toString( CSSClear val );
 
 	static CSSClear fromString( std::string_view val );
+};
+
+enum class CSSFlexDirection { Row, RowReverse, Column, ColumnReverse };
+
+struct EE_API CSSFlexDirectionHelper {
+	static std::string toString( CSSFlexDirection val );
+	static CSSFlexDirection fromString( std::string_view val );
+};
+
+enum class CSSFlexWrap { NoWrap, Wrap, WrapReverse };
+
+struct EE_API CSSFlexWrapHelper {
+	static std::string toString( CSSFlexWrap val );
+	static CSSFlexWrap fromString( std::string_view val );
+};
+
+enum class CSSJustifyContent { FlexStart, FlexEnd, Center, SpaceBetween, SpaceAround, SpaceEvenly };
+
+struct EE_API CSSJustifyContentHelper {
+	static std::string toString( CSSJustifyContent val );
+	static CSSJustifyContent fromString( std::string_view val );
+};
+
+enum class CSSAlignItems { FlexStart, FlexEnd, Center, Baseline, Stretch };
+
+struct EE_API CSSAlignItemsHelper {
+	static std::string toString( CSSAlignItems val );
+	static CSSAlignItems fromString( std::string_view val );
+};
+
+enum class CSSAlignContent {
+	FlexStart,
+	FlexEnd,
+	Center,
+	SpaceBetween,
+	SpaceAround,
+	SpaceEvenly,
+	Stretch
+};
+
+struct EE_API CSSAlignContentHelper {
+	static std::string toString( CSSAlignContent val );
+	static CSSAlignContent fromString( std::string_view val );
+};
+
+enum class CSSAlignSelf { Auto, FlexStart, FlexEnd, Center, Baseline, Stretch };
+
+struct EE_API CSSAlignSelfHelper {
+	static std::string toString( CSSAlignSelf val );
+	static CSSAlignSelf fromString( std::string_view val );
 };
 
 enum class CSSBaselineAlignment {

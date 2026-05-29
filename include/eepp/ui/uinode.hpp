@@ -33,6 +33,7 @@ class UIWidget;
 class EE_API UINode : public Node {
   public:
 	friend class BlockLayouter;
+	friend class FlexLayouter;
 	friend class InlineLayouter;
 	friend class TableLayouter;
 	/**

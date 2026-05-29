@@ -13,6 +13,8 @@ std::string CSSDisplayHelper::toString( CSSDisplay display ) {
 			return "list-item";
 		case CSSDisplay::Flex:
 			return "flex";
+		case CSSDisplay::InlineFlex:
+			return "inline-flex";
 		case CSSDisplay::None:
 			return "none";
 		case CSSDisplay::Table:
@@ -57,6 +59,8 @@ CSSDisplay CSSDisplayHelper::fromString( std::string_view val ) {
 		display = CSSDisplay::TableFooter;
 	else if ( val == "flex" )
 		display = CSSDisplay::Flex;
+	else if ( val == "inline-flex" )
+		display = CSSDisplay::InlineFlex;
 	return display;
 }
 
@@ -266,6 +270,178 @@ CSSBaselineAlignValue CSSBaselineAlignmentHelper::fromKeyword( std::string_view 
 	}
 
 	return out;
+}
+
+std::string CSSFlexDirectionHelper::toString( CSSFlexDirection val ) {
+	switch ( val ) {
+		case CSSFlexDirection::RowReverse:
+			return "row-reverse";
+		case CSSFlexDirection::Column:
+			return "column";
+		case CSSFlexDirection::ColumnReverse:
+			return "column-reverse";
+		case CSSFlexDirection::Row:
+		default:
+			return "row";
+	}
+}
+
+CSSFlexDirection CSSFlexDirectionHelper::fromString( std::string_view val ) {
+	if ( val == "row-reverse" )
+		return CSSFlexDirection::RowReverse;
+	if ( val == "column" )
+		return CSSFlexDirection::Column;
+	if ( val == "column-reverse" )
+		return CSSFlexDirection::ColumnReverse;
+	return CSSFlexDirection::Row;
+}
+
+std::string CSSFlexWrapHelper::toString( CSSFlexWrap val ) {
+	switch ( val ) {
+		case CSSFlexWrap::Wrap:
+			return "wrap";
+		case CSSFlexWrap::WrapReverse:
+			return "wrap-reverse";
+		case CSSFlexWrap::NoWrap:
+		default:
+			return "nowrap";
+	}
+}
+
+CSSFlexWrap CSSFlexWrapHelper::fromString( std::string_view val ) {
+	if ( val == "wrap" )
+		return CSSFlexWrap::Wrap;
+	if ( val == "wrap-reverse" )
+		return CSSFlexWrap::WrapReverse;
+	return CSSFlexWrap::NoWrap;
+}
+
+std::string CSSJustifyContentHelper::toString( CSSJustifyContent val ) {
+	switch ( val ) {
+		case CSSJustifyContent::FlexEnd:
+			return "flex-end";
+		case CSSJustifyContent::Center:
+			return "center";
+		case CSSJustifyContent::SpaceBetween:
+			return "space-between";
+		case CSSJustifyContent::SpaceAround:
+			return "space-around";
+		case CSSJustifyContent::SpaceEvenly:
+			return "space-evenly";
+		case CSSJustifyContent::FlexStart:
+		default:
+			return "flex-start";
+	}
+}
+
+CSSJustifyContent CSSJustifyContentHelper::fromString( std::string_view val ) {
+	if ( val == "flex-end" )
+		return CSSJustifyContent::FlexEnd;
+	if ( val == "center" )
+		return CSSJustifyContent::Center;
+	if ( val == "space-between" )
+		return CSSJustifyContent::SpaceBetween;
+	if ( val == "space-around" )
+		return CSSJustifyContent::SpaceAround;
+	if ( val == "space-evenly" )
+		return CSSJustifyContent::SpaceEvenly;
+	return CSSJustifyContent::FlexStart;
+}
+
+std::string CSSAlignItemsHelper::toString( CSSAlignItems val ) {
+	switch ( val ) {
+		case CSSAlignItems::FlexEnd:
+			return "flex-end";
+		case CSSAlignItems::Center:
+			return "center";
+		case CSSAlignItems::Baseline:
+			return "baseline";
+		case CSSAlignItems::Stretch:
+			return "stretch";
+		case CSSAlignItems::FlexStart:
+		default:
+			return "flex-start";
+	}
+}
+
+CSSAlignItems CSSAlignItemsHelper::fromString( std::string_view val ) {
+	if ( val == "flex-end" )
+		return CSSAlignItems::FlexEnd;
+	if ( val == "center" )
+		return CSSAlignItems::Center;
+	if ( val == "baseline" )
+		return CSSAlignItems::Baseline;
+	if ( val == "stretch" )
+		return CSSAlignItems::Stretch;
+	return CSSAlignItems::FlexStart;
+}
+
+std::string CSSAlignContentHelper::toString( CSSAlignContent val ) {
+	switch ( val ) {
+		case CSSAlignContent::FlexEnd:
+			return "flex-end";
+		case CSSAlignContent::Center:
+			return "center";
+		case CSSAlignContent::SpaceBetween:
+			return "space-between";
+		case CSSAlignContent::SpaceAround:
+			return "space-around";
+		case CSSAlignContent::SpaceEvenly:
+			return "space-evenly";
+		case CSSAlignContent::Stretch:
+			return "stretch";
+		case CSSAlignContent::FlexStart:
+		default:
+			return "flex-start";
+	}
+}
+
+CSSAlignContent CSSAlignContentHelper::fromString( std::string_view val ) {
+	if ( val == "flex-end" )
+		return CSSAlignContent::FlexEnd;
+	if ( val == "center" )
+		return CSSAlignContent::Center;
+	if ( val == "space-between" )
+		return CSSAlignContent::SpaceBetween;
+	if ( val == "space-around" )
+		return CSSAlignContent::SpaceAround;
+	if ( val == "space-evenly" )
+		return CSSAlignContent::SpaceEvenly;
+	if ( val == "stretch" )
+		return CSSAlignContent::Stretch;
+	return CSSAlignContent::FlexStart;
+}
+
+std::string CSSAlignSelfHelper::toString( CSSAlignSelf val ) {
+	switch ( val ) {
+		case CSSAlignSelf::FlexStart:
+			return "flex-start";
+		case CSSAlignSelf::FlexEnd:
+			return "flex-end";
+		case CSSAlignSelf::Center:
+			return "center";
+		case CSSAlignSelf::Baseline:
+			return "baseline";
+		case CSSAlignSelf::Stretch:
+			return "stretch";
+		case CSSAlignSelf::Auto:
+		default:
+			return "auto";
+	}
+}
+
+CSSAlignSelf CSSAlignSelfHelper::fromString( std::string_view val ) {
+	if ( val == "flex-start" )
+		return CSSAlignSelf::FlexStart;
+	if ( val == "flex-end" )
+		return CSSAlignSelf::FlexEnd;
+	if ( val == "center" )
+		return CSSAlignSelf::Center;
+	if ( val == "baseline" )
+		return CSSAlignSelf::Baseline;
+	if ( val == "stretch" )
+		return CSSAlignSelf::Stretch;
+	return CSSAlignSelf::Auto;
 }
 
 }} // namespace EE::UI

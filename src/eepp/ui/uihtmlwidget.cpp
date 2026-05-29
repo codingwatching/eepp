@@ -75,6 +75,7 @@ UIHTMLWidget::~UIHTMLWidget() {
 	if ( mScrollTarget && mScrollCb )
 		mScrollTarget->removeEventListener( mScrollCb );
 	eeSAFE_DELETE( mLayouter );
+	eeSAFE_DELETE( mFlexState );
 }
 
 UILayouter* UIHTMLWidget::getLayouter() {
@@ -110,10 +111,12 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 		mDisplay = display;
 		mNodeFlags |= NODE_FLAG_OVER_FIND_ALLOWED;
 
-		if ( mDisplay == CSSDisplay::InlineBlock || mDisplay == CSSDisplay::Inline ) {
+		if ( mDisplay == CSSDisplay::InlineBlock || mDisplay == CSSDisplay::Inline ||
+			 mDisplay == CSSDisplay::InlineFlex ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::MatchParent )
 				setLayoutWidthPolicy( SizePolicy::WrapContent );
-		} else if ( mDisplay == CSSDisplay::Block || mDisplay == CSSDisplay::ListItem ) {
+		} else if ( mDisplay == CSSDisplay::Block || mDisplay == CSSDisplay::ListItem ||
+					mDisplay == CSSDisplay::Flex ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::WrapContent &&
 				 mPosition != CSSPosition::Absolute && mPosition != CSSPosition::Fixed )
 				setLayoutWidthPolicy( SizePolicy::MatchParent );
@@ -192,13 +195,129 @@ void UIHTMLWidget::setZIndex( int zIndex ) {
 	mZIndex = zIndex;
 }
 
+void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->direction != val ) {
+		fs->direction = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setFlexWrap( CSSFlexWrap val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->wrap != val ) {
+		fs->wrap = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setJustifyContent( CSSJustifyContent val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->justifyContent != val ) {
+		fs->justifyContent = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setAlignItems( CSSAlignItems val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->alignItems != val ) {
+		fs->alignItems = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setAlignContent( CSSAlignContent val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->alignContent != val ) {
+		fs->alignContent = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setAlignSelf( CSSAlignSelf val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->alignSelf != val ) {
+		fs->alignSelf = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setFlexGrow( Float val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->flexGrow != val ) {
+		fs->flexGrow = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setFlexShrink( Float val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->flexShrink != val ) {
+		fs->flexShrink = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setFlexBasis( const std::string& val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->flexBasis != val ) {
+		fs->flexBasis = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setOrder( int val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->order != val ) {
+		fs->order = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setRowGap( const std::string& val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->rowGap != val ) {
+		fs->rowGap = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setColumnGap( const std::string& val ) {
+	auto* fs = ensureFlexState();
+	if ( fs->columnGap != val ) {
+		fs->columnGap = val;
+		notifyLayoutAttrChange();
+	}
+}
+
 std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 	auto props = UILayout::getPropertiesImplemented();
-	auto local = { PropertyId::Display, PropertyId::Position,
-				   PropertyId::Float,	PropertyId::Clear,
-				   PropertyId::Top,		PropertyId::Right,
-				   PropertyId::Bottom,	PropertyId::Left,
-				   PropertyId::ZIndex,	PropertyId::AlignmentBaseline };
+	auto local = { PropertyId::Display,
+				   PropertyId::Position,
+				   PropertyId::Float,
+				   PropertyId::Clear,
+				   PropertyId::Top,
+				   PropertyId::Right,
+				   PropertyId::Bottom,
+				   PropertyId::Left,
+				   PropertyId::ZIndex,
+				   PropertyId::AlignmentBaseline,
+				   PropertyId::FlexDirection,
+				   PropertyId::FlexWrap,
+				   PropertyId::FlexFlow,
+				   PropertyId::JustifyContent,
+				   PropertyId::AlignItems,
+				   PropertyId::AlignContent,
+				   PropertyId::AlignSelf,
+				   PropertyId::FlexGrow,
+				   PropertyId::FlexShrink,
+				   PropertyId::FlexBasis,
+				   PropertyId::Flex,
+				   PropertyId::Order,
+				   PropertyId::ColumnGap,
+				   PropertyId::RowGap,
+				   PropertyId::Gap };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -229,6 +348,30 @@ std::string UIHTMLWidget::getPropertyString( const PropertyDefinition* propertyD
 			return String::toString( mZIndex );
 		case PropertyId::AlignmentBaseline:
 			return std::string( CSSBaselineAlignmentHelper::toString( mBaselineAlign ) );
+		case PropertyId::FlexDirection:
+			return CSSFlexDirectionHelper::toString( getFlexDirection() );
+		case PropertyId::FlexWrap:
+			return CSSFlexWrapHelper::toString( getFlexWrap() );
+		case PropertyId::JustifyContent:
+			return CSSJustifyContentHelper::toString( getJustifyContent() );
+		case PropertyId::AlignItems:
+			return CSSAlignItemsHelper::toString( getAlignItems() );
+		case PropertyId::AlignContent:
+			return CSSAlignContentHelper::toString( getAlignContent() );
+		case PropertyId::AlignSelf:
+			return CSSAlignSelfHelper::toString( getAlignSelf() );
+		case PropertyId::FlexGrow:
+			return String::toString( getFlexGrow() );
+		case PropertyId::FlexShrink:
+			return String::toString( getFlexShrink() );
+		case PropertyId::FlexBasis:
+			return getFlexBasis();
+		case PropertyId::Order:
+			return String::toString( getOrder() );
+		case PropertyId::RowGap:
+			return getRowGap();
+		case PropertyId::ColumnGap:
+			return getColumnGap();
 		default:
 			return UILayout::getPropertyString( propertyDef );
 	}
@@ -287,6 +430,54 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::AlignmentBaseline: {
 			setBaselineAlign( parseBaselineAlign( this, attribute ) );
+			return true;
+		}
+		case PropertyId::FlexDirection: {
+			setFlexDirection( CSSFlexDirectionHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::FlexWrap: {
+			setFlexWrap( CSSFlexWrapHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::JustifyContent: {
+			setJustifyContent( CSSJustifyContentHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::AlignItems: {
+			setAlignItems( CSSAlignItemsHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::AlignContent: {
+			setAlignContent( CSSAlignContentHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::AlignSelf: {
+			setAlignSelf( CSSAlignSelfHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::FlexGrow: {
+			setFlexGrow( attribute.asFloat() );
+			return true;
+		}
+		case PropertyId::FlexShrink: {
+			setFlexShrink( attribute.asFloat() );
+			return true;
+		}
+		case PropertyId::FlexBasis: {
+			setFlexBasis( attribute.asString() );
+			return true;
+		}
+		case PropertyId::Order: {
+			setOrder( (int)attribute.asFloat() );
+			return true;
+		}
+		case PropertyId::RowGap: {
+			setRowGap( attribute.asString() );
+			return true;
+		}
+		case PropertyId::ColumnGap: {
+			setColumnGap( attribute.asString() );
 			return true;
 		}
 		default:

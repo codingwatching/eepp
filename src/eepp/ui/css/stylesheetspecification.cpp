@@ -498,6 +498,18 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "target", "_self" ).setType( PropertyType::String );
 	registerProperty( "unicode-range", "" ).setType( PropertyType::String );
 	registerProperty( "alignment-baseline", "baseline" ).setType( PropertyType::String );
+	registerProperty( "flex-direction", "row" ).setType( PropertyType::String );
+	registerProperty( "flex-wrap", "nowrap" ).setType( PropertyType::String );
+	registerProperty( "justify-content", "flex-start" ).setType( PropertyType::String );
+	registerProperty( "align-items", "stretch" ).setType( PropertyType::String );
+	registerProperty( "align-content", "stretch" ).setType( PropertyType::String );
+	registerProperty( "align-self", "auto" ).setType( PropertyType::String );
+	registerProperty( "flex-grow", "0" ).setType( PropertyType::NumberFloat );
+	registerProperty( "flex-shrink", "1" ).setType( PropertyType::NumberFloat );
+	registerProperty( "flex-basis", "auto" ).setType( PropertyType::NumberLength );
+	registerProperty( "order", "0" ).setType( PropertyType::NumberInt );
+	registerProperty( "row-gap", "0px" ).setType( PropertyType::NumberLength );
+	registerProperty( "column-gap", "0px" ).setType( PropertyType::NumberLength );
 
 	// Shorthands
 	registerShorthand( "margin", { "margin-top", "margin-right", "margin-bottom", "margin-left" },
@@ -569,6 +581,9 @@ void StyleSheetSpecification::registerDefaultProperties() {
 					   { "font-style", "font-weight", "font-size", "line-height", "font-family" },
 					   "font" );
 	registerShorthand( "vertical-align", { "alignment-baseline" }, "vertical-align" );
+	registerShorthand( "flex-flow", { "flex-direction", "flex-wrap" }, "single-value-vector" );
+	registerShorthand( "flex", { "flex-grow", "flex-shrink", "flex-basis" }, "flex" );
+	registerShorthand( "gap", { "row-gap", "column-gap" }, "vector2" );
 }
 
 void StyleSheetSpecification::registerNodeSelector( const std::string& name,
@@ -1533,6 +1548,107 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 					familyStr = familyStr.substr( 1, familyStr.size() - 2 );
 				}
 				properties.emplace_back( StyleSheetProperty( propNames[familyPos], familyStr ) );
+			}
+		}
+
+		return properties;
+	};
+
+	mShorthandParsers["flex-flow"] = []( const ShorthandDefinition* shorthand,
+										 std::string value ) -> std::vector<StyleSheetProperty> {
+		value = String::trim( value );
+		if ( value.empty() )
+			return {};
+
+		const std::vector<std::string>& propNames = shorthand->getProperties();
+		if ( propNames.size() != 2 )
+			return {};
+
+		std::vector<std::string> tokens = String::split( value, ' ' );
+		if ( tokens.empty() )
+			return {};
+
+		std::vector<StyleSheetProperty> properties;
+		properties.emplace_back( StyleSheetProperty( propNames[0], tokens[0] ) );
+		if ( tokens.size() > 1 )
+			properties.emplace_back( StyleSheetProperty( propNames[1], tokens[1] ) );
+		return properties;
+	};
+
+	mShorthandParsers["flex"] = []( const ShorthandDefinition* shorthand,
+									std::string value ) -> std::vector<StyleSheetProperty> {
+		value = String::trim( value );
+		if ( value.empty() )
+			return {};
+
+		const std::vector<std::string>& propNames = shorthand->getProperties();
+		if ( propNames.size() != 3 )
+			return {};
+
+		std::string lowerVal = String::toLower( value );
+		String::removeExtraSpaces( lowerVal );
+
+		std::vector<StyleSheetProperty> properties;
+
+		if ( lowerVal == "auto" ) {
+			properties.emplace_back( StyleSheetProperty( propNames[0], "1" ) );
+			properties.emplace_back( StyleSheetProperty( propNames[1], "1" ) );
+			properties.emplace_back( StyleSheetProperty( propNames[2], "auto" ) );
+			return properties;
+		}
+
+		if ( lowerVal == "none" ) {
+			properties.emplace_back( StyleSheetProperty( propNames[0], "0" ) );
+			properties.emplace_back( StyleSheetProperty( propNames[1], "0" ) );
+			properties.emplace_back( StyleSheetProperty( propNames[2], "auto" ) );
+			return properties;
+		}
+
+		std::vector<std::string> tokens = String::split( lowerVal, ' ' );
+		if ( tokens.empty() )
+			return {};
+
+		auto isNumber = []( const std::string& s ) -> bool {
+			if ( s.empty() )
+				return false;
+			char c = s[0];
+			return ( c >= '0' && c <= '9' ) || c == '.' || c == '-' || c == '+';
+		};
+
+		auto isLength = []( const std::string& s ) -> bool {
+			if ( s.empty() )
+				return false;
+			if ( s == "auto" || s == "content" )
+				return true;
+			char c = s[0];
+			return ( c >= '0' && c <= '9' ) || c == '.' || c == '-' || c == '+';
+		};
+
+		if ( tokens.size() == 1 ) {
+			// flex: <number>  =>  <number> 1 0%
+			if ( isNumber( tokens[0] ) ) {
+				properties.emplace_back( StyleSheetProperty( propNames[0], tokens[0] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[1], "1" ) );
+				properties.emplace_back( StyleSheetProperty( propNames[2], "0%" ) );
+			}
+		} else if ( tokens.size() == 2 ) {
+			if ( isNumber( tokens[0] ) && isNumber( tokens[1] ) ) {
+				// flex: <grow> <shrink>  =>  <grow> <shrink> 0%
+				properties.emplace_back( StyleSheetProperty( propNames[0], tokens[0] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[1], tokens[1] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[2], "0%" ) );
+			} else if ( isNumber( tokens[0] ) && isLength( tokens[1] ) ) {
+				// flex: <grow> <basis>  =>  <grow> 1 <basis>
+				properties.emplace_back( StyleSheetProperty( propNames[0], tokens[0] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[1], "1" ) );
+				properties.emplace_back( StyleSheetProperty( propNames[2], tokens[1] ) );
+			}
+		} else if ( tokens.size() >= 3 ) {
+			// flex: <grow> <shrink> <basis>
+			if ( isNumber( tokens[0] ) && isNumber( tokens[1] ) && isLength( tokens[2] ) ) {
+				properties.emplace_back( StyleSheetProperty( propNames[0], tokens[0] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[1], tokens[1] ) );
+				properties.emplace_back( StyleSheetProperty( propNames[2], tokens[2] ) );
 			}
 		}
 

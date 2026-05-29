@@ -1187,7 +1187,17 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 	if ( container->isType( UI_TYPE_TEXTSPAN ) ) {
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
-		if ( !selfSpan->getText().empty() && !selfSpan->isInline() &&
+		bool parentIsFlex = false;
+		Node* parentNode = container->getParent();
+		if ( parentNode && parentNode->isWidget() ) {
+			UIWidget* parentWidget = parentNode->asType<UIWidget>();
+			if ( parentWidget->isType( UI_TYPE_HTML_WIDGET ) ) {
+				CSSDisplay parentDisplay = parentWidget->asType<UIHTMLWidget>()->getDisplay();
+				parentIsFlex = ( parentDisplay == CSSDisplay::Flex ||
+								 parentDisplay == CSSDisplay::InlineFlex );
+			}
+		}
+		if ( !selfSpan->getText().empty() && ( !selfSpan->isInline() || parentIsFlex ) &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
 			String::View selfText = selfSpan->getText().view();
 			String transformed;

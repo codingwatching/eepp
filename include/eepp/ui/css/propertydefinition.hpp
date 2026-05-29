@@ -273,6 +273,21 @@ enum class PropertyId : Uint32 {
 	For = String::hash( "for" ),
 	UnicodeRange = String::hash( "unicode-range" ),
 	AlignmentBaseline = String::hash( "alignment-baseline" ),
+	FlexDirection = String::hash( "flex-direction" ),
+	FlexWrap = String::hash( "flex-wrap" ),
+	JustifyContent = String::hash( "justify-content" ),
+	AlignItems = String::hash( "align-items" ),
+	AlignContent = String::hash( "align-content" ),
+	AlignSelf = String::hash( "align-self" ),
+	FlexGrow = String::hash( "flex-grow" ),
+	FlexShrink = String::hash( "flex-shrink" ),
+	FlexBasis = String::hash( "flex-basis" ),
+	Flex = String::hash( "flex" ),
+	FlexFlow = String::hash( "flex-flow" ),
+	Order = String::hash( "order" ),
+	RowGap = String::hash( "row-gap" ),
+	ColumnGap = String::hash( "column-gap" ),
+	Gap = String::hash( "gap" ),
 };
 
 enum class PropertyType : Uint32 {
