@@ -24,6 +24,9 @@ static bool parentIsFlexContainer( UIWidget* widget ) {
 UILayouter* UILayouterManager::create( CSSDisplay display, UIWidget* container ) {
 	// Blockification per CSS Flexbox §4: children of flex containers are block-level
 	if ( parentIsFlexContainer( container ) ) {
+		// But a child that is itself a flex container still needs FlexLayouter
+		if ( display == CSSDisplay::Flex || display == CSSDisplay::InlineFlex )
+			return eeNew( FlexLayouter, ( container ) );
 		return eeNew( BlockLayouter, ( container ) );
 	}
 

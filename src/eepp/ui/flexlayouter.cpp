@@ -183,12 +183,28 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			 item.widget->getLayoutHeightPolicy() != SizePolicy::Fixed )
 			item.widget->setInternalPixelsHeight( tentativeCrossSize );
 
+		SizePolicy oldMainPolicy = mainAxis.horizontal ? item.widget->getLayoutWidthPolicy()
+													   : item.widget->getLayoutHeightPolicy();
+		if ( oldMainPolicy == SizePolicy::MatchParent ) {
+			if ( mainAxis.horizontal )
+				item.widget->setLayoutWidthPolicy( SizePolicy::WrapContent );
+			else
+				item.widget->setLayoutHeightPolicy( SizePolicy::WrapContent );
+		}
+
 		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
 			auto* childHtml = item.widget->asType<UIHTMLWidget>();
 			auto* layouter = childHtml->getLayouter();
 			if ( layouter && !layouter->isPacking() && layouter != this ) {
 				childHtml->updateLayout();
 			}
+		}
+
+		if ( oldMainPolicy == SizePolicy::MatchParent ) {
+			if ( mainAxis.horizontal )
+				item.widget->setLayoutWidthPolicy( oldMainPolicy );
+			else
+				item.widget->setLayoutHeightPolicy( oldMainPolicy );
 		}
 
 		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
@@ -366,19 +382,19 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 			break;
 		case CSSJustifyContent::SpaceBetween:
 			if ( itemCount > 1 )
-				spacing = freeSpaceMain / (Float)( itemCount - 1 );
+				spacing = columnGap + freeSpaceMain / (Float)( itemCount - 1 );
 			else
 				mainOffset = 0.f;
 			break;
 		case CSSJustifyContent::SpaceAround:
 			if ( itemCount > 0 ) {
-				spacing = freeSpaceMain / (Float)itemCount;
+				spacing = columnGap + freeSpaceMain / (Float)itemCount;
 				mainOffset = spacing * 0.5f;
 			}
 			break;
 		case CSSJustifyContent::SpaceEvenly:
 			if ( itemCount > 0 ) {
-				Float slot = freeSpaceMain / (Float)( itemCount + 1 );
+				Float slot = columnGap + freeSpaceMain / (Float)( itemCount + 1 );
 				mainOffset = slot;
 				spacing = slot;
 			}
@@ -572,12 +588,12 @@ void FlexLayouter::applyLayout( const std::vector<FlexLine>& lines, const Axis& 
 	Float totH = containerHeight;
 
 	if ( widthPolicy == SizePolicy::WrapContent )
-		totW = contentW + containerPadding.Right;
+		totW = containerPadding.Left + contentW + containerPadding.Right;
 	else if ( widthPolicy != SizePolicy::Fixed )
 		totW = mContainer->getParent() ? mContainer->getParent()->getPixelsSize().getWidth() : totW;
 
 	if ( heightPolicy == SizePolicy::WrapContent )
-		totH = contentH + containerPadding.Bottom;
+		totH = containerPadding.Top + contentH + containerPadding.Bottom;
 
 	mContainer->setInternalPixelsWidth( totW );
 	mContainer->setInternalPixelsHeight( totH );

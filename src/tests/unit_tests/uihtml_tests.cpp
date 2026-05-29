@@ -3257,3 +3257,144 @@ UTEST( UIHTML, FlexFormLayout ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, FlexMediaQueriesLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Media Queries Layout Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_mediaqueries.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+
+	// Header
+	auto header = bodyWidget->findByClass( "site-header" );
+	ASSERT_TRUE( header != nullptr );
+	auto headerWidget = header->asType<UIWidget>();
+
+	// Header logo (contains SVG + "Causality" text)
+	auto logo = headerWidget->findByClass( "header-logo" );
+	ASSERT_TRUE( logo != nullptr );
+	auto logoWidget = logo->asType<UIWidget>();
+
+	// Header wordmark (the "Causality" span)
+	auto wordmark = headerWidget->findByClass( "header-wordmark" );
+	ASSERT_TRUE( wordmark != nullptr );
+	auto wordmarkWidget = wordmark->asType<UIWidget>();
+
+	// Site nav
+	auto nav = headerWidget->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	// Header should have visible height (padding + content + padding)
+	EXPECT_GT( headerWidget->getPixelsSize().getHeight(), 80.f );
+
+	// Header should not exceed content width significantly
+	EXPECT_LE( headerWidget->getPixelsSize().getWidth(), 1024.f );
+
+	// The wordmark "Causality" should have positive width and height (visible text)
+	EXPECT_GT( wordmarkWidget->getPixelsSize().getWidth(), 10.f );
+	EXPECT_GT( wordmarkWidget->getPixelsSize().getHeight(), 5.f );
+
+	// The logo (flex item in header) should not extend outside the header
+	EXPECT_LE( logoWidget->getPixelsPosition().x + logoWidget->getPixelsSize().getWidth(),
+			   headerWidget->getPixelsPosition().x + headerWidget->getPixelsSize().getWidth() +
+				   1.f );
+
+	// Site nav should not overflow the header
+	EXPECT_LE( navWidget->getPixelsPosition().x + navWidget->getPixelsSize().getWidth(),
+			   headerWidget->getPixelsPosition().x + headerWidget->getPixelsSize().getWidth() +
+				   1.f );
+
+	// Essay nav
+	auto essayNav = bodyWidget->findByClass( "essay-nav" );
+	ASSERT_TRUE( essayNav != nullptr );
+	auto essayNavWidget = essayNav->asType<UIWidget>();
+
+	// The essay-nav link (<a>)
+	auto essayNavLink = essayNavWidget->findByClass( "essay-nav-prev" );
+	ASSERT_TRUE( essayNavLink != nullptr );
+	auto essayNavLinkWidget = essayNavLink->asType<UIWidget>();
+
+	// essay-nav should contain its link (link should not overflow in local coords)
+	Float linkLocalX = essayNavLinkWidget->getPixelsPosition().x;
+	Float linkLocalY = essayNavLinkWidget->getPixelsPosition().y;
+	Float linkLocalW = essayNavLinkWidget->getPixelsSize().getWidth();
+	Float linkLocalH = essayNavLinkWidget->getPixelsSize().getHeight();
+	Float navW = essayNavWidget->getPixelsSize().getWidth();
+	Float navH = essayNavWidget->getPixelsSize().getHeight();
+
+	EXPECT_GE( linkLocalX, -1.f );
+	EXPECT_LE( linkLocalX + linkLocalW, navW + 1.f );
+	EXPECT_GE( linkLocalY, -1.f );
+	EXPECT_LE( linkLocalY + linkLocalH, navH + 1.f );
+
+	// essay-nav should have visible size
+	EXPECT_GT( essayNavWidget->getPixelsSize().getHeight(), 10.f );
+	EXPECT_GT( essayNavWidget->getPixelsSize().getWidth(), 10.f );
+
+	// The essay-nav link contains two spans: label and title
+	// They should stack vertically (flex-direction: column on the <a>)
+	// so the link height should be at least the sum of both span heights
+	auto essayLabel = essayNavLinkWidget->findByClass( "essay-nav-label" );
+	auto essayTitle = essayNavLinkWidget->findByClass( "essay-nav-title" );
+	if ( essayLabel && essayTitle ) {
+		auto labelWidget = essayLabel->asType<UIWidget>();
+		auto titleWidget = essayTitle->asType<UIWidget>();
+		EXPECT_GT( essayNavLinkWidget->getPixelsSize().getHeight(),
+				   labelWidget->getPixelsSize().getHeight() +
+					   titleWidget->getPixelsSize().getHeight() - 1.f );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexAnchorInFlexNavVisible ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Anchor in Flex Nav Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_mediaquery.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+
+	auto nav = bodyWidget->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	// The nav is a flex container; its <a> children are blockified flex items.
+	// Each <a> should have non-zero width and height (text must be visible).
+	for ( Uint32 i = 0; i < navWidget->getChildCount(); ++i ) {
+		auto c = navWidget->getChildAt( i );
+		auto cw = c->asType<UIWidget>();
+		if ( !cw || cw->getElementTag() != "a" )
+			continue;
+		EXPECT_GT( cw->getPixelsSize().getWidth(), 5.f );
+		EXPECT_GT( cw->getPixelsSize().getHeight(), 5.f );
+	}
+
+	Engine::destroySingleton();
+}

@@ -141,6 +141,11 @@ MediaQueryList::ptr MediaQueryList::parse( const std::string& str ) {
 		String::trimInPlace( tok );
 		String::toLowerInPlace( tok );
 
+		if ( String::startsWith( tok, "@media" ) ) {
+			tok = tok.substr( 6 );
+			String::trimInPlace( tok );
+		}
+
 		MediaQuery::ptr query = MediaQuery::parse( tok );
 
 		if ( query ) {
