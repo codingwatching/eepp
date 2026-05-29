@@ -234,6 +234,7 @@ class EE_API UIHTMLBody : public UIRichText {
 
   protected:
 	bool mPropagatedBackground{ false };
+	StyleSheetLength mMinHeightLocal;
 
 	UIHTMLBody( const std::string& tag = "body" );
 };
