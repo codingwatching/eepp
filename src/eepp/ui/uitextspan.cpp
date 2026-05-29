@@ -71,20 +71,14 @@ bool UITextSpan::isInlineBlock() const {
 }
 
 void UITextSpan::draw() {
-	if ( !isInline() ) {
+	// When a UITextSpan is a flex item it is laid out independently by the
+	// flex container (blockification per CSS Flexbox §4). In that case the
+	// parent flex container does NOT render its text via rebuildRichText(),
+	// so the span must draw itself.
+	if ( !isInline() ||
+		 ( getParent() && getParent()->isType( UI_TYPE_HTML_WIDGET ) &&
+		   getParent()->asType<UIHTMLWidget>()->isFlex() ) ) {
 		UIRichText::draw();
-	} else {
-		// When a UITextSpan is a flex item it is laid out independently by the
-		// flex container (blockification per CSS Flexbox §4).  In that case the
-		// parent flex container does NOT render its text via rebuildRichText(),
-		// so the span must draw itself.
-		Node* parentNode = getParent();
-		if ( parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) ) {
-			CSSDisplay parentDisplay = parentNode->asType<UIHTMLWidget>()->getDisplay();
-			if ( parentDisplay == CSSDisplay::Flex || parentDisplay == CSSDisplay::InlineFlex ) {
-				UIRichText::draw();
-			}
-		}
 	}
 }
 

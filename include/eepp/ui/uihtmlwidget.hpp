@@ -47,6 +47,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	CSSDisplay getDisplay() const { return mDisplay; }
 
+	bool isFlex() const { return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex; }
+
 	void setDisplay( CSSDisplay display );
 
 	CSSPosition getCSSPosition() const { return mPosition; }

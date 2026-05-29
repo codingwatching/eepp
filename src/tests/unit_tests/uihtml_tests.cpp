@@ -57,7 +57,7 @@ static void init_ui_test() {
 
 UTEST( UIHTMLTable, complexLayout ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
+		WindowSettings( 1024, 653, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
 						32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2071,7 +2071,7 @@ UTEST( UIHTMLDetails, lobstersInlineBlockCachesWidth ) {
 
 UTEST( UIBorder, renderingVariations ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Border Rendering Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Border Rendering Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2586,7 +2586,7 @@ UTEST( UIHTML, ContactFormLayout ) {
 
 UTEST( UIBackground, imageAtlasPositioning ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Background Atlas Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -3104,28 +3104,7 @@ UTEST( UIHTML, FlexCenterWebViewLikeLayout ) {
 	ASSERT_TRUE( postWrapper != nullptr );
 	ASSERT_TRUE( post != nullptr );
 
-	auto postWrapperWidget = postWrapper->asType<UIWidget>();
 	auto postWidget = post->asType<UIWidget>();
-
-	std::cerr << "[TEST1280] post-wrapper size=" << postWrapperWidget->getPixelsSize().getWidth()
-			  << "x" << postWrapperWidget->getPixelsSize().getHeight()
-			  << " pos=" << postWrapperWidget->getPixelsPosition().x << ","
-			  << postWrapperWidget->getPixelsPosition().y
-			  << " pad=" << postWrapperWidget->getPixelsPadding().Left << ","
-			  << postWrapperWidget->getPixelsPadding().Top << ","
-			  << postWrapperWidget->getPixelsPadding().Right << ","
-			  << postWrapperWidget->getPixelsPadding().Bottom << std::endl;
-	std::cerr << "[TEST1280] post type=" << postWidget->getType()
-			  << " size=" << postWidget->getPixelsSize().getWidth() << "x"
-			  << postWidget->getPixelsSize().getHeight()
-			  << " pos=" << postWidget->getPixelsPosition().x << ","
-			  << postWidget->getPixelsPosition().y
-			  << " widthPolicy=" << (int)postWidget->getLayoutWidthPolicy()
-			  << " heightPolicy=" << (int)postWidget->getLayoutHeightPolicy()
-			  << " margin=" << postWidget->getLayoutPixelsMargin().Left << ","
-			  << postWidget->getLayoutPixelsMargin().Top << ","
-			  << postWidget->getLayoutPixelsMargin().Right << ","
-			  << postWidget->getLayoutPixelsMargin().Bottom << std::endl;
 
 	// In a real browser a div with width:100% inside a column flex container
 	// with align-items:center still spans the full cross axis because 100%
@@ -3169,17 +3148,6 @@ UTEST( UIHTML, FlexCenterNoTextNodeDisplacement ) {
 	Float postMarginTop = postWidget->getLayoutPixelsMargin().Top;
 	Float wrapperW = postWrapperWidget->getPixelsSize().getWidth();
 	Float postW = postWidget->getPixelsSize().getWidth();
-
-	// Debug: print children of post-wrapper
-	std::cerr << "[TEST] post-wrapper children:" << std::endl;
-	Node* c = postWrapper->getFirstChild();
-	while ( c ) {
-		std::cerr << "  type=" << c->getType() << " id=" << c->getId()
-				  << ( c->isWidget() ? " widget" : "" ) << std::endl;
-		c = c->getNextNode();
-	}
-	std::cerr << "[TEST] post pos=" << postX << "," << postY << " size=" << postW << "x"
-			  << postWidget->getPixelsSize().getHeight() << " wrapperW=" << wrapperW << std::endl;
 
 	// In a column flex container the first (and only) real flex item should
 	// sit right after the container's top padding plus its own margin-top.

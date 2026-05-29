@@ -14,8 +14,7 @@ static bool isStretchedFlexItem( UIHTMLWidget* widget ) {
 	if ( !parent || !parent->isWidget() || !parent->isType( UI_TYPE_HTML_WIDGET ) )
 		return false;
 	UIHTMLWidget* parentHtml = parent->asType<UIHTMLWidget>();
-	if ( parentHtml->getDisplay() != CSSDisplay::Flex &&
-		 parentHtml->getDisplay() != CSSDisplay::InlineFlex )
+	if ( !parentHtml->isFlex() )
 		return false;
 
 	CSSAlignSelf alignSelf = widget->getAlignSelf();
@@ -75,16 +74,9 @@ void BlockLayouter::updateLayout() {
 	if ( rt == nullptr || mPacking )
 		return;
 
-	bool parentIsFlex = false;
 	Node* parentNode = widget->getParent();
-	if ( parentNode && parentNode->isWidget() ) {
-		UIWidget* parentWidget = parentNode->asType<UIWidget>();
-		if ( parentWidget->isType( UI_TYPE_HTML_WIDGET ) ) {
-			CSSDisplay parentDisplay = parentWidget->asType<UIHTMLWidget>()->getDisplay();
-			parentIsFlex =
-				( parentDisplay == CSSDisplay::Flex || parentDisplay == CSSDisplay::InlineFlex );
-		}
-	}
+	bool parentIsFlex = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+						parentNode->asType<UIHTMLWidget>()->isFlex();
 
 	if ( widget->isInline() && !parentIsFlex )
 		return;

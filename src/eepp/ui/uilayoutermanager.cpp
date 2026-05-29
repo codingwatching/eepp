@@ -12,13 +12,8 @@ namespace EE { namespace UI {
 
 static bool parentIsFlexContainer( UIWidget* widget ) {
 	Node* parent = widget->getParent();
-	if ( !parent || !parent->isWidget() )
-		return false;
-	UIWidget* parentWidget = parent->asType<UIWidget>();
-	if ( !parentWidget->isType( UI_TYPE_HTML_WIDGET ) )
-		return false;
-	CSSDisplay parentDisplay = parentWidget->asType<UIHTMLWidget>()->getDisplay();
-	return parentDisplay == CSSDisplay::Flex || parentDisplay == CSSDisplay::InlineFlex;
+	return parent && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+		   parent->asType<UIHTMLWidget>()->isFlex();
 }
 
 UILayouter* UILayouterManager::create( CSSDisplay display, UIWidget* container ) {
