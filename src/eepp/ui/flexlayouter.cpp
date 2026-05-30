@@ -920,6 +920,15 @@ void FlexLayouter::updateLayout() {
 
 	collectFlexItems( mItems );
 
+	// Clear any stale RichText data from a previous block layout mode.
+	// When a flex container has actual flex items, each item draws its own
+	// content via UITextSpan::draw(). The parent's mRichText is stale and
+	// should not be rendered, otherwise text appears twice (once from the
+	// parent's RichText and once from the flex item's own draw()).
+	if ( !mItems.empty() && mContainer->isType( UI_TYPE_RICHTEXT ) ) {
+		mContainer->asType<UIRichText>()->getRichTextPtr()->clear();
+	}
+
 	if ( mItems.empty() ) {
 		// If the container is a UITextSpan with its own text content (e.g. an <a> with
 		// display:flex containing only text), process the text via RichText so the
