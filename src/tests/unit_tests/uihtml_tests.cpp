@@ -57,7 +57,7 @@ static void init_ui_test() {
 
 UTEST( UIHTMLTable, complexLayout ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
+		WindowSettings( 1024, 653, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
 						32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2071,7 +2071,7 @@ UTEST( UIHTMLDetails, lobstersInlineBlockCachesWidth ) {
 
 UTEST( UIBorder, renderingVariations ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Border Rendering Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Border Rendering Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2586,7 +2586,7 @@ UTEST( UIHTML, ContactFormLayout ) {
 
 UTEST( UIBackground, imageAtlasPositioning ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Background Atlas Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
