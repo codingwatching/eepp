@@ -2521,6 +2521,39 @@ UTEST( UIHTML, BodyHeightMiscalculationFixture ) {
 	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 3000.f );
 	EXPECT_LT( bodyWidget->getPixelsSize().getHeight(), 6000.f );
 
+	// Verify the nav layout: .wrap has justify-content: space-between,
+	// so .brand should be at the left and .links at the right.
+	auto nav = sceneNode->getRoot()->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	auto wrap = navWidget->findByClass( "wrap" );
+	ASSERT_TRUE( wrap != nullptr );
+	auto wrapWidget = wrap->asType<UIWidget>();
+
+	auto brand = wrapWidget->findByClass( "brand" );
+	ASSERT_TRUE( brand != nullptr );
+	auto brandWidget = brand->asType<UIWidget>();
+
+	auto links = wrapWidget->findByClass( "links" );
+	ASSERT_TRUE( links != nullptr );
+	auto linksWidget = links->asType<UIWidget>();
+
+	// With justify-content: space-between in a row-direction flex:
+	// .brand should be at the left side of .wrap (near padding edge).
+	EXPECT_LT( brandWidget->getPixelsPosition().x,
+			   wrapWidget->getPixelsSize().getWidth() * 0.25f );
+
+	// .links should be at the right side of .wrap, NOT next to .brand.
+	Float wrapW = wrapWidget->getPixelsSize().getWidth();
+	Float linksW = linksWidget->getPixelsSize().getWidth();
+	Float linksRight = linksWidget->getPixelsPosition().x + linksW;
+	EXPECT_GT( linksWidget->getPixelsPosition().x, wrapW * 0.5f );
+
+	// .links should NOT occupy all available width — it must be content-sized.
+	EXPECT_GT( linksW, 0.f );
+	EXPECT_LT( linksW, wrapW * 0.5f );
+
 	Engine::destroySingleton();
 }
 

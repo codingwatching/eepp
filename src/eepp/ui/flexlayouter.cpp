@@ -828,8 +828,16 @@ void FlexLayouter::applyLayout( const SmallVector<FlexLine, 8>& lines, const Axi
 
 	if ( widthPolicy == SizePolicy::WrapContent )
 		totW = containerPadding.Left + contentW + containerPadding.Right;
-	else if ( widthPolicy != SizePolicy::Fixed )
-		totW = mContainer->getParent() ? mContainer->getParent()->getPixelsSize().getWidth() : totW;
+	else if ( widthPolicy != SizePolicy::Fixed ) {
+		auto* parent = mContainer->getParent();
+		bool parentIsFlex = parent && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+							static_cast<UIHTMLWidget*>( parent )->isFlex();
+		if ( parentIsFlex ) {
+			totW = containerWidth;
+		} else {
+			totW = parent ? parent->getPixelsSize().getWidth() : totW;
+		}
+	}
 
 	if ( heightPolicy == SizePolicy::WrapContent )
 		totH = containerPadding.Top + contentH + containerPadding.Bottom;
@@ -849,7 +857,14 @@ void FlexLayouter::updateLayout() {
 	mPacking = true;
 
 	mContainer->beginAttributesTransaction();
-	setMatchParentIfNeededVerticalGrowth();
+
+	{
+		auto* parent = mContainer->getParent();
+		bool parentIsFlexContainer = parent && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+									 static_cast<UIHTMLWidget*>( parent )->isFlex();
+		if ( !parentIsFlexContainer )
+			setMatchParentIfNeededVerticalGrowth();
+	}
 
 	readContainerStyle( mDirection, mWrap, mJustify, mAlignItems, mAlignContent, mColumnGap,
 						mRowGap );
