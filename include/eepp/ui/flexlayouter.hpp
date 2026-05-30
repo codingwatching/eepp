@@ -2,6 +2,7 @@
 #define EE_UI_FLEXLAYOUTER_HPP
 
 #include <eepp/core/containers.hpp>
+#include <eepp/core/small_vector.hpp>
 #include <eepp/math/rect.hpp>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/csslayouttypes.hpp>
@@ -60,7 +61,7 @@ class EE_API FlexLayouter : public UILayouter {
 	};
 
 	struct FlexLine {
-		std::vector<size_t> itemIndices;
+		SmallVector<size_t, 16> itemIndices;
 		Float mainSize;
 		Float crossSize;
 		Float crossPos;
@@ -81,7 +82,7 @@ class EE_API FlexLayouter : public UILayouter {
 		bool reversed;
 	};
 
-	void collectFlexItems( std::vector<FlexItem>& items );
+	void collectFlexItems( SmallVector<FlexItem, 16>& items );
 
 	void readContainerStyle( CSSFlexDirection& direction, CSSFlexWrap& wrap,
 							 CSSJustifyContent& justify, CSSAlignItems& alignItems,
@@ -100,7 +101,7 @@ class EE_API FlexLayouter : public UILayouter {
 
 	Float getItemCrossSize( UIWidget* child, const Axis& crossAxis ) const;
 
-	void generateFlexLines( std::vector<FlexLine>& lines, const Float containerMainSize,
+	void generateFlexLines( SmallVector<FlexLine, 8>& lines, const Float containerMainSize,
 							const Float columnGap );
 
 	void resolveFlexibleLengths( FlexLine& line, const Float containerMainSize,
@@ -110,10 +111,10 @@ class EE_API FlexLayouter : public UILayouter {
 
 	void resolveCrossSizes( FlexLine& line, const Axis& crossAxis, const Axis& mainAxis );
 
-	void alignCrossAxis( const std::vector<FlexLine>& lines, const Float containerCrossSize,
+	void alignCrossAxis( const SmallVector<FlexLine, 8>& lines, const Float containerCrossSize,
 						 const Float rowGap, const Axis& crossAxis );
 
-	void applyLayout( const std::vector<FlexLine>& lines, const Axis& mainAxis,
+	void applyLayout( const SmallVector<FlexLine, 8>& lines, const Axis& mainAxis,
 					  const Axis& crossAxis, const Rectf& containerPadding,
 					  const Float containerWidth, const Float containerHeight,
 					  const SizePolicy widthPolicy, const SizePolicy heightPolicy );
@@ -123,7 +124,7 @@ class EE_API FlexLayouter : public UILayouter {
 						   const Float containerHeight, const Rectf& containerPadding,
 						   bool indefiniteMainSize, bool indefiniteCrossSize );
 
-	std::vector<FlexItem> mItems;
+	SmallVector<FlexItem, 16> mItems;
 	CSSFlexDirection mDirection{ CSSFlexDirection::Row };
 	CSSFlexWrap mWrap{ CSSFlexWrap::NoWrap };
 	CSSJustifyContent mJustify{ CSSJustifyContent::FlexStart };

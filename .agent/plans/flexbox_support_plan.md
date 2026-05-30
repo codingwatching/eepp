@@ -25,10 +25,9 @@ Complete `display: flex` and `display: inline-flex` support including:
 - `display: flex` on non-HTML eepp widgets (only `UIHTMLWidget` children)
 - Nested flex containers (works naturally once the layouter is correct, but no special treatment)
 - `order` with CSS Grid integration (order is ignored for non-flex/grid contexts)
-- `align-content: space-evenly` unless time permits after core algorithm completion
-- `margin: auto` on the cross axis for single-line containers (treat as missing if not easily
-  compatible with current margin model)
-- Column-reverse reordering of stacking context / z-order (focus on geometric layout first)
+- `align-content: space-evenly` (implemented, included in Phase 3)
+- `margin: auto` on the cross axis (now tracked as gap G4)
+- Column-reverse reordering of stacking context / z-order (now tracked as gap G11)
 
 ## Current State
 
@@ -900,6 +899,226 @@ Phase 0 completed:
 | `src/eepp/ui/uirichtext.cpp` | To be modified | Skip flex-item widget children in `rebuildRichText()` |
 | `make/linux/eepp.make` | Regenerated | Add `src/eepp/ui/flexlayouter.cpp` (via premake, then `make config=debug_x86_64 -C make/linux`) |
 
+## Gaps and Missing Features (Spec Review against CSS Flexbox Level 1)
+
+This section catalogues features in the CSS Flexbox Level 1 specification that are
+either unimplemented or incompletely implemented in the current `FlexLayouter`. Each
+gap is prioritized (P1=critical correctness, P2=important, P3=nice-to-have).
+
+### G1: Iterative flex resolution after min/max clamping (§9.7) — P1
+
+**Status:** Missing. `resolveFlexibleLengths()` does a single pass: distribute free space,
+clamp by min/max, then return. The spec requires iterative re-distribution: when clamping
+frees up or consumes space, that space must be re-distributed to other unfrozen items.
+Items that hit their min/max become "frozen" and excluded from subsequent iterations.
+
+**Impact:** Items with `min-width` constraints can cause incorrect free space distribution.
+For example, if three items all have `flex-grow: 1` but one has `min-width: 200px` and
+hits that minimum, the remaining free space should go to the other two items proportionally.
+Our single-pass implementation doesn't handle this.
+
+**Fix:**
+1. Add a `frozen` flag to `FlexItem`.
+2. Implement the iterative loop from §9.7:
+   ```
+   while (free space changes) {
+       for each unfrozen item: fix its size if it hits min/max (mark frozen)
+       re-distribute freed/consumed space among remaining unfrozen items
+   }
+   ```
+3. Replaces current lines ~364-419 of `flexlayouter.cpp`.
+
+### G2: Correct min-intrinsic width for wrap containers (§9.9.1.3) — P1
+
+**Status:** Incorrect. `computeIntrinsicWidths()` returns `containerPadding.Left +
+containerPadding.Right` for `mMinIntrinsicWidth` in all wrap cases (lines 950, 943).
+The spec says min-content main size of a multi-line flex container is the largest
+min-content contribution among all items on ALL lines (since each line can be as
+narrow as its widest item, and the container is as narrow as its widest line).
+
+**Fix:**
+```cpp
+// For wrap containers, min-intrinsic width = largest item min-content width
+Float maxMinContent = 0.f;
+for (auto& item : items) {
+    Float minContent = /* item's min-content main size — use getMinIntrinsicWidth() if available */;
+    maxMinContent = eemax(maxMinContent, minContent + padding);
+}
+mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
+```
+
+### G3: `visibility: collapse` on flex items (§4.4) — P2
+
+**Status:** Not implemented. No references to `collapse` in flex layouter code.
+
+**Impact:** `visibility: collapse` is a flexbox-specific feature that hides items while
+preserving cross-axis space (for single-line containers) so the layout doesn't "wobble".
+
+**Fix:**
+1. In `collectFlexItems()`, detect `visibility: collapse` items (check widget style).
+2. Run flex layout twice: first pass uncollapsed to compute line cross sizes, second
+   pass with collapsed items replaced by struts preserving the original line cross size.
+3. In `applyLayout()`, set collapsed items to invisible (zero size or skip rendering).
+
+### G4: Cross-axis auto margins (§8.1) — P2
+
+**Status:** Not implemented. Auto margins on the main axis are handled (zeroed in
+`measureFlexItems()`, absorbed in `alignMainAxis()`). Auto margins on the cross axis
+are NOT detected — `marginCrossStart`/`marginCrossEnd` are set to the raw pixel margin
+values without checking for `auto`.
+
+**Impact:** `margin: auto` on a flex item in column direction (or `margin-top: auto` +
+`margin-bottom: auto` in row direction) should center the item on the cross axis.
+Currently this silently fails.
+
+**Fix:**
+1. In `measureFlexItems()`, detect cross-axis auto margins similarly to main-axis:
+   ```cpp
+   item.marginCrossStart = hasLayoutMarginTopAuto() ? 0.f : margin.Top;  // for row
+   item.marginCrossEnd = hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
+   item.hasAutoMarginCrossStart = /* bool flag */;
+   item.hasAutoMarginCrossEnd = /* bool flag */;
+   ```
+2. Add `hasAutoMarginCrossStart`/`hasAutoMarginCrossEnd` fields to `FlexItem`.
+3. In `alignCrossAxis()`, before applying `align-items`/`align-self`, distribute
+   cross-axis free space to items with auto cross-axis margins:
+   - If both are auto: center the item
+   - If only one: push to the opposite edge
+4. Auto margins absorb free space BEFORE `align-self` applies per §8.1.
+
+### G5: `overflow` affecting `min-width:auto` / `min-height:auto` (§4.5) — P2
+
+**Status:** Not implemented. The `min-width:auto` computation (lines 250-280 of
+`flexlayouter.cpp`) does not check `overflow`. Per spec:
+- `overflow: visible` → min-size = content-based minimum (current behavior, correct)
+- `overflow: scroll`/`auto`/`hidden` → min-size = 0
+
+**Fix:**
+1. In `measureFlexItems()`, check the item's computed `overflow` value.
+2. For scrollable overflow items, set `minMainSize = 0`.
+3. Keep content-based minimum for `overflow: visible` (the default).
+
+### G6: Percentage margins/paddings on flex items (§4.2) — P3
+
+**Status:** Not explicitly handled. Margins are obtained via `getLayoutPixelsMargin()`,
+which returns pixel values pre-resolved by the widget system. If the widget system
+doesn't resolve percentage margins correctly for flex items (resolved against the
+containing block's inline size), this could be wrong.
+
+**Impact:** `margin: 5%` on a flex item should resolve against the flex container's
+width (in horizontal writing mode). If this isn't handled upstream, percentage
+margins behave incorrectly.
+
+**Fix:** Verify whether `getLayoutPixelsMargin()` already resolves percentage
+margins correctly. If not, add percentage resolution in `measureFlexItems()` using
+the flex container's width (containing block inline size).
+
+### G7: Painting order by `order`-modified document order (§4.3) — P3
+
+**Status:** Not implemented. `order` sorts items for layout purposes only. The spec
+says flex items paint in `order`-modified document order (items with lower `order`
+paint first, regardless of DOM position), and `z-index` values other than `auto`
+create a stacking context even if `position` is `static`.
+
+**Impact:** Overlapping flex items with different `order` values may paint in the
+wrong order. This affects visual output but not layout geometry.
+
+**Fix:** Requires changes to the widget painting/tree structure, which is outside
+`FlexLayouter`'s scope. Options:
+1. Physically reorder children in the widget tree (complex, affects hit testing).
+2. Add a `paintOrder` field to `UIWidget` and sort by it during paint traversal.
+3. Accept as a known limitation for now (most layouts don't overlap ordered items).
+
+### G8: Flex container baseline computation (§8.5) — P3
+
+**Status:** Not implemented. `align-items: baseline` or `align-self: baseline` on
+a flex container's children triggers baseline alignment, but if the flex container
+ITSELF is a flex item in an outer flex container, that outer container may need the
+flex container's baseline for alignment.
+
+Per spec, the baseline of a flex container is:
+1. The baseline of the first flex line if `flex-direction` is row/row-reverse.
+2. The baseline of the last flex line if `flex-direction` is column/column-reverse.
+
+**Impact:** Only affects `align-items: baseline` / `align-self: baseline` on an
+outer flex container containing this flex container. This is an uncommon pattern.
+
+**Fix:**
+1. After `applyLayout()`, store the baseline offset of the first/last line.
+2. Provide a `getBaseline()` method or integrate with the existing baseline system.
+3. Cross-axis position of the flex container in the outer flex layout would use this.
+
+### G9: `flex-basis: content` distinct from `flex-basis: auto` (§7.2.3) — P3
+
+**Status:** Both `content` and `auto` are treated identically (`flexBasisAuto = true`).
+Per spec, `flex-basis: content` always uses the content-based size, while
+`flex-basis: auto` first checks for a definite main size property.
+
+**Impact:** In practice, most uses of `flex-basis: content` produce the same result
+as `flex-basis: auto`. The difference matters when an item has both `flex-basis: auto`
+and an explicit `width: 300px` — `auto` uses 300px, `content` uses the content size.
+
+**Fix:** Add a separate `flexBasisContent` flag (or rename `flexBasisAuto` to an
+enum: Auto, Content, None). In `resolveFlexBasis()`, skip the definite-size check
+when `flex-basis: content`.
+
+### G10: `flex-basis` percentage resolution for indefinite container size (§9.8) — P3
+
+**Status:** Partially handled. Line 233: `if (indefiniteMainSize && item.flexBasisIsPercentage)`
+→ treats as auto. Good, but only for the main axis indefinite case. The spec also
+says percentages in `flex-basis` resolve against the container's inner main size.
+
+**Impact:** Minor; most percentage `flex-basis` uses have a definite container.
+
+### G11: Column-reverse stacking context reordering (§4.1 note) — P3
+
+**Status:** Not implemented. Per spec, `flex-direction: column-reverse` should
+reorder the stacking context (z-index painting) so the last visual item paints on
+top, even though it's DOM-first. Our implementation only visually reorders without
+adjusting the stacking context.
+
+**Impact:** Only visual; items in a column-reverse container may not paint in the
+expected order when they overlap.
+
+### G12: Anonymous flex items from bare text nodes (§4) — P3
+
+**Status:** Not implemented. Text sequences between flex item elements should wrap
+in anonymous block flex items. Our `collectFlexItems()` skips `UITextNode` whitespace
+but does not create anonymous wrappers for non-whitespace text.
+
+**Impact:** Bare text as direct children of flex containers doesn't participate in
+flex layout. Workaround: wrap text in `<span>` or `<div>` elements.
+
+### Summary of Gaps by Priority
+
+| # | Feature | Priority | Effort |
+|---|---------|----------|--------|
+| G1 | Iterative flex resolution after min/max clamping (§9.7) | **P1** | Medium |
+| G2 | Correct min-intrinsic width for wrap containers (§9.9.1.3) | **P1** | Small |
+| G3 | `visibility: collapse` (§4.4) | P2 | Large |
+| G4 | Cross-axis auto margins (§8.1) | P2 | Medium |
+| G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small |
+| G6 | Percentage margins/paddings (§4.2) | P3 | Small |
+| G7 | Painting order by `order` (§4.3) | P3 | Medium |
+| G8 | Flex container baselines (§8.5) | P3 | Medium |
+| G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small |
+| G10 | Percentage flex-basis resolution (§9.8) | P3 | Small |
+| G11 | Column-reverse stacking context (§4.1) | P3 | Small |
+| G12 | Anonymous flex items (§4) | P3 | Large |
+
+### Remaining Phase 12: Route `CSSDisplay::Flex` to FlexLayouter
+
+As documented above, the RichText integration blocker prevents `display: flex`
+from being routed to `FlexLayouter`. The fix requires two coordinated changes:
+
+1. `UILayouterManager::create()` — blockify flex item children (return `BlockLayouter`
+   for direct children of flex/inline-flex containers, regardless of their own `display`)
+2. `BlockLayouter::updateLayout()` — skip the `isInline()` early-return for flex items
+
+These changes are described in detail in the Root Cause Analysis section above.
+They should be implemented, tested, and verified before considering `display: flex`
+routing to be production-ready.
+
 ## Risk Analysis
 
 | Risk | Severity | Mitigation |
@@ -915,16 +1134,45 @@ Phase 0 completed:
 | Performance of repeated style reads in the flex hot path | Low | Already mitigated: `collectFlexItems()` reads all style properties once and caches in `FlexItem`. No style reads in the hot loop. |
 | Auto margins on flex items not implemented | Low | Document as limitation. Most layouts don't rely on auto margins in flex. Can be added later without breaking existing behavior. |
 
+## Updated Implementation Roadmap
+
+The original plan covered Phases 0-12. Phases 0-11 are largely complete with the
+gaps documented above. Here's the updated path forward:
+
+### Immediate (fix correctness bugs)
+1. **G1** — Iterative flex resolution after min/max clamping. Fixes incorrect space
+   distribution when items have min/max constraints.
+2. **G2** — Correct min-intrinsic width for wrap containers. Fixes incorrect
+   container sizing with `flex-wrap: wrap` and `width: auto`.
+
+### Next (fill spec gaps)
+3. **G5** — `overflow` affecting min-width:auto. Important for scroll containers.
+4. **G4** — Cross-axis auto margins. Common CSS pattern (centering).
+5. **G3** — `visibility: collapse`. Full spec feature, large effort but important
+   for dynamic UIs.
+
+### Later (edge cases)
+6. **G8** — Flex container baselines. Only needed for nested baseline alignment.
+7. **G9** — `flex-basis: content` vs `auto`. Minor distinction, rarely used.
+8. **G10** — Percentage flex-basis edge cases.
+9. **G11** — Column-reverse stacking context.
+10. **G6** — Percentage margins/paddings.
+11. **G7** — Painting order by `order`.
+
+### Final gate
+12. **Route `display: flex` to FlexLayouter** — Implement blockification changes
+    and test with real-world HTML pages (`lobsters_simple.html`, `body_height_miscalculation.html`,
+    etc.). This is the final validation that the RichText integration fix works.
+
 ## Limitations Documented For This Implementation
 
 1. **Anonymous flex items from bare text nodes:** Not generated. Text nodes and non-widget
    nodes as direct children of flex containers are skipped during item collection. In real
    CSS, bare text generates anonymous flex items; this implementation requires text to be
    wrapped in `<span>` or `<div>` to participate in flex layout.
-2. **`margin: auto` on flex items:** Not implemented. Auto margins in the main axis should
-   absorb free space before `justify-content` applies (§8.1). Auto margins in the cross axis
-   should absorb free space before `align-self` applies. Current implementation ignores auto
-   margins entirely.
+2. **`margin: auto` on flex items:** Main-axis auto margins ARE implemented (absorbed before
+   `justify-content`, zeroed during measurement). Cross-axis auto margins are NOT implemented
+   (see gap G4).
 3. **Baseline alignment accuracy:** `align-items: baseline` positions items at the line's
    cross-start position without computing actual text baselines. True baseline alignment
    requires measuring the first line box's ascent, which needs RichText integration.
@@ -965,23 +1213,51 @@ subsequent phases. No phase should introduce regressions in earlier test coverag
 
 ## Implementation Status (Current)
 
-### What is built and working (Phases 0-11 completed)
+### What is built and working (Phases 0-11 mostly complete)
 
 The `FlexLayouter` class at `include/eepp/ui/flexlayouter.hpp` / `src/eepp/ui/flexlayouter.cpp`
-contains a **full CSS Flexbox layout algorithm** covering:
+contains a working flex layout algorithm covering:
 
-- Item collection sorted by `order`, skipping out-of-flow and `display:none` children
-- Main-axis sizing: `flex-basis` resolution, `flex-grow` distribution, `flex-shrink` overflow handling
-- Cross-axis sizing: `align-items`/`align-self` (stretch/content/flex-start/flex-end/center/baseline)
-- `justify-content`: flex-start/flex-end/center/space-between/space-around/space-evenly
-- `align-content`: multi-line cross-axis distribution
-- Direction variants: row/row-reverse/column/column-reverse with proper axis mapping
-- Wrap: nowrap/wrap/wrap-reverse with multi-line breaking
-- Gaps: `column-gap` (main-axis spacing), `row-gap` (cross-axis line spacing)
-- `flex` shorthand registered (expands to flex-grow, flex-shrink, flex-basis)
-- Child positioning with size write-back and layouter triggering
-- Container shrink-wrap and intrinsic width computation
-- `min-width`/`min-height` explicit values respected
+- **Item collection:** Sorted by `order`, skipping out-of-flow (`position:absolute/fixed`) and
+  `display:none` children. Whitespace-only text nodes skipped. Anonymous flex items from bare
+  text are NOT generated (known limitation, documented below).
+- **Main-axis sizing:** `flex-basis` resolution from widget size/style; `flex-grow` distribution
+  of positive free space; `flex-shrink` handling of negative free space; min/max main size
+  clamping (`min-width:auto` supported via `getMinIntrinsicWidth()`).
+- **Cross-axis sizing:** `align-items`/`align-self` handling for stretch, flex-start, flex-end,
+  center. Baseline alignment uses flex-start positioning (no actual baseline measurement).
+  Stretch properly respects explicit cross-size (`Fixed` size policy).
+- **`justify-content`:** All values: flex-start, flex-end, center, space-between, space-around,
+  space-evenly. Auto margins on main axis absorb free space before justify-content applies.
+  Fixed `justify-content:center`/`flex-end` behavior (no clamping of negative free space).
+- **`align-content`:** All values for multi-line containers. Space-distribute modes guarded
+  against negative free space. `align-content` has no effect on single-line containers (correct).
+- **Direction:** All four `flex-direction` values (row/row-reverse/column/column-reverse)
+  with proper axis mapping and reverse handling.
+- **Wrap:** `nowrap`/`wrap`/`wrap-reverse` with multi-line line breaking. Handles edge case
+  where container is narrower than any single item (forces at least one item per line).
+- **Gaps:** `column-gap` between items on main axis; `row-gap` between lines on cross axis.
+  `normal` resolves to 0px correctly.
+- **Flex shorthand:** Registered via `StyleSheetSpecification`, expands to `flex-grow`,
+  `flex-shrink`, `flex-basis`. Handles `flex: auto`, `flex: none`, single/multi-value syntax.
+- **Child layout:** Positioning via `setPixelsPosition()` and sizing via `setPixelsSize()`,
+  with child layouter triggering for nested flex/block containers. Container shrink-wrap
+  via `WrapContent` size policy.
+- **Intrinsic widths:** Max-content width computed for `nowrap` containers (sum of flex bases
+  + gaps + padding). `calculateIntrinsicWidths()` provides min/max intrinsic widths for
+  flex containers.
+- **`min-width:auto` / `min-height:auto`:** Content-based minimum size prevents collapse.
+  Exposed via `getMinIntrinsicWidth()` on item layouters.
+- **Resolved cross-size recalc:** `resolveCrossSizes()` sets each item's main-axis size to its
+  resolved `targetMainSize` and re-lays it out before measuring cross size — prevents cross
+  sizes computed with stale widths from previous layout passes.
+- **Memory:** `SmallVector` with inline buffers used for item/line/index collections,
+  avoiding heap allocations for typical flex containers (5-10 items, 1-3 lines).
+- **Indefinite cross size:** When cross-axis is `WrapContent`, `containerCrossSize` is zeroed
+  to prevent using stale container height from previous layout pass. Items re-measured with
+  correct main-axis size after `resolveFlexibleLengths`.
+- **`flex-basis: auto` vs `flex-basis: content`:** Both treated as `auto` (uses item's main
+  size property). `content` keyword parsed but handled identically to `auto`.
 
 ### Current routing
 

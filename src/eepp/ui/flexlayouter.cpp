@@ -9,7 +9,7 @@
 
 namespace EE { namespace UI {
 
-void FlexLayouter::collectFlexItems( std::vector<FlexItem>& items ) {
+void FlexLayouter::collectFlexItems( SmallVector<FlexItem, 16>& items ) {
 	items.clear();
 
 	Node* child = mContainer->getFirstChild();
@@ -281,11 +281,11 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 	}
 }
 
-void FlexLayouter::generateFlexLines( std::vector<FlexLayouter::FlexLine>& lines,
+void FlexLayouter::generateFlexLines( SmallVector<FlexLayouter::FlexLine, 8>& lines,
 									  const Float containerMainSize, const Float columnGap ) {
 	lines.clear();
 
-	std::vector<size_t> remaining;
+	SmallVector<size_t, 16> remaining;
 	for ( size_t i = 0; i < mItems.size(); i++ )
 		remaining.push_back( i );
 
@@ -293,7 +293,7 @@ void FlexLayouter::generateFlexLines( std::vector<FlexLayouter::FlexLine>& lines
 		FlexLine line;
 		Float usedMain = 0.f;
 
-		std::vector<size_t> nextRemaining;
+		SmallVector<size_t, 16> nextRemaining;
 
 		for ( size_t idx : remaining ) {
 			const auto& item = mItems[idx];
@@ -308,6 +308,17 @@ void FlexLayouter::generateFlexLines( std::vector<FlexLayouter::FlexLine>& lines
 			} else {
 				nextRemaining.push_back( idx );
 			}
+		}
+
+		// Per CSS Flexbox §9.4, every flex line must contain at least one
+		// flex item. If the container is narrower than any single item,
+		// force the first remaining item into this line to avoid an
+		// infinite loop.
+		if ( line.itemIndices.empty() && !remaining.empty() ) {
+			line.itemIndices.push_back( remaining.front() );
+			nextRemaining.clear();
+			for ( size_t i = 1; i < remaining.size(); i++ )
+				nextRemaining.push_back( remaining[i] );
 		}
 
 		lines.push_back( std::move( line ) );
@@ -508,7 +519,7 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 	line.crossSize = maxCross;
 }
 
-void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
+void FlexLayouter::alignCrossAxis( const SmallVector<FlexLine, 8>& lines,
 								   const Float containerCrossSize, const Float rowGap,
 								   const Axis& crossAxis ) {
 	if ( lines.empty() )
@@ -611,7 +622,7 @@ void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
 	}
 }
 
-void FlexLayouter::applyLayout( const std::vector<FlexLine>& lines, const Axis& mainAxis,
+void FlexLayouter::applyLayout( const SmallVector<FlexLine, 8>& lines, const Axis& mainAxis,
 								const Axis& crossAxis, const Rectf& containerPadding,
 								const Float containerWidth, const Float containerHeight,
 								const SizePolicy widthPolicy, const SizePolicy heightPolicy ) {
@@ -830,7 +841,7 @@ void FlexLayouter::updateLayout() {
 	measureFlexItems( mainAxis, crossAxis, containerCrossSize, containerWidth, containerHeight,
 					  containerPadding, indefiniteMainSize, indefiniteCrossSize );
 
-	std::vector<FlexLine> lines;
+	SmallVector<FlexLine, 8> lines;
 
 	if ( indefiniteMainSize ) {
 		// Compute container main size from item outer sizes (CSS §9.3)
@@ -877,7 +888,7 @@ void FlexLayouter::computeIntrinsicWidths() {
 
 	Axis mainAxis = getMainAxis( mDirection );
 
-	std::vector<FlexItem> items;
+	SmallVector<FlexItem, 16> items;
 	collectFlexItems( items );
 
 	if ( items.empty() ) {
