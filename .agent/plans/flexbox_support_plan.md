@@ -1091,20 +1091,20 @@ flex layout. Workaround: wrap text in `<span>` or `<div>` elements.
 
 ### Summary of Gaps by Priority
 
-| # | Feature | Priority | Effort |
-|---|---------|----------|--------|
-| G1 | Iterative flex resolution after min/max clamping (§9.7) | **P1** | Medium |
-| G2 | Correct min-intrinsic width for wrap containers (§9.9.1.3) | **P1** | Small |
-| G3 | `visibility: collapse` (§4.4) | P2 | Large |
-| G4 | Cross-axis auto margins (§8.1) | P2 | Medium |
-| G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small |
-| G6 | Percentage margins/paddings (§4.2) | P3 | Small |
-| G7 | Painting order by `order` (§4.3) | P3 | Medium |
-| G8 | Flex container baselines (§8.5) | P3 | Medium |
-| G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small |
-| G10 | Percentage flex-basis resolution (§9.8) | P3 | Small |
-| G11 | Column-reverse stacking context (§4.1) | P3 | Small |
-| G12 | Anonymous flex items (§4) | P3 | Large |
+| # | Feature | Priority | Effort | Status |
+|   |---------|----------|--------|--------|
+| G1 | Iterative flex resolution after min/max clamping (§9.7) | **P1** | Medium | ✅ Done |
+| G2 | Correct min-intrinsic width for wrap containers (§9.9.1.3) | **P1** | Small | ✅ Done |
+| G3 | `visibility: collapse` (§4.4) | P2 | Large | Pending |
+| G4 | Cross-axis auto margins (§8.1) | P2 | Medium | ✅ Done |
+| G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small | ✅ Done |
+| G6 | Percentage margins/paddings (§4.2) | P3 | Small | Pending |
+| G7 | Painting order by `order` (§4.3) | P3 | Medium | Pending |
+| G8 | Flex container baselines (§8.5) | P3 | Medium | Pending |
+| G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | Pending |
+| G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
+| G11 | Column-reverse stacking context (§4.1) | P3 | Small | Pending |
+| G12 | Anonymous flex items (§4) | P3 | Large | Pending |
 
 ### Remaining Phase 12: Route `CSSDisplay::Flex` to FlexLayouter
 
@@ -1139,30 +1139,27 @@ routing to be production-ready.
 The original plan covered Phases 0-12. Phases 0-11 are largely complete with the
 gaps documented above. Here's the updated path forward:
 
-### Immediate (fix correctness bugs)
-1. **G1** — Iterative flex resolution after min/max clamping. Fixes incorrect space
-   distribution when items have min/max constraints.
-2. **G2** — Correct min-intrinsic width for wrap containers. Fixes incorrect
-   container sizing with `flex-wrap: wrap` and `width: auto`.
+### ✅ Done (this session)
+- **G1** — Iterative flex resolution after min/max clamping. Rewrote `resolveFlexibleLengths()` with iterative §9.7 algorithm — saves original flex base sizes, freezes items on min/max violations, redistributes remaining free space to unfrozen items, repeats until stable. Added `FlexItem::frozen` flag.
+- **G2** — Correct min-intrinsic width for wrap containers. Fixed `computeIntrinsicWidths()` to compute largest item min-content contribution + margins + padding instead of returning just `containerPadding`.
+- **G4** — Cross-axis auto margins. Added `FlexItem::hasAutoMarginCrossStart/End` flags; detected and zeroed in `measureFlexItems()`; `alignCrossAxis()` positions items using auto-margin rules (both auto: center, cross-start auto: push to cross-end, cross-end auto: stay at cross-start) before `align-self` applies.
+- **G5** — `overflow` affecting min-width:auto. Added overflow check in `measureFlexItems()`: if item's `overflow` property is not `"visible"`, the automatic minimum size is set to 0 per §4.5.
+- Also fixed missing `min-width`/`min-height` CSS property reading in flex algorithm: `measureFlexItems()` now clamps `item.minMainSize` to any explicit `min-width`/`min-height` from the widget's style.
 
-### Next (fill spec gaps)
-3. **G5** — `overflow` affecting min-width:auto. Important for scroll containers.
-4. **G4** — Cross-axis auto margins. Common CSS pattern (centering).
-5. **G3** — `visibility: collapse`. Full spec feature, large effort but important
-   for dynamic UIs.
-
-### Later (edge cases)
-6. **G8** — Flex container baselines. Only needed for nested baseline alignment.
-7. **G9** — `flex-basis: content` vs `auto`. Minor distinction, rarely used.
-8. **G10** — Percentage flex-basis edge cases.
-9. **G11** — Column-reverse stacking context.
-10. **G6** — Percentage margins/paddings.
-11. **G7** — Painting order by `order`.
+### Next (fill remaining spec gaps)
+- **G3** — `visibility: collapse`. Full spec feature, large effort but important for dynamic UIs.
+- **G8** — Flex container baselines. Only needed for nested baseline alignment.
+- **G9** — `flex-basis: content` vs `auto`. Minor distinction, rarely used.
+- **G10** — Percentage flex-basis edge cases.
+- **G11** — Column-reverse stacking context.
+- **G6** — Percentage margins/paddings.
+- **G7** — Painting order by `order`.
+- **G12** — Anonymous flex items.
 
 ### Final gate
-12. **Route `display: flex` to FlexLayouter** — Implement blockification changes
-    and test with real-world HTML pages (`lobsters_simple.html`, `body_height_miscalculation.html`,
-    etc.). This is the final validation that the RichText integration fix works.
+- **Route `display: flex` to FlexLayouter** — Implement blockification changes
+  and test with real-world HTML pages (`lobsters_simple.html`, `body_height_miscalculation.html`,
+  etc.). This is the final validation that the RichText integration fix works.
 
 ## Limitations Documented For This Implementation
 
@@ -1170,9 +1167,9 @@ gaps documented above. Here's the updated path forward:
    nodes as direct children of flex containers are skipped during item collection. In real
    CSS, bare text generates anonymous flex items; this implementation requires text to be
    wrapped in `<span>` or `<div>` to participate in flex layout.
-2. **`margin: auto` on flex items:** Main-axis auto margins ARE implemented (absorbed before
-   `justify-content`, zeroed during measurement). Cross-axis auto margins are NOT implemented
-   (see gap G4).
+2. **`margin: auto` on flex items:** Main-axis and cross-axis auto margins ARE implemented.
+   Main-axis auto margins absorb free space before `justify-content`. Cross-axis auto margins
+   push items to cross-end (single auto) or center (both cross-start and cross-end auto).
 3. **Baseline alignment accuracy:** `align-items: baseline` positions items at the line's
    cross-start position without computing actual text baselines. True baseline alignment
    requires measuring the first line box's ascent, which needs RichText integration.
@@ -1501,30 +1498,28 @@ in the size write-back; margins are handled as offsets in the positioning logic.
 This matches CSS: `flex-basis` applies to the content box (in the default `box-sizing:
 content-box` model), and the item's total outer size is content + padding + border + margin.
 
-#### `computeIntrinsicWidths()` for Wrap Containers
+#### `computeIntrinsicWidths()` for Wrap Containers (Fixed — G2)
 
-The current implementation of `computeIntrinsicWidths()` for `wrap` containers is
-incomplete. For `nowrap` containers, max-content width = sum of flex bases + gaps.
-For `wrap` containers, max-content width = sum of flex bases on the widest line + gaps.
-Min-content width for `wrap` containers = largest single item's min-content contribution
-(because a line can be as narrow as its widest item).
-
-The current code returns `containerPadding.Left + containerPadding.Right` for min-content
-width of wrap containers, which is incorrect. This should be fixed to:
+The min-content width for wrap containers was fixed in `computeIntrinsicWidths()`.
+For `nowrap` containers, max-content width = sum of flex bases + gaps.
+For `wrap` containers, the min-content width now correctly computes the largest single
+item's min-content contribution + container margins and padding:
 ```cpp
 // For wrap containers, min-content width = largest item min-content width on any line
 Float maxMinContent = 0.f;
 for (auto& item : items) {
-    Float minContent = /* item's min-content main size */;
+    Float minContent = item.getMinIntrinsicWidth();
     maxMinContent = eemax(maxMinContent, minContent);
 }
 mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
 ```
+The fix categorizes items by line (simulating line breaking), and for each line finds
+the largest min-content contribution, then takes the maximum across all lines.
 
 Computing the item's min-content main size requires `getMinIntrinsicWidth()` on the
 item's layouter, which in turn requires the item's cross-size to be set. This creates
-a circular dependency for column-direction containers. A practical approximation is to
-use the item's current pixel size or flex basis as the min-content estimate.
+a circular dependency for column-direction containers. The current implementation
+approximates by measuring at the available container width.
 
 #### Gap Property Parsing: `normal` → `0px`
 

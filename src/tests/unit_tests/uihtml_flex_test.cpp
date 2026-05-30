@@ -1423,3 +1423,90 @@ UTEST( FlexProperties, enumConversions ) {
 	EXPECT_EQ( CSSAlignSelfHelper::fromString( "stretch" ), CSSAlignSelf::Stretch );
 	EXPECT_EQ( CSSAlignSelfHelper::fromString( "center" ), CSSAlignSelf::Center );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 14: Flex Algorithm Bug Fixes (G1, G2, G4, G5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+UTEST( FlexContainer, iterativeFlexResolutionWithMinWidths ) {
+	// G1: When a flex item hits its min-width, remaining free space is
+	// redistributed to other items (iterative §9.7 algorithm).
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	// Three items with flex: 1 1 0% (equal flex-grow, zero base size)
+	UIHTMLWidget* a = UIHTMLWidget::New();
+	a->setParent( flex );
+	a->setPixelsSize( 10, 50 );
+	a->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	a->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 0%" ) );
+
+	UIHTMLWidget* b = UIHTMLWidget::New();
+	b->setParent( flex );
+	b->setPixelsSize( 10, 50 );
+	b->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	b->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 0%" ) );
+
+	// c has min-width:200px, so it should stay at 200 while a and b split
+	// the remaining 300px → 150px each
+	UIHTMLWidget* c = UIHTMLWidget::New();
+	c->setParent( flex );
+	c->setPixelsSize( 10, 50 );
+	c->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	c->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 0%" ) );
+	c->setStyleSheetProperty( StyleSheetProperty( "min-width", "200px" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_NEAR( a->getPixelsSize().getWidth(), 150.f, 5.f );
+	EXPECT_NEAR( b->getPixelsSize().getWidth(), 150.f, 5.f );
+	EXPECT_NEAR( c->getPixelsSize().getWidth(), 200.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, crossAxisAutoMargins ) {
+	// G4: margin: auto on the cross axis should center/position the item
+	// within the line before align-self applies (§8.1).
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// Row-direction flex container with fixed height
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	// Single item with margin-top: auto and margin-bottom: auto
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "margin", "auto" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// With both margin-top and margin-bottom as auto, the item should be
+	// vertically centered. Container is 200px, item is 50px.
+	// Item Y should be (200 - 50) / 2 = 75
+	// (Flex container has no padding in this setup)
+	EXPECT_NEAR( child->getPixelsPosition().y, 75.f, 5.f );
+
+	Engine::destroySingleton();
+}

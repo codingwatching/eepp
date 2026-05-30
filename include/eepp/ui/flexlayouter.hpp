@@ -42,6 +42,9 @@ class EE_API FlexLayouter : public UILayouter {
 
 		Float minMainSize{ 0.f };
 		Float maxMainSize{ std::numeric_limits<Float>::max() };
+		bool frozen{ false };
+		bool hasAutoMarginCrossStart{ false };
+		bool hasAutoMarginCrossEnd{ false };
 
 		FlexItem() :
 			widget( nullptr ),

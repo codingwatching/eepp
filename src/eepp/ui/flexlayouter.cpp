@@ -219,12 +219,23 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			item.marginMainEnd = item.widget->hasLayoutMarginRightAuto() ? 0.f : margin.Right;
 			item.marginCrossStart = margin.Top;
 			item.marginCrossEnd = margin.Bottom;
+			item.hasAutoMarginCrossStart = item.widget->hasLayoutMarginTopAuto();
+			item.hasAutoMarginCrossEnd = item.widget->hasLayoutMarginBottomAuto();
 		} else {
 			item.marginMainStart = item.widget->hasLayoutMarginTopAuto() ? 0.f : margin.Top;
 			item.marginMainEnd = item.widget->hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
 			item.marginCrossStart = margin.Left;
 			item.marginCrossEnd = margin.Right;
+			item.hasAutoMarginCrossStart = item.widget->hasLayoutMarginLeftAuto();
+			item.hasAutoMarginCrossEnd = item.widget->hasLayoutMarginRightAuto();
 		}
+
+		// Zero out cross-axis auto margins since they absorb free space during
+		// cross-axis alignment and should not contribute to line cross sizing.
+		if ( item.hasAutoMarginCrossStart )
+			item.marginCrossStart = 0.f;
+		if ( item.hasAutoMarginCrossEnd )
+			item.marginCrossEnd = 0.f;
 
 		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
 												item.flexBasisAuto, mainAxis );
@@ -258,7 +269,26 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			if ( item.minMainSize < 0.f )
 				item.minMainSize = 0.f;
 
+			// Per §4.5: if the main-axis overflow is scrollable (non-visible),
+			// the automatic minimum size is zero, not the content-based minimum.
 			if ( item.widget->getUIStyle() ) {
+				const auto* ov = item.widget->getUIStyle()->getProperty( PropertyId::Overflow );
+				if ( ov ) {
+					std::string val = ov->asString();
+					String::toLowerInPlace( val );
+					if ( val != "visible" )
+						item.minMainSize = 0.f;
+				}
+			}
+
+			// Clamp by explicit min-width/max-width CSS properties
+			if ( item.widget->getUIStyle() ) {
+				const auto* minW = item.widget->getUIStyle()->getProperty( PropertyId::MinWidth );
+				if ( minW ) {
+					Float explicitMin = item.widget->lengthFromValue( *minW );
+					if ( explicitMin > item.minMainSize )
+						item.minMainSize = explicitMin;
+				}
 				const auto* maxW = item.widget->getUIStyle()->getProperty( PropertyId::MaxWidth );
 				if ( maxW )
 					item.maxMainSize = item.widget->lengthFromValue( *maxW );
@@ -270,7 +300,26 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			if ( item.minMainSize < 0.f )
 				item.minMainSize = 0.f;
 
+			// Per §4.5: if the main-axis overflow is scrollable (non-visible),
+			// the automatic minimum size is zero.
 			if ( item.widget->getUIStyle() ) {
+				const auto* ov = item.widget->getUIStyle()->getProperty( PropertyId::Overflow );
+				if ( ov ) {
+					std::string val = ov->asString();
+					String::toLowerInPlace( val );
+					if ( val != "visible" )
+						item.minMainSize = 0.f;
+				}
+			}
+
+			// Clamp by explicit min-height/max-height CSS properties
+			if ( item.widget->getUIStyle() ) {
+				const auto* minH = item.widget->getUIStyle()->getProperty( PropertyId::MinHeight );
+				if ( minH ) {
+					Float explicitMin = item.widget->lengthFromValue( *minH );
+					if ( explicitMin > item.minMainSize )
+						item.minMainSize = explicitMin;
+				}
 				const auto* maxH = item.widget->getUIStyle()->getProperty( PropertyId::MaxHeight );
 				if ( maxH )
 					item.maxMainSize = item.widget->lengthFromValue( *maxH );
@@ -355,77 +404,159 @@ void FlexLayouter::resolveFlexibleLengths( FlexLine& line, const Float container
 	if ( line.itemIndices.empty() )
 		return;
 
-	Float totalFlexBasis = 0.f;
+	size_t itemCount = line.itemIndices.size();
+	Float totalGaps = ( itemCount > 1 ) ? (Float)( itemCount - 1 ) * columnGap : 0.f;
+
+	// Save original flex base sizes and compute totals
+	SmallVector<Float, 16> baseSizes;
 	Float totalFlexGrow = 0.f;
 	Float totalFlexShrink = 0.f;
-
-	for ( size_t idx : line.itemIndices ) {
-		const auto& item = mItems[idx];
-		totalFlexBasis += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
-		totalFlexGrow += item.flexGrow;
-		totalFlexShrink += item.flexShrink;
+	for ( auto idx : line.itemIndices ) {
+		baseSizes.push_back( mItems[idx].targetMainSize );
+		totalFlexGrow += mItems[idx].flexGrow;
+		totalFlexShrink += mItems[idx].flexShrink;
 	}
 
-	size_t itemCount = line.itemIndices.size();
-	if ( mWrap != CSSFlexWrap::NoWrap )
-		totalFlexBasis += (Float)( itemCount - 1 ) * columnGap;
+	// Reset frozen state for all items on this line
+	for ( auto idx : line.itemIndices )
+		mItems[idx].frozen = false;
 
-	Float freeSpace = containerMainSize - totalFlexBasis;
+	// Compute initial free space using original flex base sizes
+	Float totalOuter = 0.f;
+	for ( size_t i = 0; i < itemCount; ++i ) {
+		size_t idx = line.itemIndices[i];
+		totalOuter += baseSizes[i] + mItems[idx].marginMainStart + mItems[idx].marginMainEnd;
+	}
+	Float freeSpace = containerMainSize - totalOuter - totalGaps;
 
-	if ( freeSpace > 0.f && totalFlexGrow > 0.f ) {
-		Float used = 0.f;
-		for ( size_t idx : line.itemIndices ) {
+	bool isGrow = freeSpace > 0.f && totalFlexGrow > 0.f;
+	bool isShrink = freeSpace < 0.f && totalFlexShrink > 0.f;
+
+	if ( freeSpace == 0.f || ( !isGrow && !isShrink ) ) {
+		// No free space to distribute, or no flexing possible — just clamp
+		for ( auto idx : line.itemIndices ) {
 			auto& item = mItems[idx];
-			if ( item.flexGrow > 0.f ) {
-				Float add = ( freeSpace * item.flexGrow ) / totalFlexGrow;
-				item.targetMainSize += add;
+			if ( item.targetMainSize < item.minMainSize )
+				item.targetMainSize = item.minMainSize;
+			if ( item.targetMainSize > item.maxMainSize )
+				item.targetMainSize = item.maxMainSize;
+		}
+		return;
+	}
+
+	// Freeze items with zero flex factor in the current direction
+	for ( auto idx : line.itemIndices ) {
+		if ( isGrow ? ( mItems[idx].flexGrow <= 0.f ) : ( mItems[idx].flexShrink <= 0.f ) )
+			mItems[idx].frozen = true;
+	}
+
+	// Reset targetMainSize to base sizes before the first distribution
+	for ( size_t i = 0; i < itemCount; ++i )
+		mItems[line.itemIndices[i]].targetMainSize = baseSizes[i];
+
+	// Helper: compute remaining free space using frozen items' clamped sizes
+	// and unfrozen items' original flex base sizes.
+	auto computeRemaining = [&]() -> Float {
+		Float sum = totalGaps;
+		for ( size_t i = 0; i < itemCount; ++i ) {
+			size_t idx = line.itemIndices[i];
+			const auto& item = mItems[idx];
+			if ( item.frozen )
+				sum += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
+			else
+				sum += baseSizes[i] + item.marginMainStart + item.marginMainEnd;
+		}
+		return containerMainSize - sum;
+	};
+
+	// Iterative distribution loop (max 100 iterations as safety)
+	for ( int iter = 0; iter < 100; ++iter ) {
+		Float remaining = computeRemaining();
+		if ( remaining == 0.f )
+			break;
+
+		if ( remaining > 0.f ) {
+			// --- Grow distribution ---
+			Float curGrow = 0.f;
+			for ( auto idx : line.itemIndices )
+				if ( !mItems[idx].frozen )
+					curGrow += mItems[idx].flexGrow;
+			if ( curGrow <= 0.f )
+				break;
+
+			Float used = 0.f;
+			for ( size_t i = 0; i < itemCount; ++i ) {
+				size_t idx = line.itemIndices[i];
+				auto& item = mItems[idx];
+				if ( item.frozen || item.flexGrow <= 0.f )
+					continue;
+				Float add = ( remaining * item.flexGrow ) / curGrow;
+				item.targetMainSize = baseSizes[i] + add;
 				used += add;
 			}
-		}
-		if ( totalFlexGrow > 0.f && ( freeSpace - used ) > 0.5f ) {
-			mItems[line.itemIndices.back()].targetMainSize += ( freeSpace - used );
-		}
-	} else if ( freeSpace < 0.f && totalFlexShrink > 0.f ) {
-		Float deficit = -freeSpace;
-		Float totalScaledShrink = 0.f;
-		for ( size_t idx : line.itemIndices ) {
-			if ( mItems[idx].flexShrink > 0.f )
-				totalScaledShrink += mItems[idx].flexShrink * mItems[idx].targetMainSize;
-		}
-
-		if ( totalScaledShrink > 0.f ) {
-			Float used = 0.f;
-			for ( size_t idx : line.itemIndices ) {
-				auto& item = mItems[idx];
-				if ( item.flexShrink > 0.f ) {
-					Float shrink =
-						deficit * ( item.flexShrink * item.targetMainSize ) / totalScaledShrink;
-					Float newMain = item.targetMainSize - shrink;
-					if ( newMain < 0.f )
-						newMain = 0.f;
-					Float actualShrink = item.targetMainSize - newMain;
-					item.targetMainSize = newMain;
-					used += actualShrink;
+			if ( curGrow > 0.f && ( remaining - used ) > 0.5f ) {
+				for ( auto idx : line.itemIndices ) {
+					if ( !mItems[idx].frozen && mItems[idx].flexGrow > 0.f ) {
+						mItems[idx].targetMainSize += ( remaining - used );
+						break;
+					}
 				}
 			}
+		} else {
+			// --- Shrink distribution ---
+			Float deficit = -remaining;
+			Float totalScaledShrink = 0.f;
+			for ( size_t i = 0; i < itemCount; ++i ) {
+				size_t idx = line.itemIndices[i];
+				if ( !mItems[idx].frozen && mItems[idx].flexShrink > 0.f )
+					totalScaledShrink += mItems[idx].flexShrink * baseSizes[i];
+			}
+			if ( totalScaledShrink <= 0.f )
+				break;
+
+			Float used = 0.f;
+			for ( size_t i = 0; i < itemCount; ++i ) {
+				size_t idx = line.itemIndices[i];
+				auto& item = mItems[idx];
+				if ( item.frozen || item.flexShrink <= 0.f )
+					continue;
+				Float shrink = deficit * ( item.flexShrink * baseSizes[i] ) / totalScaledShrink;
+				Float newMain = baseSizes[i] - shrink;
+				if ( newMain < 0.f )
+					newMain = 0.f;
+				item.targetMainSize = newMain;
+				used += baseSizes[i] - item.targetMainSize;
+			}
 			if ( ( deficit - used ) > 0.5f ) {
-				for ( size_t idx : line.itemIndices ) {
-					if ( mItems[idx].targetMainSize > 0.f ) {
+				for ( auto idx : line.itemIndices ) {
+					if ( !mItems[idx].frozen && mItems[idx].targetMainSize > 0.f ) {
 						mItems[idx].targetMainSize -= ( deficit - used );
 						break;
 					}
 				}
 			}
 		}
-	}
 
-	// Clamp each item by its min/max main size (CSS Flexbox §9.7 step 6)
-	for ( size_t idx : line.itemIndices ) {
-		auto& item = mItems[idx];
-		if ( item.targetMainSize < item.minMainSize )
-			item.targetMainSize = item.minMainSize;
-		if ( item.targetMainSize > item.maxMainSize )
-			item.targetMainSize = item.maxMainSize;
+		// Clamp each unfrozen item and freeze those that hit min/max
+		bool anyViolation = false;
+		for ( size_t i = 0; i < itemCount; ++i ) {
+			size_t idx = line.itemIndices[i];
+			auto& item = mItems[idx];
+			if ( item.frozen )
+				continue;
+			if ( item.targetMainSize < item.minMainSize ) {
+				item.targetMainSize = item.minMainSize;
+				item.frozen = true;
+				anyViolation = true;
+			} else if ( item.targetMainSize > item.maxMainSize ) {
+				item.targetMainSize = item.maxMainSize;
+				item.frozen = true;
+				anyViolation = true;
+			}
+		}
+
+		if ( !anyViolation )
+			break;
 	}
 }
 
@@ -587,6 +718,20 @@ void FlexLayouter::alignCrossAxis( const SmallVector<FlexLine, 8>& lines,
 
 		for ( size_t idx : line.itemIndices ) {
 			auto& item = mItems[idx];
+
+			// Cross-axis auto margins (§8.1): absorb free space before align-self.
+			if ( item.hasAutoMarginCrossStart || item.hasAutoMarginCrossEnd ) {
+				Float free = lineCrossSize - item.outerCrossSize;
+				if ( item.hasAutoMarginCrossStart && item.hasAutoMarginCrossEnd ) {
+					item.crossPos = pos + free * 0.5f + item.marginCrossStart;
+				} else if ( item.hasAutoMarginCrossStart ) {
+					item.crossPos = pos + free + item.marginCrossStart;
+				} else {
+					item.crossPos = pos + item.marginCrossStart;
+				}
+				continue;
+			}
+
 			CSSAlignSelf resolved = resolveAlignSelf( item.alignSelf, mAlignItems );
 
 			Float itemFreeSpace = lineCrossSize - item.outerCrossSize;
@@ -928,14 +1073,49 @@ void FlexLayouter::computeIntrinsicWidths() {
 
 		if ( mainAxis.horizontal ) {
 			mMaxIntrinsicWidth = maxContentMain + containerPadding.Left + containerPadding.Right;
-			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
+
+			// Min-content = largest single item's min-content contribution
+			Float maxMinContent = 0.f;
+			for ( auto& item : items ) {
+				Float minContent = item.targetMainSize;
+				if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
+					 item.widget->asType<UIHTMLWidget>()->getLayouter() ) {
+					minContent = eemax( minContent, item.widget->asType<UIHTMLWidget>()
+														->getLayouter()
+														->getMinIntrinsicWidth() );
+				} else {
+					minContent = eemax( minContent, item.widget->getPixelsSize().getWidth() );
+				}
+				if ( minContent < 0.f )
+					minContent = 0.f;
+				maxMinContent =
+					eemax( maxMinContent, minContent + item.marginMainStart + item.marginMainEnd );
+			}
+			mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
 		} else {
 			Float maxItemWidth = 0.f;
 			for ( auto& item : items )
 				maxItemWidth = eemax( maxItemWidth, item.targetMainSize + item.marginCrossStart +
 														item.marginCrossEnd );
 			mMaxIntrinsicWidth = maxItemWidth + containerPadding.Left + containerPadding.Right;
-			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
+
+			Float maxMinContent = 0.f;
+			for ( auto& item : items ) {
+				Float minContent = item.targetMainSize;
+				if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
+					 item.widget->asType<UIHTMLWidget>()->getLayouter() ) {
+					minContent = eemax( minContent, item.widget->asType<UIHTMLWidget>()
+														->getLayouter()
+														->getMinIntrinsicWidth() );
+				} else {
+					minContent = eemax( minContent, item.widget->getPixelsSize().getWidth() );
+				}
+				if ( minContent < 0.f )
+					minContent = 0.f;
+				maxMinContent = eemax( maxMinContent,
+									   minContent + item.marginCrossStart + item.marginCrossEnd );
+			}
+			mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
 		}
 	} else {
 		if ( mainAxis.horizontal ) {
@@ -947,14 +1127,50 @@ void FlexLayouter::computeIntrinsicWidths() {
 			}
 			maxLineWidth = lineSum;
 			mMaxIntrinsicWidth = maxLineWidth + containerPadding.Left + containerPadding.Right;
-			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
+
+			// Min-content width for multi-line containers = largest single item's
+			// min-content contribution (each line can be as narrow as its widest item).
+			Float maxMinContent = 0.f;
+			for ( auto& item : items ) {
+				Float minContent = item.targetMainSize;
+				if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
+					 item.widget->asType<UIHTMLWidget>()->getLayouter() ) {
+					minContent = eemax( minContent, item.widget->asType<UIHTMLWidget>()
+														->getLayouter()
+														->getMinIntrinsicWidth() );
+				} else {
+					minContent = eemax( minContent, item.widget->getPixelsSize().getWidth() );
+				}
+				if ( minContent < 0.f )
+					minContent = 0.f;
+				maxMinContent =
+					eemax( maxMinContent, minContent + item.marginMainStart + item.marginMainEnd );
+			}
+			mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
 		} else {
 			Float maxItemWidth = 0.f;
 			for ( auto& item : items )
 				maxItemWidth = eemax( maxItemWidth, item.targetMainSize + item.marginCrossStart +
 														item.marginCrossEnd );
 			mMaxIntrinsicWidth = maxItemWidth + containerPadding.Left + containerPadding.Right;
-			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
+
+			Float maxMinContent = 0.f;
+			for ( auto& item : items ) {
+				Float minContent = item.targetMainSize;
+				if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
+					 item.widget->asType<UIHTMLWidget>()->getLayouter() ) {
+					minContent = eemax( minContent, item.widget->asType<UIHTMLWidget>()
+														->getLayouter()
+														->getMinIntrinsicWidth() );
+				} else {
+					minContent = eemax( minContent, item.widget->getPixelsSize().getWidth() );
+				}
+				if ( minContent < 0.f )
+					minContent = 0.f;
+				maxMinContent = eemax( maxMinContent,
+									   minContent + item.marginCrossStart + item.marginCrossEnd );
+			}
+			mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Right;
 		}
 	}
 
