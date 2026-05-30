@@ -1609,7 +1609,8 @@ UTEST( FlexContainer, anonymousTextNodeWrapping ) {
 	// Long text that should wrap within the 100px-wide flex container
 	UITextNode* textNode = UITextNode::New();
 	textNode->setParent( flex );
-	textNode->setText( "This is a very long text that should wrap to multiple lines inside the narrow flex container." );
+	textNode->setText( "This is a very long text that should wrap to multiple lines inside the "
+					   "narrow flex container." );
 
 	sceneNode->updateDirtyLayouts();
 
@@ -1620,6 +1621,91 @@ UTEST( FlexContainer, anonymousTextNodeWrapping ) {
 	EXPECT_TRUE( textNode->getPixelsSize().getWidth() > 0.f );
 	EXPECT_TRUE( textNode->getPixelsSize().getHeight() >= fontHeight * 2.f );
 	EXPECT_TRUE( textNode->getPixelsSize().getWidth() <= 100.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, visibilityCollapsePreservesCrossSize ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	// First item — normal, 100x50
+	UIRichText* item1 = UIRichText::NewDiv();
+	item1->setParent( flex );
+	item1->setPixelsSize( 100, 50 );
+	item1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	// Second item — visibility:collapse, 100x80
+	UIRichText* item2 = UIRichText::NewDiv();
+	item2->setParent( flex );
+	item2->setPixelsSize( 100, 80 );
+	item2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	item2->applyProperty( StyleSheetProperty( "visibility", "collapse" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Collapsed item should have 0 width (main axis for row)
+	EXPECT_EQ( item2->getPixelsSize().getWidth(), 0.f );
+	// Container cross size should be at least the taller item's height (80px from item2)
+	EXPECT_GE( flex->getPixelsSize().getHeight(), 80.f );
+	// First item should still be positioned normally at the start
+	EXPECT_EQ( item1->getPixelsPosition().x, 0.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, visibilityCollapseWithTextNode ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "14dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	// Normal text node
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "Normal text" );
+
+	UIHTMLWidget* collapsedDiv = UIRichText::NewDiv();
+	collapsedDiv->setParent( flex );
+	collapsedDiv->setPixelsSize( 200, 50 );
+	collapsedDiv->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	collapsedDiv->applyProperty( StyleSheetProperty( "visibility", "collapse" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Normal text node should have positive size
+	EXPECT_TRUE( textNode->getPixelsSize().getWidth() > 0.f );
+	EXPECT_TRUE( textNode->getPixelsSize().getHeight() > 0.f );
+	// Collapsed div should have 0 width (main axis for row)
+	EXPECT_EQ( collapsedDiv->getPixelsSize().getWidth(), 0.f );
+	// Collapsed div has 0 cross size (setPixelsSize(0,0) was called)
+	EXPECT_EQ( collapsedDiv->getPixelsSize().getHeight(), 0.f );
+	// Normal text node is first, so x should be 0
+	EXPECT_EQ( textNode->getPixelsPosition().x, 0.f );
+	// Collapsed div should be after text node (no additional gap)
+	EXPECT_EQ( collapsedDiv->getPixelsPosition().x, textNode->getPixelsSize().getWidth() );
 
 	Engine::destroySingleton();
 }

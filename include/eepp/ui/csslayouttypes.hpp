@@ -162,6 +162,13 @@ struct EE_API CSSBaselineAlignmentHelper {
 	static CSSBaselineAlignValue fromKeyword( std::string_view val );
 };
 
+enum class CSSVisibility { Visible, Hidden, Collapse };
+
+struct EE_API CSSVisibilityHelper {
+	static std::string toString( CSSVisibility val );
+	static CSSVisibility fromString( std::string_view val );
+};
+
 }} // namespace EE::UI
 
 #endif

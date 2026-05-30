@@ -132,6 +132,17 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 	}
 }
 
+bool UIHTMLWidget::isFlex() const {
+	return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex;
+}
+
+void UIHTMLWidget::setVisibility( CSSVisibility val ) {
+	if ( mVisibility != val ) {
+		mVisibility = val;
+		setVisible( val != CSSVisibility::Hidden );
+	}
+}
+
 void UIHTMLWidget::setCSSPosition( CSSPosition position ) {
 	if ( mPosition != position ) {
 		mPosition = position;
@@ -396,6 +407,10 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::Clear: {
 			setCSSClear( CSSClearHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::Visibility: {
+			setVisibility( CSSVisibilityHelper::fromString( attribute.asString() ) );
 			return true;
 		}
 		case PropertyId::Overflow: {

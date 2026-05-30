@@ -47,9 +47,9 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	CSSDisplay getDisplay() const { return mDisplay; }
 
-	bool isFlex() const { return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex; }
-
 	void setDisplay( CSSDisplay display );
+
+	bool isFlex() const;
 
 	CSSPosition getCSSPosition() const { return mPosition; }
 
@@ -112,6 +112,9 @@ class EE_API UIHTMLWidget : public UILayout {
 		return mFlexState ? mFlexState->alignSelf : CSSAlignSelf::Auto;
 	}
 	void setAlignSelf( CSSAlignSelf val );
+
+	CSSVisibility getVisibility() const { return mVisibility; }
+	void setVisibility( CSSVisibility val );
 
 	Float getFlexGrow() const { return mFlexState ? mFlexState->flexGrow : 0.f; }
 	void setFlexGrow( Float val );
@@ -198,6 +201,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	CSSFloat mFloat{ CSSFloat::None };
 	CSSClear mClear{ CSSClear::None };
 	CSSBaselineAlignValue mBaselineAlign;
+	CSSVisibility mVisibility{ CSSVisibility::Visible };
 	std::string mTopEq{ "auto" };
 	std::string mRightEq{ "auto" };
 	std::string mBottomEq{ "auto" };

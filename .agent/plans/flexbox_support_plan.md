@@ -949,16 +949,24 @@ mMinIntrinsicWidth = maxMinContent + containerPadding.Left + containerPadding.Ri
 
 ### G3: `visibility: collapse` on flex items (§4.4) — P2
 
-**Status:** Not implemented. No references to `collapse` in flex layouter code.
+**Status:** Implemented. `visibility: collapse` flex items are detected and handled:
+- In `collectFlexItems()`: `UIHTMLWidget::getVisibility()` returns a new `CSSVisibility` enum
+  (`Visible`/`Hidden`/`Collapse`). Collapsed items are collected even though `isVisible()`
+  returns false for the `collapse` value.
+- In `measureFlexItems()`: collapsed items get `targetMainSize=0`, `minMainSize=0`,
+  `maxMainSize=0`, `flexGrow=0`, `flexShrink=0`, and margins zeroed on the main axis.
+  The cross size is saved to `savedCrossSize` before zeroing, so the line cross size
+  still accounts for the collapsed item.
+- In `resolveCrossSizes()`: collapsed items are skipped during main-size setting and
+  text-node wrapping. Their `crossSize` uses `savedCrossSize` instead of `getItemCrossSize()`.
+- In `applyLayout()`: collapsed items are positioned (to preserve layout flow) but sized 0×0.
+- `CSSVisibility` enum + helper (`CSSVisibilityHelper`) added in `csslayouttypes.hpp`.
+- `UIHTMLWidget::applyProperty()` handles `PropertyId::Visibility` via `setVisibility()`.
+- `UIWidget::applyProperty()` keeps the original `setVisible()` logic (collapse → visible).
 
-**Impact:** `visibility: collapse` is a flexbox-specific feature that hides items while
-preserving cross-axis space (for single-line containers) so the layout doesn't "wobble".
-
-**Fix:**
-1. In `collectFlexItems()`, detect `visibility: collapse` items (check widget style).
-2. Run flex layout twice: first pass uncollapsed to compute line cross sizes, second
-   pass with collapsed items replaced by struts preserving the original line cross size.
-3. In `applyLayout()`, set collapsed items to invisible (zero size or skip rendering).
+**Impact:** `visibility: collapse` is now fully supported for flex items. The cross size of
+the flex line is preserved, so collapsing/expanding items doesn't change the container's
+cross size. The collapsed item is invisible (zero sized) but maintains its position in flow.
 
 ### G4: Cross-axis auto margins (§8.1) — P2
 
@@ -1116,7 +1124,7 @@ with `setMaxWrapWidth()` (see anchor below for full details).
 |   |---------|----------|--------|--------|
 | G1 | Iterative flex resolution after min/max clamping (§9.7) | **P1** | Medium | ✅ Done |
 | G2 | Correct min-intrinsic width for wrap containers (§9.9.1.3) | **P1** | Small | ✅ Done |
-| G3 | `visibility: collapse` (§4.4) | P2 | Large | Pending |
+| G3 | `visibility: collapse` (§4.4) | P2 | Large | ✅ Done |
 | G4 | Cross-axis auto margins (§8.1) | P2 | Medium | ✅ Done |
 | G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small | ✅ Done |
 | G6 | Percentage margins/paddings (§4.2) | P3 | Small | Pending |
@@ -1168,10 +1176,10 @@ gaps documented above. Here's the updated path forward:
 - **G5** — `overflow` affecting min-width:auto. Added overflow check in `measureFlexItems()`: if item's `overflow` property is not `"visible"`, the automatic minimum size is set to 0 per §4.5.
 - Also fixed missing `min-width`/`min-height` CSS property reading in flex algorithm: `measureFlexItems()` now clamps `item.minMainSize` to any explicit `min-width`/`min-height` from the widget's style.
 - **G12** — Anonymous flex items from bare text nodes. Text node children of flex containers are now collected as flex items. `resolveFlexBasis()` measures text content width for `flex-basis: auto`. `measureFlexItems()` sets cross size (font height) and `minMainSize`. `resolveCrossSizes()` configures wrapped Text measurement and sets cross size to wrapped height. `UITextNode::draw()` renders at the flex-assigned position.
-- **G13** — Anonymous flex item text wrapping. Uses a cached `Graphics::Text` value member on `UITextNode` with `setLineWrapMode(Word)` and `setMaxWrapWidth()`. Configured in `resolveCrossSizes()`; rendered in `draw()`. `minMainSize` set to 0 for text nodes to allow flex-shrink below full text width.
+- **G13** — Anonymous flex item text wrapping. Uses a `Text*` (`mFlexText`) on `UITextNode` with `setLineWrapMode(Word)` and `setMaxWrapWidth()`. Configured in `resolveCrossSizes()`; rendered in `draw()`. `minMainSize` set to 0 for text nodes to allow flex-shrink below full text width.
+- **G3** — `visibility: collapse` on flex items. Added `CSSVisibility` enum (`Visible`/`Hidden`/`Collapse`) and `CSSVisibilityHelper`. `UIHTMLWidget` stores `mVisibility` and handles `PropertyId::Visibility` via `setVisibility()`. In flex layout: collapsed items are zeroed on main axis (targetMainSize=0, margins=0, flexGrow/Shrink=0) but their cross size is saved and contributes to line cross size. They are positioned at flow position with 0×0 size.
 
 ### Next (fill remaining spec gaps)
-- **G3** — `visibility: collapse`. Full spec feature, large effort but important for dynamic UIs.
 - **G8** — Flex container baselines. Only needed for nested baseline alignment.
 - **G9** — `flex-basis: content` vs `auto`. Minor distinction, rarely used.
 - **G10** — Percentage flex-basis edge cases.

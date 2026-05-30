@@ -444,4 +444,24 @@ CSSAlignSelf CSSAlignSelfHelper::fromString( std::string_view val ) {
 	return CSSAlignSelf::Auto;
 }
 
+std::string CSSVisibilityHelper::toString( CSSVisibility val ) {
+	switch ( val ) {
+		case CSSVisibility::Visible:
+			return "visible";
+		case CSSVisibility::Hidden:
+			return "hidden";
+		case CSSVisibility::Collapse:
+			return "collapse";
+	}
+	return "visible";
+}
+
+CSSVisibility CSSVisibilityHelper::fromString( std::string_view val ) {
+	if ( val == "hidden" )
+		return CSSVisibility::Hidden;
+	if ( val == "collapse" )
+		return CSSVisibility::Collapse;
+	return CSSVisibility::Visible;
+}
+
 }} // namespace EE::UI

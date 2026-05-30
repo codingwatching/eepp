@@ -24,7 +24,22 @@ void FlexLayouter::collectFlexItems( SmallVector<FlexItem, 16>& items ) {
 
 		UIWidget* widget = child->asType<UIWidget>();
 
-		if ( !widget->isVisible() ) {
+		// Check for visibility:collapse before the isVisible() test,
+		// since isVisible() returns false for both hidden and collapse.
+		bool isCollapsed = false;
+		if ( widget->isType( UI_TYPE_HTML_WIDGET ) ) {
+			isCollapsed =
+				widget->asType<UIHTMLWidget>()->getVisibility() == CSSVisibility::Collapse;
+		} else {
+			// Non-HTML widgets (e.g. UITextNode): check via style property
+			if ( widget->getUIStyle() ) {
+				const auto* visProp = widget->getUIStyle()->getProperty( PropertyId::Visibility );
+				if ( visProp )
+					isCollapsed = String::iequals( visProp->value(), "collapse" );
+			}
+		}
+
+		if ( !widget->isVisible() && !isCollapsed ) {
 			child = child->getNextNode();
 			continue;
 		}
@@ -48,6 +63,7 @@ void FlexLayouter::collectFlexItems( SmallVector<FlexItem, 16>& items ) {
 
 		FlexItem item;
 		item.widget = widget;
+		item.collapsed = isCollapsed;
 		readItemStyle( widget, item );
 
 		items.push_back( item );
@@ -408,6 +424,19 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 					item.maxMainSize = std::numeric_limits<Float>::max();
 			}
 		}
+
+		// For collapsed items: zero out main-axis sizes, save cross size
+		if ( item.collapsed ) {
+			item.savedCrossSize = getItemCrossSize( item.widget, crossAxis );
+			item.targetMainSize = 0.f;
+			item.minMainSize = 0.f;
+			item.maxMainSize = 0.f;
+			item.flexGrow = 0.f;
+			item.flexShrink = 0.f;
+			item.marginMainStart = 0.f;
+			item.marginMainEnd = 0.f;
+			item.widget->setPixelsSize( 0, 0 );
+		}
 	}
 }
 
@@ -708,8 +737,11 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 
 	// Set each item's main-axis size to its resolved targetMainSize so that
 	// getItemCrossSize reflects the correct cross size for the final width.
+	// Skip collapsed items — their targetMainSize is 0 and we use savedCrossSize.
 	for ( size_t idx : line.itemIndices ) {
 		auto& item = mItems[idx];
+		if ( item.collapsed )
+			continue;
 		if ( mainAxis.horizontal )
 			item.widget->setInternalPixelsWidth( item.targetMainSize );
 		else
@@ -726,15 +758,17 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 	// the resolved main size and use it as the cross size.
 	for ( size_t idx : line.itemIndices ) {
 		auto& item = mItems[idx];
+		if ( item.collapsed )
+			continue;
 		if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
 			auto* textNode = item.widget->asType<UITextNode>();
 			if ( !textNode->getText().empty() ) {
 				FontStyleConfig fontConfig;
 				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
-					Graphics::Text& flexText = textNode->getFlexText();
-					flexText.setStyleConfig( fontConfig );
-					flexText.setString( textNode->getText() );
-					flexText.setLineWrapMode( LineWrapMode::Word );
+					Text* flexText = textNode->getFlexText();
+					flexText->setStyleConfig( fontConfig );
+					flexText->setString( textNode->getText() );
+					flexText->setLineWrapMode( LineWrapMode::Word );
 					Float maxWidth;
 					if ( mainAxis.horizontal ) {
 						maxWidth = item.targetMainSize;
@@ -744,9 +778,9 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 					}
 					if ( maxWidth <= 0.f )
 						maxWidth = 10000.f;
-					flexText.setMaxWrapWidth( maxWidth );
+					flexText->setMaxWrapWidth( maxWidth );
 					if ( mainAxis.horizontal ) {
-						Float wrappedHeight = flexText.getTextHeight();
+						Float wrappedHeight = flexText->getTextHeight();
 						if ( wrappedHeight <= 0.f )
 							wrappedHeight =
 								(Float)fontConfig.Font->getFontHeight( fontConfig.CharacterSize );
@@ -760,7 +794,11 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 	Float maxCross = 0.f;
 	for ( size_t idx : line.itemIndices ) {
 		auto& item = mItems[idx];
-		item.crossSize = getItemCrossSize( item.widget, crossAxis );
+		if ( item.collapsed ) {
+			item.crossSize = item.savedCrossSize;
+		} else {
+			item.crossSize = getItemCrossSize( item.widget, crossAxis );
+		}
 		item.outerCrossSize = item.crossSize + item.marginCrossStart + item.marginCrossEnd;
 		maxCross = eemax( maxCross, item.outerCrossSize );
 	}
@@ -894,6 +932,23 @@ void FlexLayouter::applyLayout( const SmallVector<FlexLine, 8>& lines, const Axi
 	for ( const auto& line : lines ) {
 		for ( size_t idx : line.itemIndices ) {
 			auto& item = mItems[idx];
+			if ( item.collapsed ) {
+				// Position collapsed items but give them zero size
+				if ( mainAxis.horizontal ) {
+					Float x = mainAxis.reversed
+								  ? containerWidth - containerPadding.Right - item.mainPos
+								  : containerPadding.Left + item.mainPos;
+					Float y = containerPadding.Top + item.crossPos;
+					item.widget->setPixelsPosition( x, y );
+				} else {
+					Float y = mainAxis.reversed
+								  ? containerHeight - containerPadding.Bottom - item.mainPos
+								  : containerPadding.Top + item.mainPos;
+					Float x = containerPadding.Left + item.crossPos;
+					item.widget->setPixelsPosition( x, y );
+				}
+				continue;
+			}
 			Float widgetX, widgetY, widgetW, widgetH;
 
 			if ( mainAxis.horizontal ) {
@@ -1183,6 +1238,15 @@ void FlexLayouter::computeIntrinsicWidths() {
 		mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
 		mIntrinsicWidthsDirty = false;
 		return;
+	}
+
+	// Zero out collapsed items so they don't contribute to intrinsic sizing
+	for ( auto& item : items ) {
+		if ( item.collapsed ) {
+			item.targetMainSize = 0.f;
+			item.marginMainStart = 0.f;
+			item.marginMainEnd = 0.f;
+		}
 	}
 
 	for ( auto& item : items ) {

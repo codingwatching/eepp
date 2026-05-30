@@ -33,12 +33,12 @@ class EE_API UITextNode : public UIWidget {
 
 	void setLayoutCharCount( size_t count ) { mLayoutCharCount = count; }
 
-	Graphics::Text& getFlexText() { return mFlexText; }
+	Text* getFlexText();
 
   protected:
 	String mText;
 	size_t mLayoutCharCount{ 0 };
-	Graphics::Text mFlexText;
+	Text* mFlexText{ nullptr };
 
 	UITextNode();
 };

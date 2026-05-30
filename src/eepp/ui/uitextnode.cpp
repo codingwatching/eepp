@@ -15,7 +15,9 @@ UITextNode::UITextNode() : UIWidget( "textnode" ) {
 	mFlags |= UI_HTML_ELEMENT;
 }
 
-UITextNode::~UITextNode() {}
+UITextNode::~UITextNode() {
+	eeSAFE_DELETE( mFlexText );
+}
 
 Uint32 UITextNode::getType() const {
 	return UI_TYPE_TEXTNODE;
@@ -33,12 +35,13 @@ void UITextNode::draw() {
 	bool isFlexItem =
 		parent && parent->isType( UI_TYPE_HTML_WIDGET ) && parent->asType<UIHTMLWidget>()->isFlex();
 	if ( isFlexItem ) {
-		if ( mFlexText.getFont() ) {
-			mFlexText.setMaxWrapWidth( getPixelsSize().getWidth() );
+		Text* flexText = getFlexText();
+		if ( flexText->getFont() ) {
+			flexText->setMaxWrapWidth( getPixelsSize().getWidth() );
 			Float alpha = getAlpha();
-			if ( alpha < 1.f )
-				mFlexText.setAlpha( (Uint8)( 255.f * alpha ) );
-			mFlexText.draw( mScreenPos.x, mScreenPos.y );
+			if ( alpha != 255.f )
+				flexText->setAlpha( (Uint8)( 255.f * alpha ) );
+			flexText->draw( mScreenPos.x, mScreenPos.y );
 		} else {
 			// Fallback: Text not yet configured by flex layouter — draw single-line
 			Node* n = parent;
@@ -107,6 +110,12 @@ bool UITextNode::isWhitespaceOnly() const {
 			return false;
 	}
 	return true;
+}
+
+Text* UITextNode::getFlexText() {
+	if ( mFlexText == nullptr )
+		mFlexText = Text::New();
+	return mFlexText;
 }
 
 }} // namespace EE::UI

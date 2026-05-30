@@ -45,6 +45,8 @@ class EE_API FlexLayouter : public UILayouter {
 		bool frozen{ false };
 		bool hasAutoMarginCrossStart{ false };
 		bool hasAutoMarginCrossEnd{ false };
+		bool collapsed{ false };
+		Float savedCrossSize{ 0.f };
 
 		FlexItem() :
 			widget( nullptr ),
@@ -60,7 +62,9 @@ class EE_API FlexLayouter : public UILayouter {
 			targetMainSize( 0.f ),
 			crossSize( 0.f ),
 			mainPos( 0.f ),
-			crossPos( 0.f ) {}
+			crossPos( 0.f ),
+			collapsed( false ),
+			savedCrossSize( 0.f ) {}
 	};
 
 	struct FlexLine {
