@@ -1080,14 +1080,35 @@ adjusting the stacking context.
 **Impact:** Only visual; items in a column-reverse container may not paint in the
 expected order when they overlap.
 
-### G12: Anonymous flex items from bare text nodes (§4) — P3
+### G12: Anonymous flex items from bare text nodes (§4) — P1
 
-**Status:** Not implemented. Text sequences between flex item elements should wrap
-in anonymous block flex items. Our `collectFlexItems()` skips `UITextNode` whitespace
-but does not create anonymous wrappers for non-whitespace text.
+**Status:** Partially implemented. Text node children of flex containers are now
+collected as flex items, sized with single-line text width (`resolveFlexBasis`),
+and rendered at their flex-assigned position (`UITextNode::draw()`). However,
+multi-line word wrapping is not yet supported — text that overflows the allocated
+main size is clipped/truncated rather than wrapped.
 
-**Impact:** Bare text as direct children of flex containers doesn't participate in
-flex layout. Workaround: wrap text in `<span>` or `<div>` elements.
+**Impact:** Simple single-line text in flex containers works correctly. Multi-line
+text or text that needs wrapping within a constrained flex item does not wrap.
+Workaround: wrap multi-line text in `<span>` or `<div>` elements.
+
+### G13: Anonymous flex item text wrapping (§4, §9.9) — P1
+
+**Status:** Implemented. When a `UITextNode` flex item is allocated a main
+size smaller than its natural text width, the text wraps to multiple lines
+and the cross size grows to accommodate the wrapped height. Uses a cached
+`Graphics::Text` instance on `UITextNode` with `setLineWrapMode(Word)` and
+`setMaxWrapWidth()` configured during `resolveCrossSizes()`. The `Text` object
+is also used in `UITextNode::draw()` for multi-line rendering.
+
+**Implementation approach:** Option C from the investigation — `Text` instance
+with `setMaxWrapWidth()` (see anchor below for full details).
+
+**Changes:**
+- `uitextnode.hpp` — Added `Graphics::Text mFlexText` value member, `getFlexText()` public accessor
+- `uitextnode.cpp` — `draw()` uses `mFlexText` with `setMaxWrapWidth()` when parent is flex
+- `flexlayouter.cpp` — `resolveCrossSizes()` configures `mFlexText` with font, text, `LineWrapMode::Word`, `setMaxWrapWidth(targetMainSize)`, reads `getTextHeight()` for cross size
+- `flexlayouter.cpp` — `measureFlexItems()` sets `minMainSize = 0` for text nodes so `flex-shrink` can reduce width below full text length, enabling wrapping
 
 ### Summary of Gaps by Priority
 
@@ -1104,7 +1125,8 @@ flex layout. Workaround: wrap text in `<span>` or `<div>` elements.
 | G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | Pending |
 | G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
 | G11 | Column-reverse stacking context (§4.1) | P3 | Small | Pending |
-| G12 | Anonymous flex items (§4) | P3 | Large | Pending |
+| G12 | Anonymous flex items (§4) — single-line + wrapping | **P1** | Large | ✅ Done |
+| G13 | Anonymous flex item text wrapping (§4, §9.9) | **P1** | Large | ✅ Done |
 
 ### Remaining Phase 12: Route `CSSDisplay::Flex` to FlexLayouter
 
@@ -1145,6 +1167,8 @@ gaps documented above. Here's the updated path forward:
 - **G4** — Cross-axis auto margins. Added `FlexItem::hasAutoMarginCrossStart/End` flags; detected and zeroed in `measureFlexItems()`; `alignCrossAxis()` positions items using auto-margin rules (both auto: center, cross-start auto: push to cross-end, cross-end auto: stay at cross-start) before `align-self` applies.
 - **G5** — `overflow` affecting min-width:auto. Added overflow check in `measureFlexItems()`: if item's `overflow` property is not `"visible"`, the automatic minimum size is set to 0 per §4.5.
 - Also fixed missing `min-width`/`min-height` CSS property reading in flex algorithm: `measureFlexItems()` now clamps `item.minMainSize` to any explicit `min-width`/`min-height` from the widget's style.
+- **G12** — Anonymous flex items from bare text nodes. Text node children of flex containers are now collected as flex items. `resolveFlexBasis()` measures text content width for `flex-basis: auto`. `measureFlexItems()` sets cross size (font height) and `minMainSize`. `resolveCrossSizes()` configures wrapped Text measurement and sets cross size to wrapped height. `UITextNode::draw()` renders at the flex-assigned position.
+- **G13** — Anonymous flex item text wrapping. Uses a cached `Graphics::Text` value member on `UITextNode` with `setLineWrapMode(Word)` and `setMaxWrapWidth()`. Configured in `resolveCrossSizes()`; rendered in `draw()`. `minMainSize` set to 0 for text nodes to allow flex-shrink below full text width.
 
 ### Next (fill remaining spec gaps)
 - **G3** — `visibility: collapse`. Full spec feature, large effort but important for dynamic UIs.
@@ -1154,7 +1178,6 @@ gaps documented above. Here's the updated path forward:
 - **G11** — Column-reverse stacking context.
 - **G6** — Percentage margins/paddings.
 - **G7** — Painting order by `order`.
-- **G12** — Anonymous flex items.
 
 ### Final gate
 - **Route `display: flex` to FlexLayouter** — Implement blockification changes
@@ -1163,10 +1186,7 @@ gaps documented above. Here's the updated path forward:
 
 ## Limitations Documented For This Implementation
 
-1. **Anonymous flex items from bare text nodes:** Not generated. Text nodes and non-widget
-   nodes as direct children of flex containers are skipped during item collection. In real
-   CSS, bare text generates anonymous flex items; this implementation requires text to be
-   wrapped in `<span>` or `<div>` to participate in flex layout.
+1. **Column-direction text wrapping in anonymous flex items:** Multi-line wrapping in `flex-direction: column` containers uses the tentative cross-axis width from `measureFlexItems()` rather than the final stretched width from `alignCrossAxis()`. In practice this means the wrapping width may not match the final allocated width for stretch-aligned column items.
 2. **`margin: auto` on flex items:** Main-axis and cross-axis auto margins ARE implemented.
    Main-axis auto margins absorb free space before `justify-content`. Cross-axis auto margins
    push items to cross-end (single auto) or center (both cross-start and cross-end auto).
@@ -1543,3 +1563,122 @@ the correct behavior. No special handling needed.
 | `src/eepp/ui/blocklayouter.cpp` | Modified | Skip `isInline()` early-return for flex items |
 | `include/eepp/ui/flexlayouter.hpp` | **New** | FlexLayouter class with FlexItem, FlexLine, full API |
 | `src/eepp/ui/flexlayouter.cpp` | **New** | Complete flex layout algorithm (~650 lines) |
+| `src/eepp/ui/uitextnode.cpp` | Modified | `draw()` — single-line rendering for anonymous flex items |
+| `src/eepp/ui/flexlayouter.cpp` | Modified | `resolveFlexBasis`, `measureFlexItems` — text node sizing |
+
+---
+
+### Anchor: Text wrapping for anonymous flex items
+
+**Goal:** When a `UITextNode` flex item is sized to a width smaller than its
+natural text width, the text should wrap, and the cross size should grow to
+accommodate the wrapped height.
+
+**Current state:** Single-line only. `UITextNode::draw()` calls static
+`Text::draw()` which renders one line. Cross size = font height.
+
+#### How the existing layout pipeline handles text wrapping
+
+When a `UITextSpan` (inline `<span>`) becomes a flex item, `UILayouterManager::create()`
+returns a `BlockLayouter` for it (not an `InlineLayouter`). That `BlockLayouter`:
+
+1. Creates/rebuilds a `RichText` via `rebuildRichText()` with the span's content
+2. `RichText::setMaxWidth()` is set to the resolved flex main size (set by `FlexLayouter`)
+3. `RichText::setLineWrap(true)` enables word wrapping
+4. `RichText::getSize()` returns the wrapped extent (used by `BlockLayouter` for cross size)
+5. `UITextSpan::draw()` calls `getRichText().draw()` at the span's screen position
+
+This pipeline produces multi-line wrapped text with correct cross sizing.
+
+#### Option A: Create anonymous `UIRichText` wrapper widgets (recommended)
+
+Create an invisible `UIRichText` wrapper for each text-only child of a flex
+container during `collectFlexItems()`. The wrapper:
+
+- Gets the text and font from the `UITextNode`
+- Is inserted as a child of the flex container (or as a sibling before the text node)
+- Becomes the flex item handled by the flex algorithm
+- Gets `BlockLayouter` → `rebuildRichText()` → `RichText` pipeline for wrapping
+- The original `UITextNode` is hidden or children-reparented into the wrapper
+
+**Pros:** Uses the existing, proven RichText wrapping pipeline verbatim. No new
+text layout code. `UITextSpan` path already proves this works.
+
+**Cons:** Requires inserting widgets into the tree during layout, which is
+architecturally problematic (tree mutation during layout). The wrapper needs to
+be positioned/sized correctly. The `UITextNode` must be hidden or removed.
+
+#### Option B: Give `UITextNode` its own `RichText` member
+
+Add a `RichText` member to `UITextNode` (lazily allocated). In the flex sizing
+pass, populate the `RichText`, set max width to the allocated main size, and
+measure the wrapped height for cross sizing. In `draw()`, render via `RichText::draw()`.
+
+**Pros:** No widget tree mutation. Self-contained in `UITextNode`.
+
+**Cons:** Duplicates RichText infrastructure on `UITextNode`. RichText is designed
+for the widget tree pipeline (owns children for inline boxes). The `UITextNode`
+is not a `UIWidget` and doesn't participate in the widget tree layout normally.
+Requires manual management of the RichText's text/font/width state across
+layout passes.
+
+#### Option C: Use `Graphics::Text` instance with `setMaxWrapWidth()`
+
+In the flex sizing pass, create (or reuse a cached) `Text` object, set the font,
+text, and max wrap width. Measure `Text::getTextHeight()` for cross sizing. In
+`draw()`, use `Text::draw()` (instance method, not static) at the node's screen
+position.
+
+**Pros:** Simple API. `Text` already supports `setMaxWrapWidth()` and multi-line
+draw. No RichText dependency. Self-contained.
+
+**Cons:** `Text::draw()` at different Y positions for each wrapped line. Need to
+verify `Text` instance correctly draws all wrapped lines at the given position
+(not just the first). Less feature-rich than RichText (no inline box support,
+no `text-decoration`, etc.)
+
+#### Recommendation: Option C — `Text` instance with `setMaxWrapWidth()`
+
+Option C is the best fit for `UITextNode` because:
+
+1. **No widget tree mutation** — avoids the architectural problem of Option A
+2. **No RichText duplication** — `Text` is a lightweight existing abstraction,
+   not a heavy widget-based pipeline
+3. **Simple cross-size measurement** — `Text::getTextHeight()` with max width set
+   returns the wrapped height directly
+4. **Simple rendering** — `Text::draw()` at node screen position renders all
+   wrapped lines
+5. **Performance** — Cache the `Text` object on `UITextNode`, only recreate when
+   text/font/size changes. No per-frame allocation.
+
+**Implementation sketch:**
+
+```
+// In UITextNode.h — add member:
+//   std::unique_ptr<Graphics::Text> mFlexText;
+
+// In FlexLayouter — after final flexible length resolution:
+//   if (item.textNode) {
+//       auto* txt = item.textNode;
+//       txt->getOrCreateFlexText();
+//       txt->mFlexText->setStyle(txt->getFontStyle(container));
+//       txt->mFlexText->setString(txt->getText());
+//       txt->mFlexText->setMaxWrapWidth(item.mainSize - padding);
+//       item.crossSize = txt->mFlexText->getTextHeight() + padding;
+//   }
+
+// In UITextNode::draw() when parent is flex:
+//   if (mFlexText) {
+//       mFlexText->setMaxWrapWidth(getPixelsSize().getWidth());
+//       mFlexText->draw(getPixelsPosition().x, getPixelsPosition().y);
+//   }
+```
+
+**Verification:** Existing unit tests should continue to pass (single-line text
+is a subset of multi-line — a single-line `Text` with no wrap is identical to
+static `Text::draw()`). A new test fixture with a constrained flex item
+containing long text will verify wrapping behavior.
+
+**Risk:** If `Text::draw()` (instance) does not correctly draw at the given
+position for multi-line wrapped text, fall back to Option B. Verify this
+before committing the implementation.

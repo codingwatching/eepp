@@ -330,14 +330,11 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.minMainSize =
 					item.widget->asType<UIHTMLWidget>()->getLayouter()->getMinIntrinsicWidth();
 			else if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
-				// Text node min size = measured text width (content-based minimum)
-				FontStyleConfig fontConfig;
-				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
-					item.minMainSize = Text::getTextWidth(
-						item.widget->asType<UITextNode>()->getText(), fontConfig );
-				} else {
-					item.minMainSize = item.widget->getPixelsSize().getWidth();
-				}
+				// Text node with wrapping: minimum size = 0, since text can wrap
+				// to any width and the cross size grows to accommodate the content.
+				// Without wrapping, the minimum would be the full text width,
+				// which prevents any flex-shrink.
+				item.minMainSize = 0.f;
 			} else
 				item.minMainSize = item.widget->getPixelsSize().getWidth();
 			if ( item.minMainSize < 0.f )
@@ -721,6 +718,42 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 			auto* htmlWidget = item.widget->asType<UIHTMLWidget>();
 			if ( htmlWidget->getLayouter() && htmlWidget->getLayouter() != this )
 				htmlWidget->updateLayout();
+		}
+	}
+
+	// For text nodes (anonymous flex items), configure a cached Text object for
+	// multi-line word wrapping. In row direction, measure wrapped text height at
+	// the resolved main size and use it as the cross size.
+	for ( size_t idx : line.itemIndices ) {
+		auto& item = mItems[idx];
+		if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
+			auto* textNode = item.widget->asType<UITextNode>();
+			if ( !textNode->getText().empty() ) {
+				FontStyleConfig fontConfig;
+				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
+					Graphics::Text& flexText = textNode->getFlexText();
+					flexText.setStyleConfig( fontConfig );
+					flexText.setString( textNode->getText() );
+					flexText.setLineWrapMode( LineWrapMode::Word );
+					Float maxWidth;
+					if ( mainAxis.horizontal ) {
+						maxWidth = item.targetMainSize;
+					} else {
+						// Column: wrap at tentative cross-axis width
+						maxWidth = item.widget->getPixelsSize().getWidth();
+					}
+					if ( maxWidth <= 0.f )
+						maxWidth = 10000.f;
+					flexText.setMaxWrapWidth( maxWidth );
+					if ( mainAxis.horizontal ) {
+						Float wrappedHeight = flexText.getTextHeight();
+						if ( wrappedHeight <= 0.f )
+							wrappedHeight =
+								(Float)fontConfig.Font->getFontHeight( fontConfig.CharacterSize );
+						item.widget->setInternalPixelsHeight( wrappedHeight );
+					}
+				}
+			}
 		}
 	}
 

@@ -1588,3 +1588,38 @@ UTEST( FlexContainer, anonymousTextNodeWithFixedSibling ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( FlexContainer, anonymousTextNodeWrapping ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 100, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	// Long text that should wrap within the 100px-wide flex container
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "This is a very long text that should wrap to multiple lines inside the narrow flex container." );
+
+	sceneNode->updateDirtyLayouts();
+
+	// The font height for NotoSans at 16dp is ~22px. If the text wraps, the total
+	// height should be at least 2x the single-line font height.
+	FontStyleConfig fontConfig = flex->getRichText().getFontStyleConfig();
+	Float fontHeight = (Float)fontConfig.Font->getFontHeight( fontConfig.CharacterSize );
+	EXPECT_TRUE( textNode->getPixelsSize().getWidth() > 0.f );
+	EXPECT_TRUE( textNode->getPixelsSize().getHeight() >= fontHeight * 2.f );
+	EXPECT_TRUE( textNode->getPixelsSize().getWidth() <= 100.f );
+
+	Engine::destroySingleton();
+}

@@ -1,6 +1,7 @@
 #ifndef EE_UI_UITEXTNODE_HPP
 #define EE_UI_UITEXTNODE_HPP
 
+#include <eepp/graphics/text.hpp>
 #include <eepp/ui/uiwidget.hpp>
 
 namespace EE { namespace UI {
@@ -32,9 +33,12 @@ class EE_API UITextNode : public UIWidget {
 
 	void setLayoutCharCount( size_t count ) { mLayoutCharCount = count; }
 
+	Graphics::Text& getFlexText() { return mFlexText; }
+
   protected:
 	String mText;
 	size_t mLayoutCharCount{ 0 };
+	Graphics::Text mFlexText;
 
 	UITextNode();
 };

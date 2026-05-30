@@ -29,28 +29,33 @@ void UITextNode::draw() {
 	if ( mText.empty() )
 		return;
 
-	// In flex layout, text nodes are anonymous flex items. The parent flex
-	// container does not render their text via RichText (it was cleared),
-	// so the text node must draw itself.
 	Node* parent = getParent();
 	bool isFlexItem =
 		parent && parent->isType( UI_TYPE_HTML_WIDGET ) && parent->asType<UIHTMLWidget>()->isFlex();
 	if ( isFlexItem ) {
-		// Walk up parent chain to find a UIRichText ancestor with font info
-		Node* n = parent;
-		while ( n ) {
-			if ( n->isType( UI_TYPE_RICHTEXT ) ) {
-				auto& fontConfig = n->asType<UIRichText>()->getRichText().getFontStyleConfig();
-				if ( fontConfig.Font ) {
-					FontStyleConfig fc = fontConfig;
-					Float alpha = getAlpha();
-					if ( alpha < 1.f )
-						fc.FontColor.a = (Uint8)( (Float)fc.FontColor.a * alpha );
-					Text::draw( mText, mScreenPos.trunc(), fc );
+		if ( mFlexText.getFont() ) {
+			mFlexText.setMaxWrapWidth( getPixelsSize().getWidth() );
+			Float alpha = getAlpha();
+			if ( alpha < 1.f )
+				mFlexText.setAlpha( (Uint8)( 255.f * alpha ) );
+			mFlexText.draw( mScreenPos.x, mScreenPos.y );
+		} else {
+			// Fallback: Text not yet configured by flex layouter — draw single-line
+			Node* n = parent;
+			while ( n ) {
+				if ( n->isType( UI_TYPE_RICHTEXT ) ) {
+					auto& fontConfig = n->asType<UIRichText>()->getRichText().getFontStyleConfig();
+					if ( fontConfig.Font ) {
+						FontStyleConfig fc = fontConfig;
+						Float alpha = getAlpha();
+						if ( alpha < 1.f )
+							fc.FontColor.a = (Uint8)( (Float)fc.FontColor.a * alpha );
+						Text::draw( mText, mScreenPos.trunc(), fc );
+					}
+					break;
 				}
-				break;
+				n = n->getParent();
 			}
-			n = n->getParent();
 		}
 	}
 }
