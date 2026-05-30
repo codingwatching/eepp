@@ -3366,3 +3366,57 @@ UTEST( UIHTML, FlexAnchorInFlexNavVisible ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, FlexLiItemsWrapContentWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex LI Width Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_li_width.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto menuContainer = sceneNode->getRoot()->findByClass( "menu-container" );
+	ASSERT_TRUE( menuContainer != nullptr );
+	auto menuWidget = menuContainer->asType<UIWidget>();
+
+	// The menu container is a flex row; its <li> children should wrap to
+	// their content width, not span the full container width.
+	Float containerWidth = menuWidget->getPixelsSize().getWidth();
+	Float containerPadding =
+		menuWidget->getPixelsPadding().Left + menuWidget->getPixelsPadding().Right;
+	Float contentWidth = containerWidth - containerPadding;
+
+	Float totalLiWidth = 0.f;
+	Uint32 liCount = 0;
+	for ( Uint32 i = 0; i < menuWidget->getChildCount(); ++i ) {
+		auto c = menuWidget->getChildAt( i );
+		if ( !c->isWidget() )
+			continue;
+		auto cw = c->asType<UIWidget>();
+		if ( cw->getElementTag() != "li" )
+			continue;
+
+		// Each <li> should be narrower than the container content width
+		EXPECT_LT( cw->getPixelsSize().getWidth(), contentWidth );
+
+		// Accumulate total width (including margin)
+		Rectf margin = cw->getLayoutPixelsMargin();
+		totalLiWidth += cw->getPixelsSize().getWidth() + margin.Left + margin.Right;
+		liCount++;
+	}
+
+	ASSERT_GT( liCount, (Uint32)0 );
+	// With 9 items and horizontal margins, the total should still fit without
+	// each item spanning the full container.
+	EXPECT_LT( totalLiWidth, contentWidth * (Float)liCount );
+
+	Engine::destroySingleton();
+}

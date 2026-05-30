@@ -166,13 +166,16 @@ Float FlexLayouter::getItemCrossSize( UIWidget* child, const Axis& crossAxis ) c
 void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis,
 									 const Float containerCrossSize, const Float containerWidth,
 									 const Float containerHeight, const Rectf& containerPadding,
-									 bool indefiniteMainSize ) {
+									 bool indefiniteMainSize, bool indefiniteCrossSize ) {
 	for ( auto& item : mItems ) {
 		Float tentativeCrossSize = containerCrossSize;
-		if ( tentativeCrossSize <= 0.f && crossAxis.horizontal )
+		if ( indefiniteCrossSize ) {
+			tentativeCrossSize = 0.f;
+		} else if ( tentativeCrossSize <= 0.f && crossAxis.horizontal ) {
 			tentativeCrossSize = containerWidth - containerPadding.Left - containerPadding.Right;
-		if ( tentativeCrossSize <= 0.f && !crossAxis.horizontal )
+		} else if ( tentativeCrossSize <= 0.f && !crossAxis.horizontal ) {
 			tentativeCrossSize = containerHeight - containerPadding.Top - containerPadding.Bottom;
+		}
 		if ( tentativeCrossSize < 0.f )
 			tentativeCrossSize = 0.f;
 
@@ -207,6 +210,22 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.widget->setLayoutHeightPolicy( oldMainPolicy );
 		}
 
+		// Resolve margins along the flex axes.
+		// Auto margins on the main axis are handled by the flex algorithm
+		// (CSS Flexbox §8.1), so we treat them as 0 here.
+		Rectf margin = item.widget->getLayoutPixelsMargin();
+		if ( mainAxis.horizontal ) {
+			item.marginMainStart = item.widget->hasLayoutMarginLeftAuto() ? 0.f : margin.Left;
+			item.marginMainEnd = item.widget->hasLayoutMarginRightAuto() ? 0.f : margin.Right;
+			item.marginCrossStart = margin.Top;
+			item.marginCrossEnd = margin.Bottom;
+		} else {
+			item.marginMainStart = item.widget->hasLayoutMarginTopAuto() ? 0.f : margin.Top;
+			item.marginMainEnd = item.widget->hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
+			item.marginCrossStart = margin.Left;
+			item.marginCrossEnd = margin.Right;
+		}
+
 		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
 												item.flexBasisAuto, mainAxis );
 
@@ -227,6 +246,38 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			if ( hprop )
 				item.targetMainSize = item.widget->lengthFromValue( *hprop );
 		}
+
+		// Compute min/max main size (CSS §4.5: min-width/min-height default is auto for flex items)
+		if ( mainAxis.horizontal ) {
+			if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
+				 item.widget->asType<UIHTMLWidget>()->getLayouter() )
+				item.minMainSize =
+					item.widget->asType<UIHTMLWidget>()->getLayouter()->getMinIntrinsicWidth();
+			else
+				item.minMainSize = item.widget->getPixelsSize().getWidth();
+			if ( item.minMainSize < 0.f )
+				item.minMainSize = 0.f;
+
+			if ( item.widget->getUIStyle() ) {
+				const auto* maxW = item.widget->getUIStyle()->getProperty( PropertyId::MaxWidth );
+				if ( maxW )
+					item.maxMainSize = item.widget->lengthFromValue( *maxW );
+				else
+					item.maxMainSize = std::numeric_limits<Float>::max();
+			}
+		} else {
+			item.minMainSize = item.widget->getPixelsSize().getHeight();
+			if ( item.minMainSize < 0.f )
+				item.minMainSize = 0.f;
+
+			if ( item.widget->getUIStyle() ) {
+				const auto* maxH = item.widget->getUIStyle()->getProperty( PropertyId::MaxHeight );
+				if ( maxH )
+					item.maxMainSize = item.widget->lengthFromValue( *maxH );
+				else
+					item.maxMainSize = std::numeric_limits<Float>::max();
+			}
+		}
 	}
 }
 
@@ -245,13 +296,15 @@ void FlexLayouter::generateFlexLines( std::vector<FlexLayouter::FlexLine>& lines
 		std::vector<size_t> nextRemaining;
 
 		for ( size_t idx : remaining ) {
-			Float itemSize = mItems[idx].targetMainSize;
+			const auto& item = mItems[idx];
+			Float itemOuterSize = item.targetMainSize + item.marginMainStart + item.marginMainEnd;
 			Float gap = line.itemIndices.empty() ? 0.f : columnGap;
 
-			if ( mWrap == CSSFlexWrap::NoWrap || ( usedMain + gap + itemSize <= containerMainSize &&
-												   usedMain + gap + itemSize >= 0.f ) ) {
+			if ( mWrap == CSSFlexWrap::NoWrap ||
+				 ( usedMain + gap + itemOuterSize <= containerMainSize &&
+				   usedMain + gap + itemOuterSize >= 0.f ) ) {
 				line.itemIndices.push_back( idx );
-				usedMain += gap + itemSize;
+				usedMain += gap + itemOuterSize;
 			} else {
 				nextRemaining.push_back( idx );
 			}
@@ -296,9 +349,10 @@ void FlexLayouter::resolveFlexibleLengths( FlexLine& line, const Float container
 	Float totalFlexShrink = 0.f;
 
 	for ( size_t idx : line.itemIndices ) {
-		totalFlexBasis += mItems[idx].targetMainSize;
-		totalFlexGrow += mItems[idx].flexGrow;
-		totalFlexShrink += mItems[idx].flexShrink;
+		const auto& item = mItems[idx];
+		totalFlexBasis += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
+		totalFlexGrow += item.flexGrow;
+		totalFlexShrink += item.flexShrink;
 	}
 
 	size_t itemCount = line.itemIndices.size();
@@ -353,6 +407,15 @@ void FlexLayouter::resolveFlexibleLengths( FlexLine& line, const Float container
 			}
 		}
 	}
+
+	// Clamp each item by its min/max main size (CSS Flexbox §9.7 step 6)
+	for ( size_t idx : line.itemIndices ) {
+		auto& item = mItems[idx];
+		if ( item.targetMainSize < item.minMainSize )
+			item.targetMainSize = item.minMainSize;
+		if ( item.targetMainSize > item.maxMainSize )
+			item.targetMainSize = item.maxMainSize;
+	}
 }
 
 void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
@@ -362,13 +425,13 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 
 	size_t itemCount = line.itemIndices.size();
 	Float totalItemMain = 0.f;
-	for ( size_t idx : line.itemIndices )
-		totalItemMain += mItems[idx].targetMainSize;
+	for ( size_t idx : line.itemIndices ) {
+		const auto& item = mItems[idx];
+		totalItemMain += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
+	}
 
 	Float totalGap = ( itemCount > 1 ) ? (Float)( itemCount - 1 ) * columnGap : 0.f;
 	Float freeSpaceMain = containerMainSize - totalItemMain - totalGap;
-	if ( freeSpaceMain < 0.f )
-		freeSpaceMain = 0.f;
 
 	Float mainOffset = 0.f;
 	Float spacing = columnGap;
@@ -381,19 +444,19 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 			mainOffset = freeSpaceMain * 0.5f;
 			break;
 		case CSSJustifyContent::SpaceBetween:
-			if ( itemCount > 1 )
+			if ( freeSpaceMain > 0.f && itemCount > 1 )
 				spacing = columnGap + freeSpaceMain / (Float)( itemCount - 1 );
 			else
 				mainOffset = 0.f;
 			break;
 		case CSSJustifyContent::SpaceAround:
-			if ( itemCount > 0 ) {
+			if ( freeSpaceMain > 0.f && itemCount > 0 ) {
 				spacing = columnGap + freeSpaceMain / (Float)itemCount;
 				mainOffset = spacing * 0.5f;
 			}
 			break;
 		case CSSJustifyContent::SpaceEvenly:
-			if ( itemCount > 0 ) {
+			if ( freeSpaceMain > 0.f && itemCount > 0 ) {
 				Float slot = columnGap + freeSpaceMain / (Float)( itemCount + 1 );
 				mainOffset = slot;
 				spacing = slot;
@@ -407,32 +470,40 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 
 	Float pos = mainOffset;
 	for ( size_t idx : line.itemIndices ) {
-		mItems[idx].mainPos = pos;
-		pos += mItems[idx].targetMainSize + spacing;
+		const auto& item = mItems[idx];
+		mItems[idx].mainPos = pos + item.marginMainStart;
+		pos += item.targetMainSize + item.marginMainStart + item.marginMainEnd + spacing;
 	}
 }
 
 void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
-									  const Float containerCrossSize ) {
+									  const Axis& mainAxis ) {
 	if ( line.itemIndices.empty() ) {
 		line.crossSize = 0.f;
 		return;
 	}
 
+	// Set each item's main-axis size to its resolved targetMainSize so that
+	// getItemCrossSize reflects the correct cross size for the final width.
+	for ( size_t idx : line.itemIndices ) {
+		auto& item = mItems[idx];
+		if ( mainAxis.horizontal )
+			item.widget->setInternalPixelsWidth( item.targetMainSize );
+		else
+			item.widget->setInternalPixelsHeight( item.targetMainSize );
+		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
+			auto* htmlWidget = item.widget->asType<UIHTMLWidget>();
+			if ( htmlWidget->getLayouter() && htmlWidget->getLayouter() != this )
+				htmlWidget->updateLayout();
+		}
+	}
+
 	Float maxCross = 0.f;
 	for ( size_t idx : line.itemIndices ) {
 		auto& item = mItems[idx];
-		CSSAlignSelf resolved = resolveAlignSelf( item.alignSelf, mAlignItems );
-		bool canStretch = crossAxis.horizontal
-							  ? ( item.widget->getLayoutWidthPolicy() != SizePolicy::Fixed )
-							  : ( item.widget->getLayoutHeightPolicy() != SizePolicy::Fixed );
-		if ( resolved == CSSAlignSelf::Stretch && canStretch && containerCrossSize > 0.f ) {
-			item.crossSize = containerCrossSize;
-		} else {
-			item.crossSize = getItemCrossSize( item.widget, crossAxis );
-		}
-		item.outerCrossSize = item.crossSize;
-		maxCross = eemax( maxCross, item.crossSize );
+		item.crossSize = getItemCrossSize( item.widget, crossAxis );
+		item.outerCrossSize = item.crossSize + item.marginCrossStart + item.marginCrossEnd;
+		maxCross = eemax( maxCross, item.outerCrossSize );
 	}
 	line.crossSize = maxCross;
 }
@@ -456,6 +527,7 @@ void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
 	Float lineGap = rowGap;
 
 	if ( lineCount > 1 ) {
+		Float fsc = freeSpaceCross;
 		switch ( mAlignContent ) {
 			case CSSAlignContent::FlexEnd:
 				crossOffset = freeSpaceCross;
@@ -464,20 +536,24 @@ void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
 				crossOffset = freeSpaceCross * 0.5f;
 				break;
 			case CSSAlignContent::SpaceBetween:
-				if ( lineCount > 1 )
-					lineGap = freeSpaceCross / (Float)( lineCount - 1 );
+				if ( fsc > 0.f && lineCount > 1 )
+					lineGap = fsc / (Float)( lineCount - 1 );
 				break;
 			case CSSAlignContent::SpaceAround:
-				lineGap = freeSpaceCross / (Float)lineCount;
-				crossOffset = lineGap * 0.5f;
+				if ( fsc > 0.f ) {
+					lineGap = fsc / (Float)lineCount;
+					crossOffset = lineGap * 0.5f;
+				}
 				break;
 			case CSSAlignContent::SpaceEvenly:
-				lineGap = freeSpaceCross / (Float)( lineCount + 1 );
-				crossOffset = lineGap;
+				if ( fsc > 0.f ) {
+					lineGap = fsc / (Float)( lineCount + 1 );
+					crossOffset = lineGap;
+				}
 				break;
 			case CSSAlignContent::Stretch:
-				if ( lineCount > 0 )
-					addPerLine = freeSpaceCross / (Float)lineCount;
+				if ( fsc > 0.f && lineCount > 0 )
+					addPerLine = fsc / (Float)lineCount;
 				break;
 			case CSSAlignContent::FlexStart:
 			default:
@@ -491,6 +567,8 @@ void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
 		line.crossPos = pos;
 
 		Float lineCrossSize = line.crossSize + addPerLine;
+		if ( lineCrossSize < line.crossSize )
+			lineCrossSize = line.crossSize;
 		if ( lines.size() == 1 && containerCrossSize > 0.f )
 			lineCrossSize = containerCrossSize;
 		if ( lineCrossSize > containerCrossSize && containerCrossSize > 0.f )
@@ -500,30 +578,31 @@ void FlexLayouter::alignCrossAxis( const std::vector<FlexLine>& lines,
 			auto& item = mItems[idx];
 			CSSAlignSelf resolved = resolveAlignSelf( item.alignSelf, mAlignItems );
 
-			Float itemFreeSpace = lineCrossSize - item.crossSize;
+			Float itemFreeSpace = lineCrossSize - item.outerCrossSize;
 			switch ( resolved ) {
 				case CSSAlignSelf::FlexStart:
-					item.crossPos = pos;
+					item.crossPos = pos + item.marginCrossStart;
 					break;
 				case CSSAlignSelf::FlexEnd:
-					item.crossPos = pos + itemFreeSpace;
+					item.crossPos = pos + itemFreeSpace + item.marginCrossStart;
 					break;
 				case CSSAlignSelf::Center:
-					item.crossPos = pos + itemFreeSpace * 0.5f;
+					item.crossPos = pos + itemFreeSpace * 0.5f + item.marginCrossStart;
 					break;
 				case CSSAlignSelf::Stretch:
-					item.crossPos = pos;
+					item.crossPos = pos + item.marginCrossStart;
 					if ( !( crossAxis.horizontal
 								? ( item.widget->getLayoutWidthPolicy() == SizePolicy::Fixed )
 								: ( item.widget->getLayoutHeightPolicy() == SizePolicy::Fixed ) ) )
-						item.crossSize = lineCrossSize;
+						item.crossSize =
+							lineCrossSize - item.marginCrossStart - item.marginCrossEnd;
 					break;
 				case CSSAlignSelf::Baseline:
-					item.crossPos = pos;
+					item.crossPos = pos + item.marginCrossStart;
 					break;
 				case CSSAlignSelf::Auto:
 				default:
-					item.crossPos = pos;
+					item.crossPos = pos + item.marginCrossStart;
 					break;
 			}
 		}
@@ -554,8 +633,10 @@ void FlexLayouter::applyLayout( const std::vector<FlexLine>& lines, const Axis& 
 				widgetY = containerPadding.Top + item.crossPos;
 				widgetW = item.targetMainSize;
 				widgetH = item.crossSize;
-				contentW = eemax( contentW, widgetX + widgetW - containerPadding.Left );
-				contentH = eemax( contentH, widgetY + widgetH - containerPadding.Top );
+				contentW = eemax( contentW,
+								  widgetX + widgetW + item.marginMainEnd - containerPadding.Left );
+				contentH = eemax( contentH,
+								  widgetY + widgetH + item.marginCrossEnd - containerPadding.Top );
 			} else {
 				if ( mainAxis.reversed ) {
 					widgetY = containerHeight - containerPadding.Bottom - item.mainPos -
@@ -566,8 +647,10 @@ void FlexLayouter::applyLayout( const std::vector<FlexLine>& lines, const Axis& 
 				widgetX = containerPadding.Left + item.crossPos;
 				widgetW = item.crossSize;
 				widgetH = item.targetMainSize;
-				contentW = eemax( contentW, widgetX + widgetW - containerPadding.Left );
-				contentH = eemax( contentH, widgetY + widgetH - containerPadding.Top );
+				contentW = eemax( contentW,
+								  widgetX + widgetW + item.marginCrossEnd - containerPadding.Left );
+				contentH = eemax( contentH,
+								  widgetY + widgetH + item.marginMainEnd - containerPadding.Top );
 			}
 
 			item.widget->setPixelsPosition( widgetX, widgetY );
@@ -669,6 +752,16 @@ void FlexLayouter::updateLayout() {
 	if ( containerCrossSize < 0.f )
 		containerCrossSize = 0.f;
 
+	// Detect indefinite cross size: WrapContent in the cross axis direction
+	bool indefiniteCrossSize = ( crossAxis.horizontal && widthPolicy == SizePolicy::WrapContent ) ||
+							   ( !crossAxis.horizontal && heightPolicy == SizePolicy::WrapContent );
+
+	// When cross size is indefinite, zero out containerCrossSize so that
+	// the flex algorithm sizes lines to content rather than using a stale
+	// container size from a previous layout pass.
+	if ( indefiniteCrossSize )
+		containerCrossSize = 0.f;
+
 	collectFlexItems( mItems );
 
 	if ( mItems.empty() ) {
@@ -735,15 +828,15 @@ void FlexLayouter::updateLayout() {
 							  ( !mainAxis.horizontal && heightPolicy == SizePolicy::WrapContent );
 
 	measureFlexItems( mainAxis, crossAxis, containerCrossSize, containerWidth, containerHeight,
-					  containerPadding, indefiniteMainSize );
+					  containerPadding, indefiniteMainSize, indefiniteCrossSize );
 
 	std::vector<FlexLine> lines;
 
 	if ( indefiniteMainSize ) {
-		// Compute container main size from item content sizes (CSS §9.3)
+		// Compute container main size from item outer sizes (CSS §9.3)
 		Float naturalMainSize = 0.f;
 		for ( auto& item : mItems )
-			naturalMainSize += item.targetMainSize;
+			naturalMainSize += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
 		if ( mItems.size() > 1 )
 			naturalMainSize += (Float)( mItems.size() - 1 ) * mColumnGap;
 		containerMainSize = naturalMainSize;
@@ -755,7 +848,7 @@ void FlexLayouter::updateLayout() {
 		if ( !indefiniteMainSize )
 			resolveFlexibleLengths( line, containerMainSize, mColumnGap );
 		alignMainAxis( line, containerMainSize, mColumnGap );
-		resolveCrossSizes( line, crossAxis, containerCrossSize );
+		resolveCrossSizes( line, crossAxis, mainAxis );
 	}
 
 	alignCrossAxis( lines, containerCrossSize, mRowGap, crossAxis );
@@ -798,6 +891,19 @@ void FlexLayouter::computeIntrinsicWidths() {
 	for ( auto& item : items ) {
 		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
 												item.flexBasisAuto, mainAxis );
+
+		Rectf margin = item.widget->getLayoutPixelsMargin();
+		if ( mainAxis.horizontal ) {
+			item.marginMainStart = item.widget->hasLayoutMarginLeftAuto() ? 0.f : margin.Left;
+			item.marginMainEnd = item.widget->hasLayoutMarginRightAuto() ? 0.f : margin.Right;
+			item.marginCrossStart = margin.Top;
+			item.marginCrossEnd = margin.Bottom;
+		} else {
+			item.marginMainStart = item.widget->hasLayoutMarginTopAuto() ? 0.f : margin.Top;
+			item.marginMainEnd = item.widget->hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
+			item.marginCrossStart = margin.Left;
+			item.marginCrossEnd = margin.Right;
+		}
 	}
 
 	const Rectf containerPadding = mContainer->getPixelsContentOffset();
@@ -805,7 +911,7 @@ void FlexLayouter::computeIntrinsicWidths() {
 	if ( mWrap == CSSFlexWrap::NoWrap ) {
 		Float maxContentMain = 0.f;
 		for ( auto& item : items )
-			maxContentMain += item.targetMainSize;
+			maxContentMain += item.targetMainSize + item.marginMainStart + item.marginMainEnd;
 		if ( items.size() > 1 )
 			maxContentMain += (Float)( items.size() - 1 ) * mColumnGap;
 
@@ -815,7 +921,8 @@ void FlexLayouter::computeIntrinsicWidths() {
 		} else {
 			Float maxItemWidth = 0.f;
 			for ( auto& item : items )
-				maxItemWidth = eemax( maxItemWidth, item.targetMainSize );
+				maxItemWidth = eemax( maxItemWidth, item.targetMainSize + item.marginCrossStart +
+														item.marginCrossEnd );
 			mMaxIntrinsicWidth = maxItemWidth + containerPadding.Left + containerPadding.Right;
 			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
 		}
@@ -824,7 +931,8 @@ void FlexLayouter::computeIntrinsicWidths() {
 			Float maxLineWidth = 0.f;
 			Float lineSum = 0.f;
 			for ( auto& item : items ) {
-				lineSum += ( lineSum > 0.f ? mColumnGap : 0.f ) + item.targetMainSize;
+				lineSum += ( lineSum > 0.f ? mColumnGap : 0.f ) + item.targetMainSize +
+						   item.marginMainStart + item.marginMainEnd;
 			}
 			maxLineWidth = lineSum;
 			mMaxIntrinsicWidth = maxLineWidth + containerPadding.Left + containerPadding.Right;
@@ -832,7 +940,8 @@ void FlexLayouter::computeIntrinsicWidths() {
 		} else {
 			Float maxItemWidth = 0.f;
 			for ( auto& item : items )
-				maxItemWidth = eemax( maxItemWidth, item.targetMainSize );
+				maxItemWidth = eemax( maxItemWidth, item.targetMainSize + item.marginCrossStart +
+														item.marginCrossEnd );
 			mMaxIntrinsicWidth = maxItemWidth + containerPadding.Left + containerPadding.Right;
 			mMinIntrinsicWidth = containerPadding.Left + containerPadding.Right;
 		}

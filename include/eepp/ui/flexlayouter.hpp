@@ -33,6 +33,15 @@ class EE_API FlexLayouter : public UILayouter {
 		Float mainPos;
 		Float crossPos;
 
+		// Margins along the flex axes
+		Float marginMainStart{ 0.f };
+		Float marginMainEnd{ 0.f };
+		Float marginCrossStart{ 0.f };
+		Float marginCrossEnd{ 0.f };
+
+		Float minMainSize{ 0.f };
+		Float maxMainSize{ std::numeric_limits<Float>::max() };
+
 		FlexItem() :
 			widget( nullptr ),
 			order( 0 ),
@@ -76,8 +85,7 @@ class EE_API FlexLayouter : public UILayouter {
 
 	void readContainerStyle( CSSFlexDirection& direction, CSSFlexWrap& wrap,
 							 CSSJustifyContent& justify, CSSAlignItems& alignItems,
-							 CSSAlignContent& alignContent, Float& columnGap,
-							 Float& rowGap );
+							 CSSAlignContent& alignContent, Float& columnGap, Float& rowGap );
 
 	void readItemStyle( UIWidget* child, FlexItem& item );
 
@@ -100,8 +108,7 @@ class EE_API FlexLayouter : public UILayouter {
 
 	void alignMainAxis( FlexLine& line, const Float containerMainSize, const Float columnGap );
 
-	void resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
-							const Float containerCrossSize );
+	void resolveCrossSizes( FlexLine& line, const Axis& crossAxis, const Axis& mainAxis );
 
 	void alignCrossAxis( const std::vector<FlexLine>& lines, const Float containerCrossSize,
 						 const Float rowGap, const Axis& crossAxis );
@@ -114,7 +121,7 @@ class EE_API FlexLayouter : public UILayouter {
 	void measureFlexItems( const Axis& mainAxis, const Axis& crossAxis,
 						   const Float containerCrossSize, const Float containerWidth,
 						   const Float containerHeight, const Rectf& containerPadding,
-						   bool indefiniteMainSize );
+						   bool indefiniteMainSize, bool indefiniteCrossSize );
 
 	std::vector<FlexItem> mItems;
 	CSSFlexDirection mDirection{ CSSFlexDirection::Row };

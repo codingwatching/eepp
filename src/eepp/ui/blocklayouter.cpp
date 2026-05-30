@@ -88,7 +88,7 @@ void BlockLayouter::updateLayout() {
 
 	bool preserveFloatConstrainedBFCWidth =
 		widget->establishesBlockFormattingContext() && !rt->getExternalFloatExclusions().empty();
-	if ( !preserveFloatConstrainedBFCWidth )
+	if ( !preserveFloatConstrainedBFCWidth && !parentIsFlex )
 		setMatchParentIfNeededVerticalGrowth();
 
 	const StyleSheetProperty* prop = nullptr;
