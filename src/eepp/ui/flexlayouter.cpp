@@ -1,11 +1,14 @@
+#include <eepp/graphics/text.hpp>
 #include <eepp/ui/css/stylesheetproperty.hpp>
 #include <eepp/ui/flexlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayout.hpp>
 #include <eepp/ui/uirichtext.hpp>
+#include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
+#include <eepp/ui/uithememanager.hpp>
 
 namespace EE { namespace UI {
 
@@ -81,6 +84,33 @@ FlexLayouter::Axis FlexLayouter::getCrossAxis( CSSFlexDirection direction ) cons
 	return { false, false };
 }
 
+namespace {
+
+bool getFontStyleFromAncestor( UIWidget* widget, FontStyleConfig& outConfig ) {
+	Node* n = widget;
+	while ( n ) {
+		if ( n->isType( UI_TYPE_RICHTEXT ) ) {
+			outConfig = n->asType<UIRichText>()->getRichText().getFontStyleConfig();
+			return outConfig.Font != nullptr;
+		}
+		n = n->getParent();
+	}
+	// Fallback: try the scene node's default font
+	UISceneNode* sceneNode = widget->getUISceneNode();
+	if ( sceneNode ) {
+		Font* defaultFont = sceneNode->getUIThemeManager()->getDefaultFont();
+		if ( defaultFont ) {
+			outConfig = FontStyleConfig();
+			outConfig.Font = defaultFont;
+			outConfig.CharacterSize = 12;
+			return true;
+		}
+	}
+	return false;
+}
+
+} // namespace
+
 void FlexLayouter::readContainerStyle( CSSFlexDirection& direction, CSSFlexWrap& wrap,
 									   CSSJustifyContent& justify, CSSAlignItems& alignItems,
 									   CSSAlignContent& alignContent, Float& columnGap,
@@ -129,6 +159,17 @@ void FlexLayouter::readItemStyle( UIWidget* child, FlexItem& item ) {
 Float FlexLayouter::resolveFlexBasis( UIWidget* child, CSSFlexDirection, Float flexBasisValue,
 									  bool flexBasisAuto, const Axis& mainAxis ) {
 	if ( flexBasisAuto ) {
+		// For text nodes (anonymous flex items), measure text content width
+		if ( child->isType( UI_TYPE_TEXTNODE ) ) {
+			auto* textNode = child->asType<UITextNode>();
+			if ( !textNode->getText().empty() ) {
+				FontStyleConfig fontConfig;
+				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
+					return Text::getTextWidth( textNode->getText(), fontConfig );
+				}
+			}
+		}
+
 		Float intrinsic = 0.f;
 		if ( mainAxis.horizontal && child->getLayoutWidthPolicy() == SizePolicy::Fixed &&
 			 child->getUIStyle() ) {
@@ -258,13 +299,46 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.targetMainSize = item.widget->lengthFromValue( *hprop );
 		}
 
+		// For text node flex items, measure text content to determine intrinsic size.
+		// CSS Flexbox §4: text nodes inside a flex container become anonymous flex items
+		// whose main size is based on their text content.
+		if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
+			auto* textNode = item.widget->asType<UITextNode>();
+			if ( !textNode->getText().empty() ) {
+				FontStyleConfig fontConfig;
+				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
+					Float textWidth = Text::getTextWidth( textNode->getText(), fontConfig );
+					Float textHeight =
+						(Float)fontConfig.Font->getFontHeight( fontConfig.CharacterSize );
+					if ( textWidth > 0.f ) {
+						if ( item.targetMainSize <= 0.f )
+							item.targetMainSize = textWidth;
+						if ( mainAxis.horizontal )
+							// cross axis is vertical for row
+							item.widget->setInternalPixelsHeight( textHeight );
+						else
+							item.widget->setInternalPixelsWidth( textWidth );
+					}
+				}
+			}
+		}
+
 		// Compute min/max main size (CSS §4.5: min-width/min-height default is auto for flex items)
 		if ( mainAxis.horizontal ) {
 			if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) &&
 				 item.widget->asType<UIHTMLWidget>()->getLayouter() )
 				item.minMainSize =
 					item.widget->asType<UIHTMLWidget>()->getLayouter()->getMinIntrinsicWidth();
-			else
+			else if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
+				// Text node min size = measured text width (content-based minimum)
+				FontStyleConfig fontConfig;
+				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
+					item.minMainSize = Text::getTextWidth(
+						item.widget->asType<UITextNode>()->getText(), fontConfig );
+				} else {
+					item.minMainSize = item.widget->getPixelsSize().getWidth();
+				}
+			} else
 				item.minMainSize = item.widget->getPixelsSize().getWidth();
 			if ( item.minMainSize < 0.f )
 				item.minMainSize = 0.f;
@@ -296,7 +370,17 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 					item.maxMainSize = std::numeric_limits<Float>::max();
 			}
 		} else {
-			item.minMainSize = item.widget->getPixelsSize().getHeight();
+			if ( item.widget->isType( UI_TYPE_TEXTNODE ) ) {
+				FontStyleConfig fontConfig;
+				if ( getFontStyleFromAncestor( mContainer, fontConfig ) ) {
+					item.minMainSize =
+						(Float)fontConfig.Font->getFontHeight( fontConfig.CharacterSize );
+				} else {
+					item.minMainSize = item.widget->getPixelsSize().getHeight();
+				}
+			} else {
+				item.minMainSize = item.widget->getPixelsSize().getHeight();
+			}
 			if ( item.minMainSize < 0.f )
 				item.minMainSize = 0.f;
 

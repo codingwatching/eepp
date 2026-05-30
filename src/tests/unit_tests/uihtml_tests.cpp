@@ -2547,7 +2547,6 @@ UTEST( UIHTML, BodyHeightMiscalculationFixture ) {
 	// .links should be at the right side of .wrap, NOT next to .brand.
 	Float wrapW = wrapWidget->getPixelsSize().getWidth();
 	Float linksW = linksWidget->getPixelsSize().getWidth();
-	Float linksRight = linksWidget->getPixelsPosition().x + linksW;
 	EXPECT_GT( linksWidget->getPixelsPosition().x, wrapW * 0.5f );
 
 	// .links should NOT occupy all available width — it must be content-sized.

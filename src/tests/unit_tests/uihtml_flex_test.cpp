@@ -11,6 +11,7 @@
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
@@ -1507,6 +1508,83 @@ UTEST( FlexContainer, crossAxisAutoMargins ) {
 	// Item Y should be (200 - 50) / 2 = 75
 	// (Flex container has no padding in this setup)
 	EXPECT_NEAR( child->getPixelsPosition().y, 75.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Anonymous Flex Items (text nodes as flex items)
+// ─────────────────────────────────────────────────────────────────────────────
+
+UTEST( FlexContainer, anonymousTextNodeSizing ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+
+	UIRichText* child1 = UIRichText::NewDiv();
+	child1->setParent( flex );
+	child1->setPixelsSize( 20, 20 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "Hello flex text" );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_TRUE( textNode->getPixelsSize().getWidth() > 0.f );
+	EXPECT_TRUE( textNode->getPixelsSize().getHeight() > 0.f );
+	EXPECT_TRUE( textNode->getPixelsPosition().x >=
+				 child1->getPixelsPosition().x + child1->getPixelsSize().getWidth() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, anonymousTextNodeWithFixedSibling ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "14dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+	flex->applyProperty( StyleSheetProperty( "column-gap", "10px" ) );
+
+	UIRichText* bullet = UIRichText::NewDiv();
+	bullet->setParent( flex );
+	bullet->setPixelsSize( 8, 8 );
+	bullet->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "Follow up to 1,024 sites" );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_TRUE( textNode->getPixelsSize().getWidth() > 0.f );
+	EXPECT_TRUE( textNode->getPixelsSize().getHeight() > 0.f );
+	// 10px gap + bullet width (8px)
+	Float expectedMinX = bullet->getPixelsPosition().x + bullet->getPixelsSize().getWidth() + 10.f;
+	EXPECT_TRUE( textNode->getPixelsPosition().x >= expectedMinX - 1.f );
 
 	Engine::destroySingleton();
 }
