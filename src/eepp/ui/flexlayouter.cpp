@@ -157,6 +157,7 @@ void FlexLayouter::readItemStyle( UIWidget* child, FlexItem& item ) {
 
 	std::string val = widget->getFlexBasis();
 	String::toLowerInPlace( val );
+	item.flexBasisRaw = val;
 	if ( val == "auto" || val == "content" ) {
 		item.flexBasisAuto = true;
 		item.flexBasisValue = 0.f;
@@ -164,8 +165,14 @@ void FlexLayouter::readItemStyle( UIWidget* child, FlexItem& item ) {
 	} else {
 		item.flexBasisAuto = false;
 		item.flexBasisIsPercentage = val.find( '%' ) != std::string::npos;
-		item.flexBasisValue = mContainer->lengthFromValue(
-			val, CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
+		if ( item.flexBasisIsPercentage ) {
+			// Store the raw percentage factor, resolve later in
+			// measureFlexItems against the flex container's inner main size.
+			item.flexBasisValue = 0.f;
+		} else {
+			item.flexBasisValue = mContainer->lengthFromValue(
+				val, CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
+		}
 	}
 
 	item.alignSelf = widget->getAlignSelf();
@@ -272,15 +279,19 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 		// (CSS Flexbox §8.1), so we treat them as 0 here.
 		Rectf margin = item.widget->getLayoutPixelsMargin();
 		if ( mainAxis.horizontal ) {
-			item.marginMainStart = item.widget->hasLayoutMarginLeftAuto() ? 0.f : margin.Left;
-			item.marginMainEnd = item.widget->hasLayoutMarginRightAuto() ? 0.f : margin.Right;
+			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginLeftAuto();
+			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginRightAuto();
+			item.marginMainStart = item.hasAutoMarginMainStart ? 0.f : margin.Left;
+			item.marginMainEnd = item.hasAutoMarginMainEnd ? 0.f : margin.Right;
 			item.marginCrossStart = margin.Top;
 			item.marginCrossEnd = margin.Bottom;
 			item.hasAutoMarginCrossStart = item.widget->hasLayoutMarginTopAuto();
 			item.hasAutoMarginCrossEnd = item.widget->hasLayoutMarginBottomAuto();
 		} else {
-			item.marginMainStart = item.widget->hasLayoutMarginTopAuto() ? 0.f : margin.Top;
-			item.marginMainEnd = item.widget->hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
+			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginTopAuto();
+			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginBottomAuto();
+			item.marginMainStart = item.hasAutoMarginMainStart ? 0.f : margin.Top;
+			item.marginMainEnd = item.hasAutoMarginMainEnd ? 0.f : margin.Bottom;
 			item.marginCrossStart = margin.Left;
 			item.marginCrossEnd = margin.Right;
 			item.hasAutoMarginCrossStart = item.widget->hasLayoutMarginLeftAuto();
@@ -294,12 +305,29 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 		if ( item.hasAutoMarginCrossEnd )
 			item.marginCrossEnd = 0.f;
 
-		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
-												item.flexBasisAuto, mainAxis );
-
-		// CSS Flexbox §9.2: percentage flex-basis against indefinite main size behaves as auto
-		if ( indefiniteMainSize && item.flexBasisIsPercentage ) {
-			item.targetMainSize = getItemMainSize( item.widget, mainAxis );
+		if ( item.flexBasisIsPercentage && !item.flexBasisAuto ) {
+			// CSS Flexbox §9.2: percentage flex-basis resolves against the flex
+			// container's inner main size. Compute the container's inner main
+			// size from the supplied dimensions and padding, then resolve the
+			// percentage. If the main size is indefinite, treat as auto.
+			Float containerInnerMain =
+				mainAxis.horizontal
+					? containerWidth - containerPadding.Left - containerPadding.Right
+					: containerHeight - containerPadding.Top - containerPadding.Bottom;
+			if ( indefiniteMainSize || containerInnerMain <= 0.f ) {
+				item.targetMainSize = getItemMainSize( item.widget, mainAxis );
+			} else {
+				// Parse the percentage from the raw string value
+				std::string pctStr = item.flexBasisRaw;
+				String::toLowerInPlace( pctStr );
+				String::replaceAll( pctStr, "%", "" );
+				Float pct = 0.f;
+				String::fromString( pct, pctStr );
+				item.targetMainSize = containerInnerMain * pct / 100.f;
+			}
+		} else {
+			item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
+													item.flexBasisAuto, mainAxis );
 		}
 
 		if ( mainAxis.horizontal && item.widget->getLayoutWidthPolicy() == SizePolicy::Fixed &&
@@ -685,31 +713,86 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 	Float totalGap = ( itemCount > 1 ) ? (Float)( itemCount - 1 ) * columnGap : 0.f;
 	Float freeSpaceMain = containerMainSize - totalItemMain - totalGap;
 
+	// CSS Flexbox §8.1: Before justify-content, positive free space on the main
+	// axis is first consumed by auto margins. If an item has margin-main-start: auto,
+	// the free space before it is absorbed; if margin-main-end: auto, the free space
+	// after it is absorbed. If both are auto, free space is split between them.
+	// We track consumed space per item and adjust freeSpaceMain for justify-content.
+	SmallVector<Float, 16> autoMainStart( itemCount, 0.f );
+	SmallVector<Float, 16> autoMainEnd( itemCount, 0.f );
+	Float remainingFree = freeSpaceMain;
+	if ( remainingFree > 0.f ) {
+		// Count items with main-axis auto margins
+		SmallVector<size_t, 16> autoStartItems;
+		SmallVector<size_t, 16> autoEndItems;
+		SmallVector<size_t, 16> autoBothItems;
+		for ( size_t i = 0; i < itemCount; ++i ) {
+			size_t idx = line.itemIndices[i];
+			const auto& item = mItems[idx];
+			if ( item.hasAutoMarginMainStart && item.hasAutoMarginMainEnd )
+				autoBothItems.push_back( i );
+			else if ( item.hasAutoMarginMainStart )
+				autoStartItems.push_back( i );
+			else if ( item.hasAutoMarginMainEnd )
+				autoEndItems.push_back( i );
+		}
+
+		// Distribute free space to auto margins in order:
+		// 1. Items with auto on both sides split the free space equally
+		// 2. Items with auto on start side get all their free space
+		// 3. Items with auto on end side get all their free space
+		if ( !autoBothItems.empty() ) {
+			Float perItem = remainingFree / (Float)autoBothItems.size();
+			for ( size_t i : autoBothItems ) {
+				Float half = perItem * 0.5f;
+				autoMainStart[i] = half;
+				autoMainEnd[i] = half;
+			}
+			remainingFree = 0.f;
+		} else if ( !autoStartItems.empty() || !autoEndItems.empty() ) {
+			Float perStart =
+				autoStartItems.empty()
+					? 0.f
+					: remainingFree / (Float)( autoStartItems.size() + autoEndItems.size() );
+			Float perEnd = perStart;
+			for ( size_t i : autoStartItems ) {
+				autoMainStart[i] = perStart;
+				autoMainEnd[i] = 0.f;
+			}
+			for ( size_t i : autoEndItems ) {
+				autoMainStart[i] = 0.f;
+				autoMainEnd[i] = perEnd;
+			}
+			remainingFree = 0.f;
+		}
+	}
+
+	// Remaining free space (after auto margins) is distributed by justify-content
 	Float mainOffset = 0.f;
 	Float spacing = columnGap;
 
 	switch ( mJustify ) {
 		case CSSJustifyContent::FlexEnd:
-			mainOffset = freeSpaceMain;
+			mainOffset = remainingFree;
 			break;
 		case CSSJustifyContent::Center:
-			mainOffset = freeSpaceMain * 0.5f;
+			mainOffset = remainingFree * 0.5f;
 			break;
 		case CSSJustifyContent::SpaceBetween:
-			if ( freeSpaceMain > 0.f && itemCount > 1 )
-				spacing = columnGap + freeSpaceMain / (Float)( itemCount - 1 );
+			if ( remainingFree > 0.f && itemCount > 1 )
+				spacing = columnGap + remainingFree / (Float)( itemCount - 1 );
 			else
 				mainOffset = 0.f;
 			break;
 		case CSSJustifyContent::SpaceAround:
-			if ( freeSpaceMain > 0.f && itemCount > 0 ) {
-				spacing = columnGap + freeSpaceMain / (Float)itemCount;
+			if ( remainingFree > 0.f && itemCount > 0 ) {
+				spacing = columnGap + remainingFree / (Float)itemCount;
 				mainOffset = spacing * 0.5f;
 			}
 			break;
 		case CSSJustifyContent::SpaceEvenly:
-			if ( freeSpaceMain > 0.f && itemCount > 0 ) {
-				Float slot = columnGap + freeSpaceMain / (Float)( itemCount + 1 );
+			if ( remainingFree > 0.f && itemCount > 0 ) {
+				Float slot = columnGap + remainingFree / (Float)( itemCount + 1 );
 				mainOffset = slot;
 				spacing = slot;
 			}
@@ -721,10 +804,12 @@ void FlexLayouter::alignMainAxis( FlexLine& line, const Float containerMainSize,
 	}
 
 	Float pos = mainOffset;
-	for ( size_t idx : line.itemIndices ) {
+	for ( size_t i = 0; i < itemCount; ++i ) {
+		size_t idx = line.itemIndices[i];
 		const auto& item = mItems[idx];
-		mItems[idx].mainPos = pos + item.marginMainStart;
-		pos += item.targetMainSize + item.marginMainStart + item.marginMainEnd + spacing;
+		mItems[idx].mainPos = pos + autoMainStart[i] + item.marginMainStart;
+		pos += autoMainStart[i] + item.targetMainSize + item.marginMainStart + item.marginMainEnd +
+			   autoMainEnd[i] + spacing;
 	}
 }
 
@@ -1250,18 +1335,28 @@ void FlexLayouter::computeIntrinsicWidths() {
 	}
 
 	for ( auto& item : items ) {
-		item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
-												item.flexBasisAuto, mainAxis );
+		if ( item.flexBasisIsPercentage && !item.flexBasisAuto ) {
+			// Percentage flex-basis in intrinsic sizing: use content-based
+			// size as a fallback since container size is not known here.
+			item.targetMainSize = getItemMainSize( item.widget, mainAxis );
+		} else {
+			item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
+													item.flexBasisAuto, mainAxis );
+		}
 
 		Rectf margin = item.widget->getLayoutPixelsMargin();
 		if ( mainAxis.horizontal ) {
-			item.marginMainStart = item.widget->hasLayoutMarginLeftAuto() ? 0.f : margin.Left;
-			item.marginMainEnd = item.widget->hasLayoutMarginRightAuto() ? 0.f : margin.Right;
+			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginLeftAuto();
+			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginRightAuto();
+			item.marginMainStart = item.hasAutoMarginMainStart ? 0.f : margin.Left;
+			item.marginMainEnd = item.hasAutoMarginMainEnd ? 0.f : margin.Right;
 			item.marginCrossStart = margin.Top;
 			item.marginCrossEnd = margin.Bottom;
 		} else {
-			item.marginMainStart = item.widget->hasLayoutMarginTopAuto() ? 0.f : margin.Top;
-			item.marginMainEnd = item.widget->hasLayoutMarginBottomAuto() ? 0.f : margin.Bottom;
+			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginTopAuto();
+			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginBottomAuto();
+			item.marginMainStart = item.hasAutoMarginMainStart ? 0.f : margin.Top;
+			item.marginMainEnd = item.hasAutoMarginMainEnd ? 0.f : margin.Bottom;
 			item.marginCrossStart = margin.Left;
 			item.marginCrossEnd = margin.Right;
 		}

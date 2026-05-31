@@ -1709,3 +1709,197 @@ UTEST( FlexContainer, visibilityCollapseWithTextNode ) {
 
 	Engine::destroySingleton();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 15: Missing Coverage — wrap-reverse, percentage basis, auto margins
+// ─────────────────────────────────────────────────────────────────────────────
+
+UTEST( FlexContainer, wrapReverse ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 200, 300 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-wrap", "wrap-reverse" ) );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-content", "flex-start" ) );
+
+	// 5 items at 50px each. In a 200px container, 4 items fit per line:
+	//   DOM order: items 0-3 on line 0, item 4 on line 1.
+	//   wrap-reverse reverses lines: line 0 (item 4) at cross-start (top),
+	//   line 1 (items 0-3) below it.
+	// With align-content: flex-start, line 0 is at y=0, line 1 at y=50.
+	for ( int i = 0; i < 5; ++i ) {
+		UIHTMLWidget* child = UIHTMLWidget::New();
+		child->setParent( flex );
+		child->setPixelsSize( 50, 50 );
+		child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	}
+
+	sceneNode->updateDirtyLayouts();
+
+	// Item 4 is the last in DOM, placed on the reversed first line at y=0.
+	UIWidget* lastItem = flex->getChildAt( 4 )->asType<UIWidget>();
+	EXPECT_NEAR( lastItem->getPixelsPosition().y, 0.f, 5.f );
+
+	// Items 0-3 are on the second line (originally first in DOM, now
+	// second after reverse), positioned below line 0 at y=50.
+	UIWidget* first = flex->getChildAt( 0 )->asType<UIWidget>();
+	EXPECT_NEAR( first->getPixelsPosition().y, 50.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, autoMarginMainAxis ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "justify-content", "flex-start" ) );
+
+	// Single item with margin-left: auto in row direction.
+	// Spec §8.1: auto margins consume free space before justify-content.
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "margin-left", "auto" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Container 400px, item 100px → 300px free space → margin-left:auto consumes it all.
+	EXPECT_NEAR( child->getPixelsPosition().x, 300.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, autoMarginMainAxisBothSides ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	// margin: auto on both sides → splits free space equally → centered.
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 200, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "margin", "auto" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_NEAR( child->getPixelsPosition().x, 100.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, percentageBasis ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 10, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "flex-basis", "50%" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// 50% of 400px container = 200px. No flex-grow, so it stays at 200px.
+	EXPECT_NEAR( child->getPixelsSize().getWidth(), 200.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, flexBasisZeroPercent ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// flex: 1 1 0% — common equal-distribution pattern.
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 300, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	for ( int i = 0; i < 3; ++i ) {
+		UIHTMLWidget* child = UIHTMLWidget::New();
+		child->setParent( flex );
+		child->setPixelsSize( 10, 50 );
+		child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+		child->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 0%" ) );
+	}
+
+	sceneNode->updateDirtyLayouts();
+
+	for ( int i = 0; i < 3; ++i ) {
+		UIWidget* child = flex->getChildAt( i )->asType<UIWidget>();
+		EXPECT_NEAR( child->getPixelsSize().getWidth(), 100.f, 5.f );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, stretchWithFixedCrossSize ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// align-items: stretch must NOT override an explicit cross-size (Fixed policy).
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "stretch" ) );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_NEAR( child->getPixelsSize().getHeight(), 50.f, 5.f );
+
+	Engine::destroySingleton();
+}

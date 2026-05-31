@@ -24,6 +24,7 @@ class EE_API FlexLayouter : public UILayouter {
 		Float flexBasisValue;
 		bool flexBasisAuto;
 		bool flexBasisIsPercentage;
+		std::string flexBasisRaw;
 
 		CSSAlignSelf alignSelf;
 
@@ -43,6 +44,8 @@ class EE_API FlexLayouter : public UILayouter {
 		Float minMainSize{ 0.f };
 		Float maxMainSize{ std::numeric_limits<Float>::max() };
 		bool frozen{ false };
+		bool hasAutoMarginMainStart{ false };
+		bool hasAutoMarginMainEnd{ false };
 		bool hasAutoMarginCrossStart{ false };
 		bool hasAutoMarginCrossEnd{ false };
 		bool collapsed{ false };
