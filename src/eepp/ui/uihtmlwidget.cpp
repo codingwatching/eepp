@@ -212,28 +212,39 @@ void UIHTMLWidget::setNeedsOrderSort( bool val ) {
 }
 
 void UIHTMLWidget::drawChildren() {
-	if ( ( isFlex() /* || isGrid() */ ) && mNeedsOrderSort ) {
-		std::vector<Node*> sortedChildren;
-		for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
-			sortedChildren.push_back( child );
+	if ( isFlex() ) {
+		CSSFlexDirection dir = getFlexDirection();
+		bool needsDirectionReverse =
+			dir == CSSFlexDirection::RowReverse || dir == CSSFlexDirection::ColumnReverse;
+		if ( mNeedsOrderSort || needsDirectionReverse ) {
+			std::vector<Node*> sortedChildren;
+			for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
+				sortedChildren.push_back( child );
 
-		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
-			int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
-							 ? static_cast<UIHTMLWidget*>( a )->getOrder()
-							 : 0;
-			int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
-							 ? static_cast<UIHTMLWidget*>( b )->getOrder()
-							 : 0;
-			return aOrder < bOrder;
-		} );
+			if ( mNeedsOrderSort ) {
+				std::stable_sort(
+					sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+						int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
+										 ? static_cast<UIHTMLWidget*>( a )->getOrder()
+										 : 0;
+						int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
+										 ? static_cast<UIHTMLWidget*>( b )->getOrder()
+										 : 0;
+						return aOrder < bOrder;
+					} );
+			}
 
-		for ( auto* child : sortedChildren ) {
-			if ( child->isVisible() )
-				child->nodeDraw();
+			if ( needsDirectionReverse )
+				std::reverse( sortedChildren.begin(), sortedChildren.end() );
+
+			for ( auto* child : sortedChildren ) {
+				if ( child->isVisible() )
+					child->nodeDraw();
+			}
+			return;
 		}
-	} else {
-		Node::drawChildren();
 	}
+	Node::drawChildren();
 }
 
 void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {

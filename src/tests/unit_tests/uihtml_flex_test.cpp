@@ -2200,3 +2200,137 @@ UTEST( FlexContainer, orderPaintSortNegatives ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( FlexContainer, directionReversePaintColumnReverse ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-direction", "column-reverse" ) );
+	flex->setPixelsSize( 500, 400 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child3 = UIHTMLWidget::New();
+	child3->setParent( flex );
+	child3->setPixelsSize( 100, 50 );
+	child3->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Column-reverse: first DOM child at bottom, last DOM child at top
+	EXPECT_GT( child1->getPixelsPosition().y, child2->getPixelsPosition().y );
+	EXPECT_GT( child2->getPixelsPosition().y, child3->getPixelsPosition().y );
+
+	// All orders equal, so no order-based sort needed; direction-only reversal in drawChildren
+	EXPECT_FALSE( flex->getNeedsOrderSort() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, directionReversePaintRowReverse ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-direction", "row-reverse" ) );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child3 = UIHTMLWidget::New();
+	child3->setParent( flex );
+	child3->setPixelsSize( 100, 50 );
+	child3->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Row-reverse: first DOM child at right, last DOM child at left
+	EXPECT_GT( child1->getPixelsPosition().x, child2->getPixelsPosition().x );
+	EXPECT_GT( child2->getPixelsPosition().x, child3->getPixelsPosition().x );
+
+	// All orders equal so no order-based sort needed
+	EXPECT_FALSE( flex->getNeedsOrderSort() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, directionReversePaintWithOrderSort ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-direction", "column-reverse" ) );
+	flex->setPixelsSize( 500, 400 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	// Orders: A=2, B=0, C=1
+	// Without direction reversal: B(order=0) at top, C(order=1) middle, A(order=2) bottom
+	// With column-reverse reversal: A at top, C middle, B at bottom
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child1->setOrder( 2 );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child2->setOrder( 0 );
+
+	UIHTMLWidget* child3 = UIHTMLWidget::New();
+	child3->setParent( flex );
+	child3->setPixelsSize( 100, 50 );
+	child3->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child3->setOrder( 1 );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Column-reverse: items sorted by order [B(0), C(1), A(2)] then reversed
+	// Visual top-to-bottom: A(2), C(1), B(0)
+	// A (order=2, DOM first) should be at top
+	// B (order=0, DOM middle) should be at bottom
+	EXPECT_LT( child1->getPixelsPosition().y, child3->getPixelsPosition().y );
+	EXPECT_LT( child3->getPixelsPosition().y, child2->getPixelsPosition().y );
+
+	EXPECT_TRUE( flex->getNeedsOrderSort() );
+
+	Engine::destroySingleton();
+}
