@@ -112,6 +112,22 @@ bool UITextNode::isWhitespaceOnly() const {
 	return true;
 }
 
+Float UITextNode::getBaseline() const {
+	if ( mFlexText && mFlexText->getFont() )
+		return mFlexText->getFont()->getAscent( mFlexText->getCharacterSize() );
+	Node* n = const_cast<UITextNode*>( this )->getParent();
+	while ( n ) {
+		if ( n->isType( UI_TYPE_RICHTEXT ) ) {
+			auto& fontConfig = n->asType<UIRichText>()->getRichText().getFontStyleConfig();
+			if ( fontConfig.Font )
+				return fontConfig.Font->getAscent( fontConfig.CharacterSize );
+			break;
+		}
+		n = n->getParent();
+	}
+	return 0.f;
+}
+
 Text* UITextNode::getFlexText() {
 	if ( mFlexText == nullptr )
 		mFlexText = Text::New();

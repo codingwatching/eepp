@@ -88,6 +88,8 @@ class EE_API FlexLayouter : public UILayouter {
 	Float getMinIntrinsicWidth() override;
 	Float getMaxIntrinsicWidth() override;
 
+	Float getBaseline() const { return mContainerBaseline; }
+
   protected:
 	struct Axis {
 		bool horizontal;
@@ -138,6 +140,7 @@ class EE_API FlexLayouter : public UILayouter {
 						   bool indefiniteMainSize, bool indefiniteCrossSize );
 
 	SmallVector<FlexItem, 16> mItems;
+	Float mContainerBaseline{ 0.f };
 	CSSFlexDirection mDirection{ CSSFlexDirection::Row };
 	CSSFlexWrap mWrap{ CSSFlexWrap::NoWrap };
 	CSSJustifyContent mJustify{ CSSJustifyContent::FlexStart };

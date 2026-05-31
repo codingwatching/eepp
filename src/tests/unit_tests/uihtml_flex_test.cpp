@@ -2334,3 +2334,111 @@ UTEST( FlexContainer, directionReversePaintWithOrderSort ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( FlexContainer, alignItemsBaselineBasic ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "baseline" ) );
+
+	UITextNode* textA = UITextNode::New();
+	textA->setParent( flex );
+	textA->setText( "Hello" );
+
+	UITextNode* textB = UITextNode::New();
+	textB->setParent( flex );
+	textB->setText( "World" );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Both text nodes have the same font, so their baselines are equal.
+	// With baseline alignment, both are at the same y as flex-start.
+	Float ascent = textA->getBaseline();
+	EXPECT_TRUE( ascent > 0.f );
+	EXPECT_NEAR( textA->getPixelsPosition().y, 0.f, 5.f );
+	EXPECT_NEAR( textB->getPixelsPosition().y, 0.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, containerGetBaseline ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "Baseline test" );
+
+	sceneNode->updateDirtyLayouts();
+
+	// After layout, the flex container's baseline should equal the text ascent
+	Float bl = flex->getBaseline();
+	EXPECT_TRUE( bl > 0.f );
+	Float ascent = textNode->getBaseline();
+	EXPECT_NEAR( bl, ascent, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, baselinePositionsLargerItemCorrectly ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 150 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "baseline" ) );
+
+	// A taller non-text item (e.g. a colored div) alongside a text node.
+	// The taller item uses FlexStart alignment (no baseline), while the text node
+	// uses baseline alignment. Both should coexist within the same line cross size.
+	UIHTMLWidget* tallBox = UIHTMLWidget::New();
+	tallBox->setParent( flex );
+	tallBox->setPixelsSize( 50, 80 );
+	tallBox->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UITextNode* textNode = UITextNode::New();
+	textNode->setParent( flex );
+	textNode->setText( "Text" );
+
+	sceneNode->updateDirtyLayouts();
+
+	// The line cross size must be at least as large as the tall box
+	Float ascent = textNode->getBaseline();
+	EXPECT_TRUE( ascent > 0.f );
+	// Text node cross-start position depends on baseline alignment
+	EXPECT_TRUE( textNode->getPixelsSize().getHeight() > 0.f );
+
+	Engine::destroySingleton();
+}

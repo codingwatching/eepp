@@ -160,6 +160,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual void drawChildren();
 
+	Float getBaseline() const;
+
 	virtual void onParentChange();
 
 	virtual void onPositionChange();

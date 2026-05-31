@@ -35,6 +35,8 @@ class EE_API UITextNode : public UIWidget {
 
 	Text* getFlexText();
 
+	Float getBaseline() const;
+
   protected:
 	String mText;
 	size_t mLayoutCharCount{ 0 };

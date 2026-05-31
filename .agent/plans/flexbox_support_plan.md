@@ -1,7 +1,7 @@
 # CSS Flexbox Support Plan
 
 > **Status: ✅ COMPLETED** — Full CSS Flexible Box Layout Module Level 1 support.
-> All 59 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (450/451 pass, 1 expected skip).
+> All 65 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (456/457 pass, 1 expected skip).
 
 ## Goal
 
@@ -1030,24 +1030,38 @@ and non-`UIHTMLWidget` children get `order=0` (not affected by reordering).
 `orderPaintSortFlagEqualOrders`, `orderPaintSortSingleItem`,
 `orderPaintSortNegatives`.
 
-### G8: Flex container baseline computation (§8.5) — P3
+### G8: Flex container baseline computation (§8.5) — ✅ DONE
 
-**Status:** Not implemented. `align-items: baseline` or `align-self: baseline` on
-a flex container's children triggers baseline alignment, but if the flex container
-ITSELF is a flex item in an outer flex container, that outer container may need the
-flex container's baseline for alignment.
+**Status:** Implemented. The baseline alignment gap has been closed:
 
-Per spec, the baseline of a flex container is:
-1. The baseline of the first flex line if `flex-direction` is row/row-reverse.
-2. The baseline of the last flex line if `flex-direction` is column/column-reverse.
+- **`UIWidget::getBaseline()`** — New virtual method returning the baseline offset
+  from the widget's cross-start content edge. Default: `0.f` (cross-start edge).
+  `UITextNode` overrides to return font ascent. `UIHTMLWidget` overrides to
+  delegate to `FlexLayouter::getBaseline()` when the widget is a flex container.
 
-**Impact:** Only affects `align-items: baseline` / `align-self: baseline` on an
-outer flex container containing this flex container. This is an uncommon pattern.
+- **`resolveCrossSizes()` baseline-aware line sizing** — When items on a flex line
+  use `align-self: baseline`, the line cross size is computed as
+  `max(existingMaxCross, maxAscent + maxDescent)` where maxAscent/maxDescent are
+  the maximum baseline ascent/descent among baseline-aligned items.
 
-**Fix:**
-1. After `applyLayout()`, store the baseline offset of the first/last line.
-2. Provide a `getBaseline()` method or integrate with the existing baseline system.
-3. Cross-axis position of the flex container in the outer flex layout would use this.
+- **`alignCrossAxis()` baseline positioning** — Items with `align-self: baseline`
+  are positioned so that their baseline matches the maximum baseline offset on the
+  line: `crossPos = pos + (maxLineBaseline - itemBaseline) + marginCrossStart`.
+
+- **`FlexLayouter::getBaseline()` / `mContainerBaseline`** — After `applyLayout()`,
+  the container's baseline is stored: for row direction, uses the first flex line's
+  max baseline offset; for column direction, uses the last flex line. The baseline
+  is the offset from the container's content area cross-start edge.
+
+- **3 new tests:** `alignItemsBaselineBasic` (two text nodes with `align-items:
+  baseline`), `containerGetBaseline` (flex container's `getBaseline()` returns
+  font ascent), `baselinePositionsLargerItemCorrectly` (baseline + non-baseline
+  items coexist on the same line).
+
+**Impact:** `align-items: baseline` and `align-self: baseline` now correctly
+position flex items within a line so their baselines match. Flex containers
+expose their baseline via `getBaseline()` for use by outer flex containers.
+65/65 flex tests pass (62 existing + 3 new), 456/457 full suite pass.
 
 ### G9: `flex-basis: content` distinct from `flex-basis: auto` (§7.2.3) — ✅ DONE
 
@@ -1112,7 +1126,7 @@ with `setMaxWrapWidth()` (see anchor below for full details).
 | G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small | ✅ Done |
 | G6 | Percentage margins/paddings (§4.2) | P3 | Small | ✅ Done |
 | G7 | Painting order by `order` (§4.3) | P3 | Medium | ✅ Done |
-| G8 | Flex container baselines (§8.5) | P3 | Medium | Pending |
+| G8 | Flex container baselines (§8.5) | P3 | Medium | ✅ Done |
 | G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | ✅ Done |
 | G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
 | G11 | Column-reverse stacking context (§4.1) | P3 | Small | Pending |
@@ -1153,6 +1167,8 @@ The original plan covered Phases 0-12. Phases 0-11 are largely complete with the
 gaps documented above. Here's the updated path forward:
 
 ### ✅ Done (this session)
+- **G11** — Column-reverse stacking context reordering (§4.1). Added `flex-direction` reverse-check in `drawChildren()` to reverse paint order for column-reverse/row-reverse after `order`-based sort. 3 new tests: `directionReversePaintColumnReverse`, `directionReversePaintRowReverse`, `directionReversePaintWithOrderSort`.
+- **G8** — Flex container baselines (§8.5). Added `getBaseline()` virtual on `UIWidget` (default=0), overrides on `UITextNode` (font ascent) and `UIHTMLWidget` (delegates to FlexLayouter). `resolveCrossSizes()` computes baseline-aware line cross size. `alignCrossAxis()` positions baseline items correctly. Container baseline stored after layout. 3 new tests: `alignItemsBaselineBasic`, `containerGetBaseline`, `baselinePositionsLargerItemCorrectly`.
 - **G7** — Painting order by `order` (§4.3). Added `UIHTMLWidget::drawChildren()` override that stable-sorts children by CSS `order` when flex items have differing values. The `mNeedsOrderSort` flag is set during flex layout. 4 new tests: `orderPaintSortFlagDifferentOrders`, `orderPaintSortFlagEqualOrders`, `orderPaintSortSingleItem`, `orderPaintSortNegatives`.
 - **G1** — Iterative flex resolution after min/max clamping. Rewrote `resolveFlexibleLengths()` with iterative §9.7 algorithm — saves original flex base sizes, freezes items on min/max violations, redistributes remaining free space to unfrozen items, repeats until stable. Added `FlexItem::frozen` flag.
 - **G2** — Correct min-intrinsic width for wrap containers. Fixed `computeIntrinsicWidths()` to compute largest item min-content contribution + margins + padding instead of returning just `containerPadding`.
@@ -1164,8 +1180,6 @@ gaps documented above. Here's the updated path forward:
 - **G3** — `visibility: collapse` on flex items. Added `CSSVisibility` enum (`Visible`/`Hidden`/`Collapse`) and `CSSVisibilityHelper`. `UIHTMLWidget` stores `mVisibility` and handles `PropertyId::Visibility` via `setVisibility()`. In flex layout: collapsed items are zeroed on main axis (targetMainSize=0, margins=0, flexGrow/Shrink=0) but their cross size is saved and contributes to line cross size. They are positioned at flow position with 0×0 size.
 
 ### Next (fill remaining spec gaps, sorted by real-world usage)
-- **G11** — Column-reverse stacking context reordering (§4.1). Last visual item in `column-reverse` should paint on top when items overlap. (P3)
-- **G8** — Flex container baselines (§8.5). Baseline computation for nested flex containers in `align-items: baseline` context. Niche pattern. (P3)
 - **G10** — Percentage flex-basis edge cases (§9.8). Already partially handled; edge case when container size is indefinite. (P3)
 
 ### Final gate

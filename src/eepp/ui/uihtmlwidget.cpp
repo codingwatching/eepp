@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
+#include <eepp/ui/flexlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayouter.hpp>
 #include <eepp/ui/uilayoutermanager.hpp>
@@ -135,6 +136,16 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 
 bool UIHTMLWidget::isFlex() const {
 	return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex;
+}
+
+Float UIHTMLWidget::getBaseline() const {
+	if ( isFlex() && mLayouter ) {
+		auto* flex = reinterpret_cast<FlexLayouter*>( mLayouter );
+		return flex->getBaseline();
+	}
+	if ( mBaselineAlign.type == CSSBaselineAlignment::Length )
+		return mBaselineAlign.value;
+	return 0.f;
 }
 
 void UIHTMLWidget::setVisibility( CSSVisibility val ) {

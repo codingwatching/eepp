@@ -102,6 +102,14 @@ FlexLayouter::Axis FlexLayouter::getCrossAxis( CSSFlexDirection direction ) cons
 
 namespace {
 
+static Float getItemBaselineOffset( UIWidget* widget ) {
+	if ( widget->isType( UI_TYPE_HTML_WIDGET ) )
+		return widget->asType<UIHTMLWidget>()->getBaseline();
+	if ( widget->isType( UI_TYPE_TEXTNODE ) )
+		return widget->asType<UITextNode>()->getBaseline();
+	return 0.f;
+}
+
 bool getFontStyleFromAncestor( UIWidget* widget, FontStyleConfig& outConfig ) {
 	Node* n = widget;
 	while ( n ) {
@@ -913,6 +921,9 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 	}
 
 	Float maxCross = 0.f;
+	bool hasBaselineItem = false;
+	Float maxBaselineAscent = 0.f;
+	Float maxBaselineDescent = 0.f;
 	for ( size_t idx : line.itemIndices ) {
 		auto& item = mItems[idx];
 		if ( item.collapsed ) {
@@ -922,8 +933,30 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 		}
 		item.outerCrossSize = item.crossSize + item.marginCrossStart + item.marginCrossEnd;
 		maxCross = eemax( maxCross, item.outerCrossSize );
+
+		if ( resolveAlignSelf( item.alignSelf, mAlignItems ) == CSSAlignSelf::Baseline ) {
+			hasBaselineItem = true;
+			Float bl = getItemBaselineOffset( item.widget );
+			Float asc = bl;
+			Float desc = item.outerCrossSize - bl;
+			if ( !crossAxis.horizontal ) {
+				asc = bl;
+				desc = item.outerCrossSize - bl;
+			}
+			// Baseline alignment only meaningful when cross axis is vertical
+			if ( !crossAxis.horizontal && !mainAxis.horizontal ) {
+				// Column direction: cross axis is horizontal, baseline is along main axis
+				asc = 0.f;
+				desc = 0.f;
+			}
+			maxBaselineAscent = eemax( maxBaselineAscent, asc );
+			maxBaselineDescent = eemax( maxBaselineDescent, desc );
+		}
 	}
-	line.crossSize = maxCross;
+	if ( hasBaselineItem )
+		line.crossSize = eemax( line.crossSize, maxBaselineAscent + maxBaselineDescent );
+	else
+		line.crossSize = maxCross;
 }
 
 void FlexLayouter::alignCrossAxis( const SmallVector<FlexLine, 8>& lines,
@@ -992,6 +1025,27 @@ void FlexLayouter::alignCrossAxis( const SmallVector<FlexLine, 8>& lines,
 		if ( lineCrossSize > containerCrossSize && containerCrossSize > 0.f )
 			lineCrossSize = containerCrossSize;
 
+		// Pre-compute max baseline offset for baseline-aligned items on this line.
+		// Baseline alignment applies when the cross axis is the block axis (vertical
+		// for row direction, or horizontal in column direction — spec treats inline-axis
+		// parallel to cross axis differently). Here we only apply baseline alignment
+		// when the cross axis is vertical (row/row-reverse direction).
+		Float maxLineBaseline = 0.f;
+		bool hasBaselineOnLine = false;
+		if ( !crossAxis.horizontal ) {
+			for ( size_t idx : line.itemIndices ) {
+				auto& item = mItems[idx];
+				if ( item.hasAutoMarginCrossStart || item.hasAutoMarginCrossEnd )
+					continue;
+				CSSAlignSelf resolved = resolveAlignSelf( item.alignSelf, mAlignItems );
+				if ( resolved == CSSAlignSelf::Baseline ) {
+					hasBaselineOnLine = true;
+					Float bl = getItemBaselineOffset( item.widget ) + item.marginCrossStart;
+					maxLineBaseline = eemax( maxLineBaseline, bl );
+				}
+			}
+		}
+
 		for ( size_t idx : line.itemIndices ) {
 			auto& item = mItems[idx];
 
@@ -1030,7 +1084,12 @@ void FlexLayouter::alignCrossAxis( const SmallVector<FlexLine, 8>& lines,
 							lineCrossSize - item.marginCrossStart - item.marginCrossEnd;
 					break;
 				case CSSAlignSelf::Baseline:
-					item.crossPos = pos + item.marginCrossStart;
+					if ( hasBaselineOnLine ) {
+						Float bl = getItemBaselineOffset( item.widget ) + item.marginCrossStart;
+						item.crossPos = pos + ( maxLineBaseline - bl ) + item.marginCrossStart;
+					} else {
+						item.crossPos = pos + item.marginCrossStart;
+					}
 					break;
 				case CSSAlignSelf::Auto:
 				default:
@@ -1328,6 +1387,31 @@ void FlexLayouter::updateLayout() {
 
 	applyLayout( lines, mainAxis, crossAxis, containerPadding, containerWidth, containerHeight,
 				 widthPolicy, heightPolicy );
+
+	// CSS Flexbox §8.5: store the container's baseline for use by outer flex containers.
+	// For row/row-reverse, baseline = first flex line's baseline offset from content top.
+	// For column/column-reverse, baseline = last flex line's baseline offset from content top.
+	{
+		mContainerBaseline = 0.f;
+		if ( !lines.empty() ) {
+			Axis lineCrossAxis = crossAxis;
+			size_t lineIdx = ( mDirection == CSSFlexDirection::Row ||
+							   mDirection == CSSFlexDirection::RowReverse )
+								 ? 0
+								 : lines.size() - 1;
+			const FlexLine& blLine = lines[lineIdx];
+			Float maxBl = 0.f;
+			for ( size_t idx : blLine.itemIndices ) {
+				auto& item = mItems[idx];
+				if ( item.collapsed )
+					continue;
+				maxBl =
+					eemax( maxBl, getItemBaselineOffset( item.widget ) + item.marginCrossStart );
+			}
+			Float absp = lineCrossAxis.horizontal ? 0.f : blLine.crossPos;
+			mContainerBaseline = absp + maxBl;
+		}
+	}
 
 	// CSS Flexbox §4.3: painting order follows order-modified document order.
 	// Set flag so drawChildren() sorts by order when items have different order values.
