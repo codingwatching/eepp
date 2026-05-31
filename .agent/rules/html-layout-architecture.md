@@ -16,6 +16,7 @@ Primary references:
 - CSS Visual Formatting Model, including inline formatting and positioning: https://www.w3.org/TR/CSS22/visuren.html
 - CSS line height and inline-block baseline rules: https://www.w3.org/TR/CSS22/visudet.html#line-height
 - CSS Lists and Counters: https://www.w3.org/TR/css-lists-3/
+- CSS Flexbox Module Level 1: https://www.w3.org/TR/css-flexbox-1/
 
 Required workflow for new HTML/CSS behavior:
 
@@ -41,12 +42,20 @@ Important responsibilities:
 
 Layout math is separated from widgets into `UILayouter` implementations:
 
-- `BlockLayouter`: Handles block-like containers, including `display: block`, `inline-block`, `list-item`, `table-cell`, and the current `flex` placeholder path. It delegates inline formatting to `RichText`, then maps the resulting physical spans back to child widgets.
+- `BlockLayouter`: Handles block-like containers, including `display: block`, `inline-block`, `list-item`, and `table-cell`. It delegates inline formatting to `RichText`, then maps the resulting physical spans back to child widgets. Also used for blockified flex item children.
+- `FlexLayouter`: Full CSS Flexbox Level 1 implementation for `display: flex` and `display: inline-flex`. Handles all flex container/item properties, the flex layout algorithm (item collection, flex basis resolution, flexible length distribution, main/cross-axis alignment, wrapping, gaps), auto margins, `order`-based paint sorting, `visibility: collapse`, min-width:auto, baseline alignment, and anonymous flex item text wrapping.
 - `TableLayouter`: Handles `display: table` and encapsulates HTML table column width distribution, rows, sections, and cell positioning.
 - `InlineLayouter`: A no-op layouter for true inline text-span elements. Inline formatting is owned by the nearest rich-text/block formatting context so normal widget layout does not override text flow.
 - `NoneLayouter`: Handles `display: none` by skipping layout/rendering participation.
 
-`UILayouterManager::create()` is the dispatch point. Before adding a new display mode, check whether it should create a new formatting context, participate in an existing one, or be represented as a rich-text custom box.
+`UILayouterManager::create()` is the dispatch point. Key routing rules:
+- `Block`/`InlineBlock`/`ListItem`/`TableCell` → `BlockLayouter`
+- `Flex`/`InlineFlex` → `FlexLayouter`
+- `Inline` → `InlineLayouter` (for text spans) or `BlockLayouter`
+- `Table` → `TableLayouter`
+- `None` → `NoneLayouter`
+
+**Blockification per CSS Flexbox §4:** Children of flex containers are automatically blockified — they receive `BlockLayouter` regardless of their own `display` value (unless they are themselves a flex container, which keeps `FlexLayouter`). This is enforced in `UILayouterManager::create()` before the display-based dispatch.
 
 ## RichText Integration
 
@@ -73,7 +82,9 @@ Atomic inline widgets (`RichText::RenderSpan::Type::AtomicBox`) do not call `UIT
 
 ### UITextNode
 
-`UITextNode` is a lightweight non-rendering node for raw parsed text (`node_pcdata`). Its text is extracted during `rebuildRichText()` and rendered by the parent `UIRichText`. After wrapping, `BlockLayouter` assigns it position and size for debugging and hit-box accounting, but `UITextNode::draw()` remains a no-op.
+`UITextNode` is a lightweight non-rendering node for raw parsed text (`node_pcdata`). Its text is extracted during `rebuildRichText()` and rendered by the parent `UIRichText`. After wrapping, `BlockLayouter` assigns it position and size for debugging and hit-box accounting.
+
+**Flex item special case:** When a `UITextNode` becomes an anonymous flex item (bare text child of a flex container), it uses a cached `Text* mFlexText` object for multi-line word wrapping. `FlexLayouter::resolveCrossSizes()` configures `mFlexText` with the target font, text, and `setMaxWrapWidth(targetMainSize)`, then measures `getTextHeight()` for cross sizing. `UITextNode::draw()` renders `mFlexText` at the flex-assigned position instead of being a no-op.
 
 ### Custom Blocks And Baselines
 
@@ -93,6 +104,8 @@ margin.Top + contentOffset.Top + lastLine.y + lastLine.maxAscent
 This is required for `display: inline-block` and for nested rich-text widgets such as `<details><summary>...</summary></details>`. A taller inline-block caused by inherited `line-height` should keep its real height but align by baseline in the parent inline formatting context.
 
 Do not fix baseline problems by special-casing individual elements, zeroing `line-height`, or changing element display defaults. The correct layer is generic inline formatting and custom-block baseline propagation.
+
+**Flex container baseline:** `FlexLayouter` stores the container's baseline after layout in `mContainerBaseline`. For row-direction flex containers, the baseline comes from the first flex line's maximum baseline offset. For column-direction, it comes from the last flex line. `UIHTMLWidget::getBaseline()` delegates to `FlexLayouter::getBaseline()` when the widget is a flex container, allowing outer flex containers to baseline-align nested flex containers correctly.
 
 ## Display And Flow Rules
 
@@ -119,6 +132,22 @@ Requirements:
 - `list-style-type: none` disables marker rendering and marker spacing.
 - `<summary>` defaults to `display: list-item` and uses disclosure marker defaults as defined by HTML rendering rules.
 - `disclosure-open` and `disclosure-closed` should use eepp's primitive marker drawing facilities, not textual `v` or `>` approximations.
+
+### Flex Layout
+
+`display: flex` and `display: inline-flex` use `FlexLayouter` implementing the full CSS Flexbox Level 1 layout algorithm. Key behaviors:
+
+- **Item collection:** In-flow children are collected, sorted by CSS `order` property. Out-of-flow (`absolute`/`fixed`) and `display: none` children are skipped. Bare `UITextNode` children become anonymous flex items with text-based sizing.
+- **Flex basis resolution:** `flex-basis` resolves against the container's inner main size (percentage) or uses the item's explicit main size / content size (`auto`). `flex-basis: content` bypasses the explicit main-size check.
+- **Flexible length resolution:** Iterative §9.7 algorithm: distribute free space, clamp by min/max, freeze items that hit constraints, redistribute remaining space to unfrozen items.
+- **Main-axis alignment:** `justify-content` with all values (flex-start, flex-end, center, space-between, space-around, space-evenly). Auto margins on main axis absorb free space before justify-content applies (§8.1).
+- **Cross-axis alignment:** `align-items`/`align-self` with flex-start, flex-end, center, baseline, stretch. Auto margins on cross axis absorb free space before alignment. Baseline alignment matches text baselines across items on the same flex line.
+- **Multi-line:** `flex-wrap: wrap`/`wrap-reverse` with per-line cross sizing and `align-content` distribution (all values including space-evenly). When container main size is indefinite, all items stay on a single line.
+- **Gaps:** `row-gap`/`column-gap` with `gap` shorthand. `gap: normal` resolves to 0px in flexbox.
+- **`min-width: auto` / `min-height: auto`:** Content-based minimum prevents flex items from collapsing below their min-content size. The `overflow` property suppresses this minimum when set to non-visible.
+- **`visibility: collapse`:** Collapsed items are invisible and zero-sized on the main axis, but their cross size still contributes to the flex line cross size (preserving layout stability).
+- **`order`-modified paint order:** `UIHTMLWidget::drawChildren()` override stable-sorts children by CSS `order` when flex items have differing values. For `row-reverse`/`column-reverse`, the sorted list is also reversed before painting.
+- **Container baseline:** After layout, the flex container's baseline is available via `FlexLayouter::getBaseline()` for use by outer formatting contexts.
 
 ### Out-Of-Flow Positioning
 
@@ -148,7 +177,8 @@ For HTML/CSS layout work, prefer narrow tests plus one realistic fixture when th
 
 - Unit-level tests for parser/style/layout primitives.
 - RichText tests for inline formatting, wrapping, baselines, custom blocks, floats, and line-height.
-- UIHTML fixture tests for browser-like element interactions such as details/summary, tables, forms, lists, images, and positioned descendants.
+- Flex algorithm tests for all flex container/item properties, direction/wrap modes, alignment, gaps, auto margins, baseline, collapsed items, and edge cases (71 unit tests in `uihtml_flex_test.cpp`).
+- UIHTML fixture tests for browser-like element interactions such as flexbox layouts, details/summary, tables, forms, lists, images, and positioned descendants.
 - Regression assertions should verify layout invariants, not screenshot pixels only.
 
 When possible, compare against browser behavior manually or with a reference capture, then encode the spec behavior in assertions.
