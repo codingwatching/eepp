@@ -11,6 +11,22 @@
 
 namespace EE { namespace UI {
 
+namespace {
+
+static bool htmlBoolAttributeIsTrue( const StyleSheetProperty& property ) {
+	if ( property.value().empty() )
+		return true;
+
+	const std::string& value = property.value();
+	if ( String::iequals( value, property.getName() ) )
+		return true;
+	if ( String::iequals( value, "false" ) || value == "0" || String::iequals( value, "no" ) )
+		return false;
+	return property.asBool();
+}
+
+} // namespace
+
 UIHTMLInput* UIHTMLInput::New() {
 	return eeNew( UIHTMLInput, () );
 }
@@ -38,6 +54,12 @@ bool UIHTMLInput::applyProperty( const StyleSheetProperty& attribute ) {
 	PropertyId id = attribute.getPropertyDefinition()->getPropertyId();
 
 	switch ( id ) {
+		case PropertyId::Checked:
+		case PropertyId::Selected:
+			mChecked = htmlBoolAttributeIsTrue( attribute );
+			mProperties[id] = attribute;
+			syncCheckedState();
+			return UIHTMLWidget::applyProperty( attribute );
 		case PropertyId::Value:
 		case PropertyId::Text:
 			mValue = attribute.value();
@@ -52,7 +74,8 @@ bool UIHTMLInput::applyProperty( const StyleSheetProperty& attribute ) {
 	if ( id != PropertyId::Id && id != PropertyId::Class && id != PropertyId::Type &&
 		 id != PropertyId::Display ) {
 		mProperties[id] = attribute;
-		if ( mChildWidget ) {
+		if ( mChildWidget && !( id == PropertyId::Value &&
+								( mInputType == "checkbox" || mInputType == "radio" ) ) ) {
 			mChildWidget->applyProperty( attribute );
 		}
 	}
@@ -68,6 +91,9 @@ std::string UIHTMLInput::getPropertyString( const PropertyDefinition* propertyDe
 	switch ( propertyDef->getPropertyId() ) {
 		case PropertyId::Value:
 			return mValue;
+		case PropertyId::Checked:
+		case PropertyId::Selected:
+			return mChecked ? "true" : "false";
 		case PropertyId::Type:
 			return mInputType;
 		default:
@@ -87,6 +113,7 @@ std::vector<PropertyId> UIHTMLInput::getPropertiesImplemented() const {
 	auto props = UIHTMLWidget::getPropertiesImplemented();
 	props.push_back( PropertyId::Type );
 	props.push_back( PropertyId::Value );
+	props.push_back( PropertyId::Checked );
 	return props;
 }
 
@@ -153,8 +180,25 @@ void UIHTMLInput::createChildWidget() {
 		} );
 
 		for ( const auto& propIt : mProperties ) {
+			if ( propIt.first == PropertyId::Checked || propIt.first == PropertyId::Selected )
+				continue;
+			if ( propIt.first == PropertyId::Value &&
+				 ( mInputType == "checkbox" || mInputType == "radio" ) )
+				continue;
 			mChildWidget->applyProperty( propIt.second );
 		}
+		syncCheckedState();
+	}
+}
+
+void UIHTMLInput::syncCheckedState() {
+	if ( !mChildWidget )
+		return;
+
+	if ( mInputType == "checkbox" ) {
+		static_cast<UICheckBox*>( mChildWidget )->setChecked( mChecked );
+	} else if ( mInputType == "radio" ) {
+		static_cast<UIRadioButton*>( mChildWidget )->setActive( mChecked );
 	}
 }
 
@@ -163,9 +207,13 @@ String UIHTMLInput::getFormValue() const {
 		return String();
 
 	if ( mInputType == "checkbox" )
-		return static_cast<UICheckBox*>( mChildWidget )->isChecked() ? "on" : "";
+		return static_cast<UICheckBox*>( mChildWidget )->isChecked()
+				   ? ( mValue.empty() ? "on" : mValue )
+				   : "";
 	if ( mInputType == "radio" )
-		return static_cast<UIRadioButton*>( mChildWidget )->isActive() ? "on" : "";
+		return static_cast<UIRadioButton*>( mChildWidget )->isActive()
+				   ? ( mValue.empty() ? "on" : mValue )
+				   : "";
 	if ( mInputType == "number" )
 		return static_cast<UISpinBox*>( mChildWidget )->getTextInput()->getText();
 	if ( mInputType == "button" || mInputType == "submit" )

@@ -52,7 +52,10 @@ Current progress:
 - Floated inline text elements now follow CSS blockification: once `float` is not `none`, inline spans/anchors stop being rebuilt as inline text and enter the atomic float path. This fixes old Reddit's comment form footer links (`.help-toggle` and `a.reddiquette`) so they align to the right under the textarea.
 - `vertical-align` on an inline-block `UITextSpan` now applies to the inline-block box in the parent line, not to its own internal self text. This keeps old Reddit's `.domain a { display:inline-block; vertical-align:middle }` from inflating the anchor's own line box while preserving parent-line alignment semantics.
 - `clear` now ignores external float exclusions inherited from an outer formatting context. This matches the old Reddit `.entry { overflow:hidden }` BFC case: its child `.expando { clear:left }` must not clear the sibling `.midcol` float outside `.entry`. The current smoke run moves `.expando` from `y=126` to `y=119.609` and `.usertext-body .md` from `y=131` to `y=124.609`.
-- Remaining visible blockers: the main selftext and comment form still start lower than the Chrome reference; footer/comments vertical spacing still diverges from Chrome; additional form-control and header sprite details still need visual tightening.
+- `updateOutOfFlowPosition()` no longer uses the generic `mPacking` early return. That guard kept old Reddit's `#header-bottom-right { position:absolute; right:0; bottom:0 }` at an early `x=297,y=-1` measurement. The current smoke run places it at `x=717,y=41` in the `1024x64` header and asserts its right/bottom edges.
+- `input checked` / `checked="checked"` now initializes `UIHTMLInput` checkbox and radio children. Checkbox/radio `value` is preserved as the submitted form value instead of being interpreted as checked state by the child control. This fixes old Reddit's checked sidebar flair checkbox and is covered by `UIHTMLInput.sizeAttribute`.
+- Current smoke geometry on 2026-05-31: `side=(719,64 300x1186.36)`, `entry=(47,71 667x531.609)`, `selftextMd=(47,124.609 667x450)`, `commentArea=(5,610.609 1014x391)`, `commentTextarea=(16,694.609 500x100)`, `srList=(252,0 772x18)`, `headerBottomRight=(717,41 307x22)`.
+- Remaining visible blockers: the main selftext and comment form still start lower than the Chrome reference; footer/comments vertical spacing still diverges from Chrome; sidebar/footer content below the first viewport still needs tightening; additional header/logo/submit-button sprite details remain.
 
 ## Reference Layout Invariants
 
@@ -163,6 +166,7 @@ Remaining plan:
 - Audit `UIWidgetCreator` and HTML element constructors for browser-like default display.
 - Keep theme-specific visual styling in CSS, but move semantic defaults into element creation.
 - Add tests that load minimal HTML without `breeze.css` and verify display, margins, and intrinsic sizes for the core elements old Reddit uses.
+- Keep input state semantics in `UIHTMLInput`, not in the child theme widgets. Boolean HTML attributes such as `checked` need HTML truthiness (`checked="checked"` is true), while `value` remains the submitted value.
 
 Reduced tests:
 
@@ -257,6 +261,8 @@ Reduced tests:
 - Paragraph margins inside `.md`.
 - `textarea` with CSS width/height and `rows/cols`.
 - `input readonly type=text` fixed width.
+- `input type=checkbox checked value=...` initializes checked state and submits the explicit value.
+- `input type=radio checked` initializes the radio active state.
 
 ### 9. Page Width, Scroll View, And Viewport Semantics
 
@@ -309,9 +315,9 @@ Reduced tests:
 
 Exit criteria:
 
-- `UIHTML.redditOldThreadWebViewSmoke` passes.
-- A current eepp screenshot is produced for side-by-side comparison.
-- Add a small helper, if needed, to dump important node rects for `.side`, `.content`, `.midcol`, `.entry`, `.arrow`, `.usertext-body`, `.commentarea`.
+- Done. `UIHTML.redditOldThreadWebViewSmoke` passes when `EEPP_REDDIT_OLD_THREAD_VISUAL=1` is set.
+- Done. A current eepp screenshot is produced at `bin/unit_tests/output/eepp-reddit-old-thread-current.webp`.
+- Done. The smoke dumps important node rects for `.side`, `.content`, `.midcol`, `.entry`, `.arrow`, `.usertext-body`, `.commentarea`, topbar/header nodes, and comment form controls.
 
 Validation:
 
@@ -325,9 +331,9 @@ Implement a shared CSS float context that block and inline layout can both see. 
 
 Exit criteria:
 
-- Reduced float/BFC tests pass.
-- `.side` and `.content` match the reference broad geometry.
-- `.midcol` and `.entry` align horizontally for the main post and first comments.
+- Mostly done for the old Reddit fixture. Reduced float/BFC tests cover the active `.side`, `.content`, `.midcol`, `.entry`, nested BFC, clear, and right-float textarea cases.
+- `.side`, `.content`, `.midcol`, and `.entry` now match the reference broad geometry closely enough for later visual details to be meaningful.
+- Keep this phase open only for newly found generic float regressions.
 
 Validation:
 
@@ -353,9 +359,9 @@ Keep semantic HTML defaults independent from the app theme. `breeze.css` should 
 
 Exit criteria:
 
-- Minimal HTML default-display tests pass without loading `breeze.css`.
+- Minimal HTML default-display tests pass without loading `breeze.css` for the covered elements.
 - The old Reddit smoke test passes without loading `breeze.css`.
-- Form controls in the comment box and sidebar match expected broad geometry.
+- Form controls in the comment box and sidebar match expected broad geometry; checkbox/radio checked state is now wired. Remaining work here is visual polish such as native checkbox/radio appearance, textarea resize affordance, and exact input/button paint.
 
 ### Phase 5: Full-Page Visual Gate
 

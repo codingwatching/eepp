@@ -40,8 +40,10 @@ class EE_API UIHTMLInput : public UIHTMLWidget {
 	UIWidget* mChildWidget{ nullptr };
 	std::map<PropertyId, StyleSheetProperty> mProperties;
 	String mValue;
+	bool mChecked{ false };
 
 	void createChildWidget();
+	void syncCheckedState();
 
 	virtual void onSizeChange();
 };

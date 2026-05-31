@@ -20,6 +20,7 @@
 #include <eepp/ui/uihtmltextarea.hpp>
 #include <eepp/ui/uihtmltextinput.hpp>
 #include <eepp/ui/uinodedrawable.hpp>
+#include <eepp/ui/uiradiobutton.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uitheme.hpp>
@@ -218,6 +219,8 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	auto srList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list" );
 	auto srFlatList = sceneNode->getRoot()->querySelector( "#sr-header-area .sr-list .flat-list" );
 	auto headerBottomLeft = sceneNode->getRoot()->find( "header-bottom-left" );
+	auto headerBottomRight = sceneNode->getRoot()->find( "header-bottom-right" );
+	auto header = sceneNode->getRoot()->find( "header" );
 	auto dropChoices = sceneNode->getRoot()->querySelector( ".drop-choices.srdrop" );
 	auto selftextMd = sceneNode->getRoot()->querySelector( ".link .usertext-body .md" );
 	auto selftextFirstP = sceneNode->getRoot()->querySelector( ".link .usertext-body .md p" );
@@ -231,6 +234,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	auto commentTextarea = sceneNode->getRoot()->querySelector( ".commentarea textarea" );
 	auto commentHelpToggle = sceneNode->getRoot()->querySelector( ".commentarea .help-toggle" );
 	auto commentContentPolicy = sceneNode->getRoot()->querySelector( ".commentarea a.reddiquette" );
+	auto flairCheckbox = sceneNode->getRoot()->find( "flair_enabled" );
 
 	ASSERT_TRUE( side != nullptr );
 	ASSERT_TRUE( siteTable != nullptr );
@@ -243,6 +247,8 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	ASSERT_TRUE( srList != nullptr );
 	ASSERT_TRUE( srFlatList != nullptr );
 	ASSERT_TRUE( headerBottomLeft != nullptr );
+	ASSERT_TRUE( headerBottomRight != nullptr );
+	ASSERT_TRUE( header != nullptr );
 	ASSERT_TRUE( dropChoices != nullptr );
 	ASSERT_TRUE( selftextMd != nullptr );
 	ASSERT_TRUE( selftextFirstP != nullptr );
@@ -256,6 +262,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	ASSERT_TRUE( commentTextarea != nullptr );
 	ASSERT_TRUE( commentHelpToggle != nullptr );
 	ASSERT_TRUE( commentContentPolicy != nullptr );
+	ASSERT_TRUE( flairCheckbox != nullptr );
 
 	UIWidget* content =
 		siteTable->getParent()->isWidget() ? siteTable->getParent()->asType<UIWidget>() : nullptr;
@@ -274,6 +281,9 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	Vector2f srFlatListPos = srFlatList->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f headerBottomLeftPos =
 		headerBottomLeft->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f headerBottomRightPos =
+		headerBottomRight->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
+	Vector2f headerPos = header->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f dropChoicesPos = dropChoices->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f selftextMdPos = selftextMd->asType<UIWidget>()->convertToWorldSpace( { 0, 0 } );
 	Vector2f selftextFirstPPos =
@@ -330,6 +340,19 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			  << "headerBottomLeft=(" << headerBottomLeftPos.x << "," << headerBottomLeftPos.y
 			  << " " << headerBottomLeft->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
 			  << headerBottomLeft->asType<UIWidget>()->getPixelsSize().getHeight() << ") "
+			  << "headerBottomRight=(" << headerBottomRightPos.x << "," << headerBottomRightPos.y
+			  << " " << headerBottomRight->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << headerBottomRight->asType<UIWidget>()->getPixelsSize().getHeight() << " position="
+			  << CSSPositionHelper::toString(
+					 headerBottomRight->asType<UIHTMLWidget>()->getCSSPosition() )
+			  << ") "
+			  << "header=(" << headerPos.x << "," << headerPos.y << " "
+			  << header->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
+			  << header->asType<UIWidget>()->getPixelsSize().getHeight() << " offset="
+			  << header->asType<UIWidget>()->getPixelsContentOffset().Left << ","
+			  << header->asType<UIWidget>()->getPixelsContentOffset().Top << ","
+			  << header->asType<UIWidget>()->getPixelsContentOffset().Right << ","
+			  << header->asType<UIWidget>()->getPixelsContentOffset().Bottom << ") "
 			  << "dropChoices=(" << dropChoicesPos.x << "," << dropChoicesPos.y << " "
 			  << dropChoices->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
 			  << dropChoices->asType<UIWidget>()->getPixelsSize().getHeight()
@@ -395,8 +418,21 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	EXPECT_NEAR( srFlatListPos.y, srHeaderPos.y, 1.f );
 	EXPECT_GE( headerBottomLeftPos.y,
 			   srHeaderPos.y + srHeader->asType<UIWidget>()->getPixelsSize().getHeight() - 1.f );
+	EXPECT_EQ( headerBottomRight->asType<UIHTMLWidget>()->getCSSPosition(), CSSPosition::Absolute );
+	EXPECT_NEAR( headerBottomRightPos.x +
+					 headerBottomRight->asType<UIWidget>()->getPixelsSize().getWidth(),
+				 headerPos.x + header->asType<UIWidget>()->getPixelsSize().getWidth(), 1.f );
+	EXPECT_NEAR( headerBottomRightPos.y +
+					 headerBottomRight->asType<UIWidget>()->getPixelsSize().getHeight(),
+				 headerPos.y + header->asType<UIWidget>()->getPixelsSize().getHeight() -
+					 header->asType<UIWidget>()->getPixelsContentOffset().Bottom,
+				 1.f );
 	EXPECT_FALSE( dropChoices->asType<UIWidget>()->isVisible() );
 	EXPECT_EQ( dropChoices->asType<UIHTMLWidget>()->getDisplay(), CSSDisplay::None );
+	ASSERT_TRUE( flairCheckbox->isType( UI_TYPE_HTML_INPUT ) );
+	ASSERT_TRUE( flairCheckbox->asType<UIHTMLInput>()->getChildWidget() != nullptr );
+	EXPECT_TRUE(
+		flairCheckbox->asType<UIHTMLInput>()->getChildWidget()->asType<UICheckBox>()->isChecked() );
 	EXPECT_NEAR(
 		commentHelpTogglePos.x + commentHelpToggle->asType<UIWidget>()->getPixelsSize().getWidth(),
 		commentEditPos.x + commentEdit->asType<UIWidget>()->getPixelsSize().getWidth(), 1.f );
@@ -1019,6 +1055,8 @@ UTEST( UIHTMLInput, sizeAttribute ) {
 			<input id="i_pwd" type="password" />
 			<input id="i_mode_pwd" input-mode="password" />
 			<input id="i_chk" type="checkbox" />
+			<input id="i_chk_checked" type="checkbox" checked="checked" value="enabled" />
+			<input id="i_radio_checked" type="radio" checked="checked" />
 		</vbox>
 	)html" );
 
@@ -1028,6 +1066,8 @@ UTEST( UIHTMLInput, sizeAttribute ) {
 	auto cp = sceneNode->getRoot()->find( "i_pwd" )->asType<UIHTMLInput>();
 	auto cm = sceneNode->getRoot()->find( "i_mode_pwd" )->asType<UIHTMLInput>();
 	auto cc = sceneNode->getRoot()->find( "i_chk" )->asType<UIHTMLInput>();
+	auto ccc = sceneNode->getRoot()->find( "i_chk_checked" )->asType<UIHTMLInput>();
+	auto crc = sceneNode->getRoot()->find( "i_radio_checked" )->asType<UIHTMLInput>();
 
 	ASSERT_TRUE( c1 != nullptr );
 	ASSERT_TRUE( c2 != nullptr );
@@ -1035,6 +1075,8 @@ UTEST( UIHTMLInput, sizeAttribute ) {
 	ASSERT_TRUE( cp != nullptr );
 	ASSERT_TRUE( cm != nullptr );
 	ASSERT_TRUE( cc != nullptr );
+	ASSERT_TRUE( ccc != nullptr );
+	ASSERT_TRUE( crc != nullptr );
 
 	auto i1 = c1->getChildWidget()->asType<UIHTMLTextInput>();
 	auto i2 = c2->getChildWidget()->asType<UIHTMLTextInput>();
@@ -1059,6 +1101,12 @@ UTEST( UIHTMLInput, sizeAttribute ) {
 	EXPECT_TRUE( cm->getChildWidget()->asType<UITextInput>()->getMode() ==
 				 UITextInput::TextInputMode::Password );
 	EXPECT_TRUE( cc->getChildWidget()->isType( UI_TYPE_CHECKBOX ) );
+	EXPECT_TRUE( ccc->getChildWidget()->isType( UI_TYPE_CHECKBOX ) );
+	EXPECT_TRUE( ccc->getChildWidget()->asType<UICheckBox>()->isChecked() );
+	EXPECT_TRUE( ccc->getFormValue() == "enabled" );
+	EXPECT_TRUE( crc->getChildWidget()->isType( UI_TYPE_RADIOBUTTON ) );
+	EXPECT_TRUE( crc->getChildWidget()->asType<UIRadioButton>()->isActive() );
+	EXPECT_TRUE( crc->getFormValue() == "on" );
 
 	Engine::destroySingleton();
 }
