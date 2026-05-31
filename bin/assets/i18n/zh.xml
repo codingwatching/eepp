@@ -8,15 +8,15 @@
 	version: 0.1
 	created: 2024-02-08
 	updated: 2024-02-29
-	language: 'zh_CN'
+	language: 'zh'
 	format: 'xml'
-	file: zh_CN.xml
+	file: zh.xml
 	source: 'github.com/SpartanJ/eepp/tree/develop/bin/assets/i18n'
 	credits: 'i18n/en.xml'
 	license: 'MIT (respective)'
 
 ?-->
-<resources language="zh_CN" title="简体中文">
+<resources language="zh" title="简体中文">
 	<string name="about_ecode">关于 Ecode</string>
 	<string name="add_branch">新增分支</string>
 	<string name="add_build">新增构建</string>
