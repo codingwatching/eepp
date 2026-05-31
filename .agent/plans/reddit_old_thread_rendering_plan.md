@@ -21,7 +21,7 @@ The smoke test opens the old Reddit fixture through `UIWebView` without loading 
 The smoke test is opt-in because the full fixture is slow in ASAN:
 
 ```sh
-EEPP_REDDIT_OLD_THREAD_VISUAL=1 ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
+EEPP_REDDIT_OLD_THREAD_VISUAL=1 projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
 ```
 
 It currently writes the visual artifact to `bin/unit_tests/output/eepp-reddit-old-thread-current.webp`. This is not a golden comparison yet. Replace or extend it with a true reference comparison only after the high-priority layout issues are fixed enough for pixel diffs to be useful.
@@ -322,7 +322,7 @@ Exit criteria:
 Validation:
 
 ```sh
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
 ```
 
 ### Phase 2: Float/BFC Correctness
@@ -338,8 +338,8 @@ Exit criteria:
 Validation:
 
 ```sh
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
 ```
 
 ### Phase 3: CSS Visual Features
@@ -390,8 +390,8 @@ Before considering a phase complete:
 
 ```sh
 make -C make/linux -j$(nproc)
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.redditOldThreadWebViewSmoke"
 git diff --check
 ```
 

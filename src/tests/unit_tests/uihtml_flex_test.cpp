@@ -2442,3 +2442,225 @@ UTEST( FlexContainer, baselinePositionsLargerItemCorrectly ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( FlexContainer, percentageBasisIndefiniteContainer ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// Container with indefinite width (WrapContent, no explicit size).
+	// Percentage flex-basis should fall back to auto → content-based sizing per §9.2.
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setLayoutSizePolicy( SizePolicy::WrapContent, SizePolicy::WrapContent );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 150, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "flex-basis", "50%" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Container width is indefinite → 50% falls back to auto → child's explicit 150px width.
+	EXPECT_NEAR( child->getPixelsSize().getWidth(), 150.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, flexBasisZeroLength ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// flex: 1 1 0px — absolute zero flex-basis, all space distributed by flex-grow
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 300, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	for ( int i = 0; i < 3; ++i ) {
+		UIHTMLWidget* child = UIHTMLWidget::New();
+		child->setParent( flex );
+		child->setPixelsSize( 10, 50 );
+		child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+		child->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 0px" ) );
+	}
+
+	sceneNode->updateDirtyLayouts();
+
+	// With flex-basis: 0px, all space is distributed equally: 300/3 = 100
+	for ( int i = 0; i < 3; ++i ) {
+		UIWidget* child = flex->getChildAt( i )->asType<UIWidget>();
+		EXPECT_NEAR( child->getPixelsSize().getWidth(), 100.f, 5.f );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, wrapWithAutoWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// Container with indefinite width (WrapContent) + flex-wrap: wrap.
+	// When main size is indefinite, the container sizes to fit all items in a single line.
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-wrap", "wrap" ) );
+	flex->setLayoutSizePolicy( SizePolicy::WrapContent, SizePolicy::WrapContent );
+
+	for ( int i = 0; i < 3; ++i ) {
+		UIHTMLWidget* child = UIHTMLWidget::New();
+		child->setParent( flex );
+		child->setPixelsSize( 100, 50 );
+		child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	}
+
+	sceneNode->updateDirtyLayouts();
+
+	// All items should be on the same line (same Y position) since container
+	// uses natural sum-of-items width, preventing wrap.
+	UIWidget* first = flex->getChildAt( 0 )->asType<UIWidget>();
+	UIWidget* last = flex->getChildAt( 2 )->asType<UIWidget>();
+	EXPECT_NEAR( first->getPixelsPosition().y, last->getPixelsPosition().y, 1.f );
+
+	// Container width should be sum of item widths (no gaps by default)
+	EXPECT_NEAR( flex->getPixelsSize().getWidth(), 300.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, alignContentSpaceEvenly ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "flex-wrap", "wrap" ) );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-content", "space-evenly" ) );
+	flex->setPixelsSize( 250, 400 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	// 3 items, 100px each, container 250px wide -> 2 lines (100 + 100 = 200, third wraps)
+	for ( int i = 0; i < 3; ++i ) {
+		UIHTMLWidget* child = UIHTMLWidget::New();
+		child->setParent( flex );
+		child->setPixelsSize( 100, 50 );
+		child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	}
+
+	sceneNode->updateDirtyLayouts();
+
+	// 2 lines of 50px = 100px. Container 400px. Free = 300px.
+	// SpaceEvenly: 300 / (2+1) = 100px between each line and edges.
+	// First line at 100px, second line at 100 + 50 + 100 = 250px.
+	Node* first = flex->getFirstChild();
+	ASSERT_TRUE( first && first->isWidget() );
+	EXPECT_NEAR( first->asType<UIWidget>()->getPixelsPosition().y, 100.f, 20.f );
+
+	Node* last = flex->getLastChild();
+	ASSERT_TRUE( last && last->isWidget() );
+	EXPECT_NEAR( last->asType<UIWidget>()->getPixelsPosition().y, 250.f, 20.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, gapNormal ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// gap: normal should resolve to 0px in flexbox (no gap between items)
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setStyleSheetProperty( StyleSheetProperty( "gap", "normal" ) );
+	flex->setPixelsSize( 300, 100 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Normal gap = 0px, so child2 starts right after child1 at x=100
+	EXPECT_NEAR( child2->getPixelsPosition().x, 100.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, baselineWithText ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// align-items: baseline with two text nodes of different font sizes.
+	// Both should share the same baseline (their text bottoms align).
+	UIRichText* flex = UIRichText::NewWithTag( "div" );
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 150 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->applyProperty( StyleSheetProperty( "font-family", "NotoSans-Regular" ) );
+	flex->applyProperty( StyleSheetProperty( "font-size", "16dp" ) );
+	flex->applyProperty( StyleSheetProperty( "align-items", "baseline" ) );
+
+	UITextNode* smallText = UITextNode::New();
+	smallText->setParent( flex );
+	smallText->setText( "Small" );
+
+	UITextNode* largeText = UITextNode::New();
+	largeText->setParent( flex );
+	largeText->setText( "LARGE" );
+	largeText->applyProperty( StyleSheetProperty( "font-size", "24dp" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Both text nodes should be baseline-aligned: their getBaseline() offset
+	// from the cross-start edge should be equal.
+	Float smallBl = smallText->getBaseline();
+	Float largeBl = largeText->getBaseline();
+	EXPECT_TRUE( smallBl > 0.f );
+	EXPECT_TRUE( largeBl > 0.f );
+
+	// With baseline alignment, the cross-start position of each text node
+	// is adjusted so their baselines match.
+	// smallText baseline Y = smallText->getPixelsPosition().y + smallBl.
+	// largeText baseline Y = largeText->getPixelsPosition().y + largeBl.
+	Float smallBaselineY = smallText->getPixelsPosition().y + smallBl;
+	Float largeBaselineY = largeText->getPixelsPosition().y + largeBl;
+	EXPECT_NEAR( smallBaselineY, largeBaselineY, 5.f );
+
+	Engine::destroySingleton();
+}

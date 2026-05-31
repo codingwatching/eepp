@@ -1,7 +1,7 @@
 # CSS Flexbox Support Plan
 
 > **Status: ✅ COMPLETED** — Full CSS Flexible Box Layout Module Level 1 support.
-> All 65 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (456/457 pass, 1 expected skip).
+> All 71 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (462/463 pass, 1 expected skip).
 
 ## Goal
 
@@ -42,7 +42,7 @@ Complete `display: flex` and `display: inline-flex` support including:
   (`src/eepp/ui/uilayoutermanager.cpp`). The RichText integration blocker has been resolved
   via text node measurement, anonymous flex item wrapping, and blockification guards in
   `BlockLayouter`.
-- 59 unit tests covering item collection, direction/wrap modes, main/cross-axis distribution,
+- 71 unit tests covering item collection, direction/wrap modes, main/cross-axis distribution,
   flexible lengths, shorthands, gaps, inline-flex, edge cases, blockification, anonymous
   text nodes, visibility collapse, algorithm bug fixes, and order-based paint sorting — all passing.
 - 7 HTML fixture tests (`FlexCenterWebViewLikeLayout`, `FlexCenterNoTextNodeDisplacement`,
@@ -742,7 +742,7 @@ which is a separate effort. This plan focuses on the LTR horizontal-tb writing m
 
 ## Tests Required
 
-### Unit Tests (Flex Algorithm) — 51 tests, all passing
+### Unit Tests (Flex Algorithm) — 71 tests, all passing
 
 | Test Name | What It Verifies | Status |
 |---|---|---|
@@ -785,14 +785,13 @@ which is a separate effort. This plan focuses on the LTR horizontal-tb writing m
 | `FlexContainer.fixedWidthItem` | Explicit width is respected | ✅ |
 | `FlexContainer.negativeOrder` | `order: -1` places item before others | ✅ |
 | `FlexContainer.percentageBasis` | `flex-basis: 50%` resolves against container | ✅ |
+| `FlexContainer.percentageBasisIndefiniteContainer` | `flex-basis: 50%` with indefinite container falls back to auto | ✅ |
 | `FlexContainer.flexBasisZeroPercent` | `flex: 1 1 0%` distributes space equally (common pattern) | ✅ |
-| `FlexContainer.flexBasisZeroLength` | `flex: 1 1 0px` is different from `0%` | ❌ (not tested) |
-| `FlexContainer.columnWithTextContent` (`flexDirectionColumnWithTextContent`) | `flex-direction: column` with text items gets correct heights | ✅ |
-| `FlexContainer.wrapWithAutoWidth` | `flex-wrap: wrap` on container with `width: auto` | ❌ (not tested) |
-| `FlexContainer.alignContentSpaceEvenly` | `align-content: space-evenly` distributes lines evenly | ❌ (not tested) |
-| `FlexContainer.gapNormal` | `gap: normal` resolves to 0px in flexbox | ❌ (not tested) |
-| `FlexContainer.stretchWithFixedCrossSize` | `align-items: stretch` does not override explicit cross size | ✅ |
-| `FlexContainer.baselineWithText` | `align-items: baseline` aligns text baselines (approximate) | ❌ (not tested) |
+| `FlexContainer.flexBasisZeroLength` | `flex: 1 1 0px` distributes space equally (same as `0%`) | ✅ |
+| `FlexContainer.wrapWithAutoWidth` | `flex-wrap: wrap` on container with `width: auto` stays single line | ✅ |
+| `FlexContainer.alignContentSpaceEvenly` | `align-content: space-evenly` distributes lines evenly | ✅ |
+| `FlexContainer.gapNormal` | `gap: normal` resolves to 0px in flexbox | ✅ |
+| `FlexContainer.baselineWithText` | `align-items: baseline` aligns baselines across font sizes | ✅ |
 | `FlexContainer.blockifiesInlineChildren` | Inline children are blockified in flex context | ✅ |
 | `FlexContainer.textSpanInsideFlexGetsSize` | Text spans inside flex get proper sizing | ✅ |
 | `FlexContainer.anonymousTextNodeSizing` | Bare text nodes as anonymous flex items | ✅ |
@@ -824,10 +823,10 @@ Before considering a phase complete:
 
 ```sh
 make -C make/linux -j$(nproc)
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="FlexContainer*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="FlexProperties*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.Flex*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="FlexContainer*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="FlexProperties*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTML.Flex*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug
 git diff --check
 ```
 
@@ -1067,23 +1066,22 @@ expose their baseline via `getBaseline()` for use by outer flex containers.
 
 **Status:** Implemented. Added `FlexItem::flexBasisContent` flag. `readItemStyle()` parses `content` vs `auto` separately. `resolveFlexBasis()` skips the explicit width/height property check when `flexBasisContent` is true (falls through to content-based sizing). The explicit width/height override in `measureFlexItems()` is also guarded by `!item.flexBasisContent`. Two tests added verifying parsing and explicit-width bypass behavior. 61 flex tests pass.
 
-### G10: `flex-basis` percentage resolution for indefinite container size (§9.8) — P3
+### G10: `flex-basis` percentage resolution for indefinite container size (§9.8) — ✅ DONE
 
-**Status:** Partially handled. Line 233: `if (indefiniteMainSize && item.flexBasisIsPercentage)`
-→ treats as auto. Good, but only for the main axis indefinite case. The spec also
-says percentages in `flex-basis` resolve against the container's inner main size.
+**Status:** Fully implemented. Percentage `flex-basis` resolves against the flex container's
+inner main size when the container size is definite. When the container's main size is
+indefinite (e.g., `width: auto`), the percentage is treated as `auto` and falls back to
+content-based sizing per CSS §9.2. Test `percentageBasisIndefiniteContainer` verifies this
+edge case.
 
-**Impact:** Minor; most percentage `flex-basis` uses have a definite container.
+### G11: Column-reverse stacking context reordering (§4.1 note) — ✅ DONE
 
-### G11: Column-reverse stacking context reordering (§4.1 note) — P3
-
-**Status:** Not implemented. Per spec, `flex-direction: column-reverse` should
-reorder the stacking context (z-index painting) so the last visual item paints on
-top, even though it's DOM-first. Our implementation only visually reorders without
-adjusting the stacking context.
-
-**Impact:** Only visual; items in a column-reverse container may not paint in the
-expected order when they overlap.
+**Status:** Implemented. `UIHTMLWidget::drawChildren()` handles both `ColumnReverse`
+and `RowReverse` by reversing the `order`-sorted child list before painting. This
+ensures the paint order matches the spec's visual order for reversed flex containers.
+When `mNeedsOrderSort` is also set, the sort runs first, then the reversal. Tested
+by `directionReversePaintColumnReverse`, `directionReversePaintRowReverse`, and
+`directionReversePaintWithOrderSort`.
 
 ### G12: Anonymous flex items from bare text nodes (§4) — P1
 
@@ -1128,8 +1126,8 @@ with `setMaxWrapWidth()` (see anchor below for full details).
 | G7 | Painting order by `order` (§4.3) | P3 | Medium | ✅ Done |
 | G8 | Flex container baselines (§8.5) | P3 | Medium | ✅ Done |
 | G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | ✅ Done |
-| G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
-| G11 | Column-reverse stacking context (§4.1) | P3 | Small | Pending |
+| G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | ✅ Done |
+| G11 | Column-reverse stacking context (§4.1) | P3 | Small | ✅ Done |
 | G12 | Anonymous flex items (§4) — single-line + wrapping | **P1** | Large | ✅ Done |
 | G13 | Anonymous flex item text wrapping (§4, §9.9) | **P1** | Large | ✅ Done |
 
@@ -1179,13 +1177,14 @@ gaps documented above. Here's the updated path forward:
 - **G13** — Anonymous flex item text wrapping. Uses a `Text*` (`mFlexText`) on `UITextNode` with `setLineWrapMode(Word)` and `setMaxWrapWidth()`. Configured in `resolveCrossSizes()`; rendered in `draw()`. `minMainSize` set to 0 for text nodes to allow flex-shrink below full text width.
 - **G3** — `visibility: collapse` on flex items. Added `CSSVisibility` enum (`Visible`/`Hidden`/`Collapse`) and `CSSVisibilityHelper`. `UIHTMLWidget` stores `mVisibility` and handles `PropertyId::Visibility` via `setVisibility()`. In flex layout: collapsed items are zeroed on main axis (targetMainSize=0, margins=0, flexGrow/Shrink=0) but their cross size is saved and contributes to line cross size. They are positioned at flow position with 0×0 size.
 
-### Next (fill remaining spec gaps, sorted by real-world usage)
-- **G10** — Percentage flex-basis edge cases (§9.8). Already partially handled; edge case when container size is indefinite. (P3)
+### ✅ Complete — all spec gaps filled
+- **G10** — Percentage flex-basis edge cases (§9.8). Implemented and tested. When container size is definite, resolves against inner main size. When indefinite (WrapContent), falls back to `auto` → content-based sizing. Test `percentageBasisIndefiniteContainer` verifies this.
 
-### Final gate
-- **Route `display: flex` to FlexLayouter** — Implement blockification changes
-  and test with real-world HTML pages (`lobsters_simple.html`, `body_height_miscalculation.html`,
-  etc.). This is the final validation that the RichText integration fix works.
+### ✅ Complete — `display: flex` routing and blockification
+- Both `CSSDisplay::Flex` and `CSSDisplay::InlineFlex` are routed to `FlexLayouter` (`uilayoutermanager.cpp:34-36`).
+- Blockification per CSS Flexbox §4: children of flex containers get `BlockLayouter` via `uilayoutermanager.cpp:19-26`. Nested flex containers still get `FlexLayouter`.
+- `BlockLayouter::updateLayout()` skips the `isInline()` early-return for flex items via the `parentIsFlex` guard (`blocklayouter.cpp:78-82`).
+- Validated by 7 HTML fixture tests all passing, including `FlexAnchorInFlexNavVisible` (inline `<a>` in flex nav), `FlexFormLayout` (input+button in flex row), and `FlexMediaQueriesLayout` (full page layout).
 
 ## Limitations Documented For This Implementation
 
@@ -1199,9 +1198,7 @@ gaps documented above. Here's the updated path forward:
 4. **Writing modes other than LTR horizontal-tb:** Deferred until `direction` and `writing-mode`
    CSS properties are implemented.
 5. **`order` does not affect tab order or accessibility tree** — visual reordering only.
-6. **Column-reverse does not reorder the stacking context (z-index)** per spec §4.1; initial
-   implementation treats it as visual reordering only.
-7. **Flex items with percentage margins/paddings where the containing block's inline size is
+6. **Flex items with percentage margins/paddings where the containing block's inline size is
    indefinite:** Deferred (rare edge case, requires multi-pass).
 
 ## Suggested Implementation Order
@@ -1279,14 +1276,13 @@ contains a working flex layout algorithm covering:
 - **`flex-basis: auto` vs `flex-basis: content`:** Both treated as `auto` (uses item's main
   size property). `content` keyword parsed but handled identically to `auto`.
 
-### Current routing
+### Current routing (active)
 
-- `CSSDisplay::Flex` → `BlockLayouter` (backward-compatible: real-world HTML uses `display: flex`
-  on text-containing elements; block rendering preserves all existing behavior)
-- `CSSDisplay::InlineFlex` → `FlexLayouter` (new layouter; no existing content uses
-  `display: inline-flex`)
+- `CSSDisplay::Flex` → `FlexLayouter`
+- `CSSDisplay::InlineFlex` → `FlexLayouter`
+- Children of flex containers are blockified per CSS Flexbox §4 (see routing code above)
 
-### Why `display: flex` is not yet routed to `FlexLayouter`
+### Why `display: flex` was not originally routed to `FlexLayouter` (historical context)
 
 The FlexLayouter algorithm is mechanically correct, but routing `display: flex` to it
 breaks real-world HTML pages. After extensive debugging, the root cause is **not** a

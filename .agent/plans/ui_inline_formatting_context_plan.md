@@ -835,14 +835,14 @@ Always run after broad changes:
 
 ```bash
 make -C make/linux -j$(nproc)
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="RichText.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIRichText.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UITextNode_RichTextRebuild.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UITextNode_BlockLayouter.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLTable.complexLayout*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug --filter="UIBackground.*"
-ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="RichText.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIRichText.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UITextNode_RichTextRebuild.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UITextNode_BlockLayouter.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLFloat.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIHTMLTable.complexLayout*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug --filter="UIBackground.*"
+projects/scripts/xvfb-run-eepp bin/unit_tests/eepp-unit_tests-debug
 git diff --check
 ```
 
