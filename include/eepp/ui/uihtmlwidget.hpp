@@ -77,6 +77,10 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	void setZIndex( int zIndex );
 
+	bool getNeedsOrderSort() const { return mNeedsOrderSort; }
+
+	void setNeedsOrderSort( bool val );
+
 	UIHTMLWidgetFlexState* getFlexState() const { return mFlexState; }
 
 	UIHTMLWidgetFlexState* ensureFlexState() {
@@ -154,6 +158,8 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual void updateLayout();
 
+	virtual void drawChildren();
+
 	virtual void onParentChange();
 
 	virtual void onPositionChange();
@@ -209,6 +215,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	Rectf mOffsets{ 0, 0, 0, 0 };
 	int mZIndex{ 0 };
 	bool mOverflowCreatesBlockFormattingContext{ false };
+	bool mNeedsOrderSort{ false };
 	UILayouter* mLayouter{ nullptr };
 	UIHTMLWidgetFlexState* mFlexState{ nullptr };
 	UnorderedMap<std::string, StyleSheetProperty> mDataProperties;

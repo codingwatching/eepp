@@ -2048,3 +2048,155 @@ UTEST( FlexContainer, flexBasisContentIgnoresExplicitWidth ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( FlexContainer, orderPaintSortFlagDifferentOrders ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child1->setOrder( 2 );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child2->setOrder( 1 );
+
+	UIHTMLWidget* child3 = UIHTMLWidget::New();
+	child3->setParent( flex );
+	child3->setPixelsSize( 100, 50 );
+	child3->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child3->setOrder( 3 );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_TRUE( flex->getNeedsOrderSort() );
+
+	// Verify layout positions reflect order-order (not DOM order)
+	// child2 has order=1, should be first visually (leftmost in row)
+	// child1 has order=2, should be second
+	// child3 has order=3, should be third
+	EXPECT_LT( child2->getPixelsPosition().x, child1->getPixelsPosition().x );
+	EXPECT_LT( child1->getPixelsPosition().x, child3->getPixelsPosition().x );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, orderPaintSortFlagEqualOrders ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	sceneNode->updateDirtyLayouts();
+
+	// All items have default order=0, so flag should be false
+	EXPECT_FALSE( flex->getNeedsOrderSort() );
+
+	// Layout positions should be in DOM order
+	EXPECT_LT( child1->getPixelsPosition().x, child2->getPixelsPosition().x );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, orderPaintSortSingleItem ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setOrder( 5 );
+
+	sceneNode->updateDirtyLayouts();
+
+	// Single item with order=5 — only one item, no ordering needed
+	EXPECT_FALSE( flex->getNeedsOrderSort() );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, orderPaintSortNegatives ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child1->setOrder( -1 );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child2->setOrder( 0 );
+
+	UIHTMLWidget* child3 = UIHTMLWidget::New();
+	child3->setParent( flex );
+	child3->setPixelsSize( 100, 50 );
+	child3->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child3->setOrder( 1 );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_TRUE( flex->getNeedsOrderSort() );
+
+	// Negative order should come first
+	EXPECT_LT( child1->getPixelsPosition().x, child2->getPixelsPosition().x );
+	EXPECT_LT( child2->getPixelsPosition().x, child3->getPixelsPosition().x );
+
+	Engine::destroySingleton();
+}

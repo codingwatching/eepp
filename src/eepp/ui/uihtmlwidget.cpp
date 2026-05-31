@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
@@ -204,6 +205,35 @@ void UIHTMLWidget::setOffsets( const Rectf& offsets ) {
 
 void UIHTMLWidget::setZIndex( int zIndex ) {
 	mZIndex = zIndex;
+}
+
+void UIHTMLWidget::setNeedsOrderSort( bool val ) {
+	mNeedsOrderSort = val;
+}
+
+void UIHTMLWidget::drawChildren() {
+	if ( ( isFlex() /* || isGrid() */ ) && mNeedsOrderSort ) {
+		std::vector<Node*> sortedChildren;
+		for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
+			sortedChildren.push_back( child );
+
+		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+			int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
+							 ? static_cast<UIHTMLWidget*>( a )->getOrder()
+							 : 0;
+			int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
+							 ? static_cast<UIHTMLWidget*>( b )->getOrder()
+							 : 0;
+			return aOrder < bOrder;
+		} );
+
+		for ( auto* child : sortedChildren ) {
+			if ( child->isVisible() )
+				child->nodeDraw();
+		}
+	} else {
+		Node::drawChildren();
+	}
 }
 
 void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {

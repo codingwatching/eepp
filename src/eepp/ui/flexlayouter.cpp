@@ -1329,6 +1329,21 @@ void FlexLayouter::updateLayout() {
 	applyLayout( lines, mainAxis, crossAxis, containerPadding, containerWidth, containerHeight,
 				 widthPolicy, heightPolicy );
 
+	// CSS Flexbox §4.3: painting order follows order-modified document order.
+	// Set flag so drawChildren() sorts by order when items have different order values.
+	if ( mItems.size() > 1 ) {
+		bool needsOrderSort = false;
+		for ( size_t i = 1; i < mItems.size(); i++ ) {
+			if ( mItems[i].order != mItems[0].order ) {
+				needsOrderSort = true;
+				break;
+			}
+		}
+		mContainer->asType<UIHTMLWidget>()->setNeedsOrderSort( needsOrderSort );
+	} else {
+		mContainer->asType<UIHTMLWidget>()->setNeedsOrderSort( false );
+	}
+
 	mContainer->endAttributesTransaction();
 	mPacking = false;
 }

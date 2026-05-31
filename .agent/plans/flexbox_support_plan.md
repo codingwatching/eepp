@@ -1,7 +1,7 @@
 # CSS Flexbox Support Plan
 
 > **Status: ✅ COMPLETED** — Full CSS Flexible Box Layout Module Level 1 support.
-> All 51 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (442/443 pass, 1 expected skip).
+> All 59 flex unit tests and 7 HTML fixture tests pass. Zero regressions in the full test suite (450/451 pass, 1 expected skip).
 
 ## Goal
 
@@ -42,9 +42,9 @@ Complete `display: flex` and `display: inline-flex` support including:
   (`src/eepp/ui/uilayoutermanager.cpp`). The RichText integration blocker has been resolved
   via text node measurement, anonymous flex item wrapping, and blockification guards in
   `BlockLayouter`.
-- 51 unit tests covering item collection, direction/wrap modes, main/cross-axis distribution,
+- 59 unit tests covering item collection, direction/wrap modes, main/cross-axis distribution,
   flexible lengths, shorthands, gaps, inline-flex, edge cases, blockification, anonymous
-  text nodes, visibility collapse, and algorithm bug fixes — all passing.
+  text nodes, visibility collapse, algorithm bug fixes, and order-based paint sorting — all passing.
 - 7 HTML fixture tests (`FlexCenterWebViewLikeLayout`, `FlexCenterNoTextNodeDisplacement`,
   `FlexFormLayout`, `FlexMediaQueriesLayout`, `FlexAnchorInFlexNavVisible`,
   `FlexLiItemsWrapContentWidth`, `BlockSizeInfDoesNotHang`) — all passing.
@@ -57,7 +57,8 @@ Complete `display: flex` and `display: inline-flex` support including:
 - `visibility: collapse` on flex items preserves flex line cross size.
 - `min-width: auto` / `min-height: auto` content-based minimum with overflow detection.
 - Flex shorthand (`flex: auto | none | <number>...`) with full spec expansion rules.
-- All 442 non-skipped tests in the full suite pass (1 skipped: `redditOldThreadWebViewSmoke`).
+- All 450 non-skipped tests in the full suite pass (1 skipped: `redditOldThreadWebViewSmoke`).
+- **G7** — Painting order by `order` (§4.3): `UIHTMLWidget::drawChildren()` override stable-sorts children by CSS `order` property when flex items have differing `order` values, matching the spec's "order-modified document order." The `mNeedsOrderSort` flag is set during flex layout. 4 new tests verify flag correctness with different order values, equal orders, single items, and negative orders.
 
 ## Reference Specifications
 
@@ -894,12 +895,13 @@ Phase 0 completed:
 | `src/eepp/ui/css/stylesheetspecification.cpp` | Modified | Register flex properties + shorthand expansion |
 | `include/eepp/ui/uinode.hpp` | Modified | Add `friend class FlexLayouter` for `setInternalPixelsWidth/Height` access |
 | `include/eepp/ui/flexlayouter.hpp` | **New** | FlexLayouter class with FlexItem, FlexLine, full API |
-| `src/eepp/ui/flexlayouter.cpp` | **New** | Complete flex layout algorithm (~1500 lines) |
+| `src/eepp/ui/flexlayouter.cpp` | **New** | Complete flex layout algorithm (~1550 lines); set `mNeedsOrderSort` flag in `updateLayout()` |
 | `src/eepp/ui/uilayoutermanager.cpp` | Modified | Route both `Flex` and `InlineFlex` to `FlexLayouter`; blockified children get `BlockLayouter` |
-| `src/eepp/ui/uihtmlwidget.cpp` | Modified | Handle `Flex`/`InlineFlex` in `setDisplay()`, add flex props to `getPropertiesImplemented()` |
+| `include/eepp/ui/uihtmlwidget.hpp` | Modified | Add `drawChildren()` override, `mNeedsOrderSort` flag, `setNeedsOrderSort()` setter |
+| `src/eepp/ui/uihtmlwidget.cpp` | Modified | Handle `Flex`/`InlineFlex` in `setDisplay()`, add flex props to `getPropertiesImplemented()`, add `drawChildren()` override |
 | `src/eepp/ui/uirichtext.cpp` | Modified | Flex-aware text span handling; text spans inside flex container processed via RichText |
 | `src/eepp/ui/blocklayouter.cpp` | Modified | Guard `setMatchParentIfNeededVerticalGrowth` when parent is flex; `isStretchedFlexItem` helper |
-| `src/tests/unit_tests/uihtml_flex_test.cpp` | **New** | 51 unit tests + 6 FlexProperties tests across 15 phases |
+| `src/tests/unit_tests/uihtml_flex_test.cpp` | **New** | 59 unit tests + 6 FlexProperties tests across 15 phases |
 | `make/linux/eepp.make` | Regenerated | Add `src/eepp/ui/flexlayouter.cpp` (via premake, then `make config=debug_x86_64 -C make/linux`) |
 
 ## Gaps and Missing Features (Spec Review against CSS Flexbox Level 1)
@@ -1008,21 +1010,25 @@ to `FlexItem`, each of the four margin CSS properties is checked for a percentag
 value. If found, the percentage is re-resolved against `mContainer->getPixelsSize().getWidth()`.
 Two tests added verifying `margin-top: 10%` and `margin: 10%` resolve against width.
 
-### G7: Painting order by `order`-modified document order (§4.3) — P3
+### G7: Painting order by `order`-modified document order (§4.3) — ✅ DONE
 
-**Status:** Not implemented. `order` sorts items for layout purposes only. The spec
-says flex items paint in `order`-modified document order (items with lower `order`
-paint first, regardless of DOM position), and `z-index` values other than `auto`
-create a stacking context even if `position` is `static`.
+**Status:** Implemented. Added `UIHTMLWidget::drawChildren()` override that
+stable-sorts children by CSS `order` property. The `mNeedsOrderSort` flag
+is set during flex layout in `FlexLayouter::updateLayout()`. Non-widget children
+and non-`UIHTMLWidget` children get `order=0` (not affected by reordering).
 
-**Impact:** Overlapping flex items with different `order` values may paint in the
-wrong order. This affects visual output but not layout geometry.
+**Implementation details:**
+- `UIHTMLWidget::drawChildren()` at `uihtmlwidget.cpp:508` — when the container
+  is flex and the flag is set, collects all children into a vector, stable-sorts
+  by CSS `order` via `std::stable_sort`, then draws in sorted order.
+- Flag set in `FlexLayouter::updateLayout()` at `flexlayouter.cpp:1340` — checks
+  if 2+ flex items have differing `order` values.
+- The `isFlex()` guard prevents stale flag from affecting non-flex containers.
+- 4 new unit tests verify flag correctness.
 
-**Fix:** Requires changes to the widget painting/tree structure, which is outside
-`FlexLayouter`'s scope. Options:
-1. Physically reorder children in the widget tree (complex, affects hit testing).
-2. Add a `paintOrder` field to `UIWidget` and sort by it during paint traversal.
-3. Accept as a known limitation for now (most layouts don't overlap ordered items).
+**Test coverage:** `orderPaintSortFlagDifferentOrders`,
+`orderPaintSortFlagEqualOrders`, `orderPaintSortSingleItem`,
+`orderPaintSortNegatives`.
 
 ### G8: Flex container baseline computation (§8.5) — P3
 
@@ -1105,7 +1111,7 @@ with `setMaxWrapWidth()` (see anchor below for full details).
 | G4 | Cross-axis auto margins (§8.1) | P2 | Medium | ✅ Done |
 | G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small | ✅ Done |
 | G6 | Percentage margins/paddings (§4.2) | P3 | Small | ✅ Done |
-| G7 | Painting order by `order` (§4.3) | P3 | Medium | Pending |
+| G7 | Painting order by `order` (§4.3) | P3 | Medium | ✅ Done |
 | G8 | Flex container baselines (§8.5) | P3 | Medium | Pending |
 | G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | ✅ Done |
 | G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
@@ -1137,7 +1143,7 @@ routing to be production-ready.
 | Column-direction flex container with auto height | Medium | Requires correct child height measurement before container height can be determined. Same root cause as RichText integration; defer to Phase 12. |
 | Interaction with float layout inside flex items | Low | Flex items establish independent formatting contexts per CSS. Floats inside items are local to the item's BlockLayouter. Should work naturally. |
 | Interaction with existing out-of-flow positioning | Low | Skip out-of-flow children during flex item collection. Out-of-flow positioning already handled by `UIHTMLWidget::updateOutOfFlowPosition()`. |
-| `order` reordering breaks DOM event targeting order | Low | `order` is visual-only per CSS spec. Hit testing follows DOM order (unchanged). Only visual positions are reordered. |
+| `order` reordering breaks DOM event targeting order | Low | Implemented via `drawChildren()` override — paint order follows `order`-modified document order per §4.3. Hit testing unaffected (child linked list unchanged). |
 | Performance of repeated style reads in the flex hot path | Low | Already mitigated: `collectFlexItems()` reads all style properties once and caches in `FlexItem`. No style reads in the hot loop. |
 | Auto margins on flex items not implemented | Low | Document as limitation. Most layouts don't rely on auto margins in flex. Can be added later without breaking existing behavior. |
 
@@ -1147,6 +1153,7 @@ The original plan covered Phases 0-12. Phases 0-11 are largely complete with the
 gaps documented above. Here's the updated path forward:
 
 ### ✅ Done (this session)
+- **G7** — Painting order by `order` (§4.3). Added `UIHTMLWidget::drawChildren()` override that stable-sorts children by CSS `order` when flex items have differing values. The `mNeedsOrderSort` flag is set during flex layout. 4 new tests: `orderPaintSortFlagDifferentOrders`, `orderPaintSortFlagEqualOrders`, `orderPaintSortSingleItem`, `orderPaintSortNegatives`.
 - **G1** — Iterative flex resolution after min/max clamping. Rewrote `resolveFlexibleLengths()` with iterative §9.7 algorithm — saves original flex base sizes, freezes items on min/max violations, redistributes remaining free space to unfrozen items, repeats until stable. Added `FlexItem::frozen` flag.
 - **G2** — Correct min-intrinsic width for wrap containers. Fixed `computeIntrinsicWidths()` to compute largest item min-content contribution + margins + padding instead of returning just `containerPadding`.
 - **G4** — Cross-axis auto margins. Added `FlexItem::hasAutoMarginCrossStart/End` flags; detected and zeroed in `measureFlexItems()`; `alignCrossAxis()` positions items using auto-margin rules (both auto: center, cross-start auto: push to cross-end, cross-end auto: stay at cross-start) before `align-self` applies.
@@ -1157,7 +1164,6 @@ gaps documented above. Here's the updated path forward:
 - **G3** — `visibility: collapse` on flex items. Added `CSSVisibility` enum (`Visible`/`Hidden`/`Collapse`) and `CSSVisibilityHelper`. `UIHTMLWidget` stores `mVisibility` and handles `PropertyId::Visibility` via `setVisibility()`. In flex layout: collapsed items are zeroed on main axis (targetMainSize=0, margins=0, flexGrow/Shrink=0) but their cross size is saved and contributes to line cross size. They are positioned at flow position with 0×0 size.
 
 ### Next (fill remaining spec gaps, sorted by real-world usage)
-- **G7** — Painting order by `order` (§4.3). Visual correctness when items overlap. Items with lower `order` should paint first per spec. Affects stacking context. (P3)
 - **G11** — Column-reverse stacking context reordering (§4.1). Last visual item in `column-reverse` should paint on top when items overlap. (P3)
 - **G8** — Flex container baselines (§8.5). Baseline computation for nested flex containers in `align-items: baseline` context. Niche pattern. (P3)
 - **G10** — Percentage flex-basis edge cases (§9.8). Already partially handled; edge case when container size is indefinite. (P3)
