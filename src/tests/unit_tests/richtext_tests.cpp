@@ -252,7 +252,41 @@ UTEST( RichText, VerticalAlignAtomicBoxes ) {
 							RichText::InlineClear::None, 10.f, middleAlign );
 	middleRt.getSize();
 	ASSERT_EQ( middleRt.getLines().front().spans.size(), (size_t)2 );
-	EXPECT_GT( middleRt.getLines().front().spans[1].position.y, baselineY );
+	EXPECT_NEAR( middleRt.getLines().front().spans[1].position.y, baselineY, 0.001f );
+
+	RichText mixedRt;
+	mixedRt.getFontStyleConfig().Font = font;
+	mixedRt.getFontStyleConfig().CharacterSize = 20;
+	mixedRt.addSpan( "Large", nullptr, 30 );
+	mixedRt.addCustomSize( Sizef( 10, 10 ), RichText::InlineFloat::None,
+						   RichText::InlineClear::None, 5.f, middleAlign );
+	mixedRt.getSize();
+	ASSERT_EQ( mixedRt.getLines().front().spans.size(), (size_t)2 );
+	const auto& mixedLine = mixedRt.getLines().front();
+	Float expectedMiddleY = mixedLine.maxAscent - 5.f;
+	EXPECT_NEAR( mixedLine.spans[1].position.y, expectedMiddleY, 0.001f );
+
+	RichText nestedRt;
+	nestedRt.getFontStyleConfig().Font = font;
+	nestedRt.getFontStyleConfig().CharacterSize = 16;
+	FontStyleConfig smallStyle = nestedRt.getFontStyleConfig();
+	smallStyle.CharacterSize = 10;
+	nestedRt.addSpan( "Title ", nullptr, 16 );
+	nestedRt.pushInlineBox( Rectf::Zero, Rectf::Zero, 0, {}, Color::Transparent, 0,
+							Color::Transparent, 0, {} );
+	nestedRt.addInlineText( "(", smallStyle, Rectf::Zero, Rectf::Zero, 0, {} );
+	nestedRt.addCustomSize( Sizef( 36, 14 ), RichText::InlineFloat::None,
+							RichText::InlineClear::None, font->getAscent( 10 ), middleAlign );
+	nestedRt.addInlineText( ")", smallStyle, Rectf::Zero, Rectf::Zero, 0, {} );
+	nestedRt.popInlineBox();
+	nestedRt.getSize();
+	ASSERT_EQ( nestedRt.getLines().front().spans.size(), (size_t)4 );
+	const auto& nestedOpenParen = nestedRt.getLines().front().spans[1];
+	const auto& nestedAtomic = nestedRt.getLines().front().spans[2];
+	ASSERT_TRUE( nestedOpenParen.text != nullptr );
+	EXPECT_STRINGEQ( nestedOpenParen.text->getString(), "(" );
+	EXPECT_EQ( nestedAtomic.type, RichText::RenderSpan::Type::AtomicBox );
+	EXPECT_NEAR( nestedAtomic.position.y, nestedOpenParen.position.y, 0.5f );
 
 	RichText::BaselineAlignValue lengthAlign;
 	lengthAlign.type = RichText::BaselineAlignment::Length;

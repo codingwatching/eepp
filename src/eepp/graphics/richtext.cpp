@@ -61,8 +61,7 @@ static Float getBaselineAlignedOffset( const RichText::RenderParagraph& line, co
 		case RichText::BaselineAlignment::TextBottom:
 			return baseline + getParentDescent( parentFontStyle ) - size.getHeight();
 		case RichText::BaselineAlignment::Middle:
-			return getParentAscent( parentFontStyle ) + getFontXHeight( parentFontStyle ) * 0.5f -
-				   size.getHeight() * 0.5f;
+			return baseline + getFontXHeight( parentFontStyle ) * 0.5f - size.getHeight() * 0.5f;
 		case RichText::BaselineAlignment::Top:
 			return 0.f;
 		case RichText::BaselineAlignment::Bottom:
@@ -830,8 +829,12 @@ class RichTextInlineLayouter {
 				Float baseline = span.baseline;
 				RichText::BaselineAlignValue baselineAlign = effectiveInlineBaselineAlign(
 					inlineItems, span.inlinePath, span.baselineAlign );
-				Float offsetY = getBaselineAlignedOffset(
-					line, span.size, baseline, span.size.getHeight(), baselineAlign, defaultStyle );
+				Float offsetY = baselineAlign.type == RichText::BaselineAlignment::Middle &&
+										baseline > 0.f && baseline < span.size.getHeight()
+									? line.maxAscent - baseline
+									: getBaselineAlignedOffset( line, span.size, baseline,
+																span.size.getHeight(),
+																baselineAlign, defaultStyle );
 				if ( preserveFloatPositions && isFloat ) {
 					span.position.y = 0;
 					continue;
