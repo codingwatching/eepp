@@ -997,20 +997,16 @@ container's inner main size (not the containing block). The raw CSS value is sto
 in `FlexItem::flexBasisRaw` and resolved in `measureFlexItems()` where the container's
 computed main size is available. Confirmed by tests: `percentageBasis`, `flexBasisZeroPercent`.
 
-### G6: Percentage margins/paddings on flex items (§4.2) — P3
+### G6: Percentage margins/paddings on flex items (§4.2) — ✅ DONE
 
-**Status:** Not explicitly handled. Margins are obtained via `getLayoutPixelsMargin()`,
-which returns pixel values pre-resolved by the widget system. If the widget system
-doesn't resolve percentage margins correctly for flex items (resolved against the
-containing block's inline size), this could be wrong.
-
-**Impact:** `margin: 5%` on a flex item should resolve against the flex container's
-width (in horizontal writing mode). If this isn't handled upstream, percentage
-margins behave incorrectly.
-
-**Fix:** Verify whether `getLayoutPixelsMargin()` already resolves percentage
-margins correctly. If not, add percentage resolution in `measureFlexItems()` using
-the flex container's width (containing block inline size).
+**Status:** Implemented. The widget system resolves `margin-top`/`margin-bottom`
+percentage values against `ContainingBlockHeight` (parent height), but CSS spec §4.2
+requires all percentage margins to resolve against the flex container's inline size
+(width in horizontal writing mode). Added percentage margin re-resolution in both
+`measureFlexItems()` and `computeIntrinsicWidths()`: before assigning margin values
+to `FlexItem`, each of the four margin CSS properties is checked for a percentage
+value. If found, the percentage is re-resolved against `mContainer->getPixelsSize().getWidth()`.
+Two tests added verifying `margin-top: 10%` and `margin: 10%` resolve against width.
 
 ### G7: Painting order by `order`-modified document order (§4.3) — P3
 
@@ -1047,19 +1043,9 @@ outer flex container containing this flex container. This is an uncommon pattern
 2. Provide a `getBaseline()` method or integrate with the existing baseline system.
 3. Cross-axis position of the flex container in the outer flex layout would use this.
 
-### G9: `flex-basis: content` distinct from `flex-basis: auto` (§7.2.3) — P3
+### G9: `flex-basis: content` distinct from `flex-basis: auto` (§7.2.3) — ✅ DONE
 
-**Status:** Both `content` and `auto` are treated identically (`flexBasisAuto = true`).
-Per spec, `flex-basis: content` always uses the content-based size, while
-`flex-basis: auto` first checks for a definite main size property.
-
-**Impact:** In practice, most uses of `flex-basis: content` produce the same result
-as `flex-basis: auto`. The difference matters when an item has both `flex-basis: auto`
-and an explicit `width: 300px` — `auto` uses 300px, `content` uses the content size.
-
-**Fix:** Add a separate `flexBasisContent` flag (or rename `flexBasisAuto` to an
-enum: Auto, Content, None). In `resolveFlexBasis()`, skip the definite-size check
-when `flex-basis: content`.
+**Status:** Implemented. Added `FlexItem::flexBasisContent` flag. `readItemStyle()` parses `content` vs `auto` separately. `resolveFlexBasis()` skips the explicit width/height property check when `flexBasisContent` is true (falls through to content-based sizing). The explicit width/height override in `measureFlexItems()` is also guarded by `!item.flexBasisContent`. Two tests added verifying parsing and explicit-width bypass behavior. 61 flex tests pass.
 
 ### G10: `flex-basis` percentage resolution for indefinite container size (§9.8) — P3
 
@@ -1118,10 +1104,10 @@ with `setMaxWrapWidth()` (see anchor below for full details).
 | G3 | `visibility: collapse` (§4.4) | P2 | Large | ✅ Done |
 | G4 | Cross-axis auto margins (§8.1) | P2 | Medium | ✅ Done |
 | G5 | `overflow` affecting min-width:auto (§4.5) | P2 | Small | ✅ Done |
-| G6 | Percentage margins/paddings (§4.2) | P3 | Small | Pending |
+| G6 | Percentage margins/paddings (§4.2) | P3 | Small | ✅ Done |
 | G7 | Painting order by `order` (§4.3) | P3 | Medium | Pending |
 | G8 | Flex container baselines (§8.5) | P3 | Medium | Pending |
-| G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | Pending |
+| G9 | `flex-basis: content` distinct from auto (§7.2.3) | P3 | Small | ✅ Done |
 | G10 | Percentage flex-basis resolution (§9.8) | P3 | Small | Pending |
 | G11 | Column-reverse stacking context (§4.1) | P3 | Small | Pending |
 | G12 | Anonymous flex items (§4) — single-line + wrapping | **P1** | Large | ✅ Done |
@@ -1170,13 +1156,11 @@ gaps documented above. Here's the updated path forward:
 - **G13** — Anonymous flex item text wrapping. Uses a `Text*` (`mFlexText`) on `UITextNode` with `setLineWrapMode(Word)` and `setMaxWrapWidth()`. Configured in `resolveCrossSizes()`; rendered in `draw()`. `minMainSize` set to 0 for text nodes to allow flex-shrink below full text width.
 - **G3** — `visibility: collapse` on flex items. Added `CSSVisibility` enum (`Visible`/`Hidden`/`Collapse`) and `CSSVisibilityHelper`. `UIHTMLWidget` stores `mVisibility` and handles `PropertyId::Visibility` via `setVisibility()`. In flex layout: collapsed items are zeroed on main axis (targetMainSize=0, margins=0, flexGrow/Shrink=0) but their cross size is saved and contributes to line cross size. They are positioned at flow position with 0×0 size.
 
-### Next (fill remaining spec gaps)
-- **G8** — Flex container baselines. Only needed for nested baseline alignment.
-- **G9** — `flex-basis: content` vs `auto`. Minor distinction, rarely used.
-- **G10** — Percentage flex-basis edge cases.
-- **G11** — Column-reverse stacking context.
-- **G6** — Percentage margins/paddings.
-- **G7** — Painting order by `order`.
+### Next (fill remaining spec gaps, sorted by real-world usage)
+- **G7** — Painting order by `order` (§4.3). Visual correctness when items overlap. Items with lower `order` should paint first per spec. Affects stacking context. (P3)
+- **G11** — Column-reverse stacking context reordering (§4.1). Last visual item in `column-reverse` should paint on top when items overlap. (P3)
+- **G8** — Flex container baselines (§8.5). Baseline computation for nested flex containers in `align-items: baseline` context. Niche pattern. (P3)
+- **G10** — Percentage flex-basis edge cases (§9.8). Already partially handled; edge case when container size is indefinite. (P3)
 
 ### Final gate
 - **Route `display: flex` to FlexLayouter** — Implement blockification changes

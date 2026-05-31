@@ -160,6 +160,7 @@ void FlexLayouter::readItemStyle( UIWidget* child, FlexItem& item ) {
 	item.flexBasisRaw = val;
 	if ( val == "auto" || val == "content" ) {
 		item.flexBasisAuto = true;
+		item.flexBasisContent = ( val == "content" );
 		item.flexBasisValue = 0.f;
 		item.flexBasisIsPercentage = false;
 	} else {
@@ -180,7 +181,8 @@ void FlexLayouter::readItemStyle( UIWidget* child, FlexItem& item ) {
 }
 
 Float FlexLayouter::resolveFlexBasis( UIWidget* child, CSSFlexDirection, Float flexBasisValue,
-									  bool flexBasisAuto, const Axis& mainAxis ) {
+									  bool flexBasisAuto, const Axis& mainAxis,
+									  bool flexBasisContent ) {
 	if ( flexBasisAuto ) {
 		// For text nodes (anonymous flex items), measure text content width
 		if ( child->isType( UI_TYPE_TEXTNODE ) ) {
@@ -193,26 +195,27 @@ Float FlexLayouter::resolveFlexBasis( UIWidget* child, CSSFlexDirection, Float f
 			}
 		}
 
-		Float intrinsic = 0.f;
-		if ( mainAxis.horizontal && child->getLayoutWidthPolicy() == SizePolicy::Fixed &&
-			 child->getUIStyle() ) {
-			const auto* wprop = child->getUIStyle()->getProperty( PropertyId::Width );
-			if ( wprop )
-				return child->lengthFromValue( *wprop );
-		}
-		if ( !mainAxis.horizontal && child->getLayoutHeightPolicy() == SizePolicy::Fixed &&
-			 child->getUIStyle() ) {
-			const auto* hprop = child->getUIStyle()->getProperty( PropertyId::Height );
-			if ( hprop )
-				return child->lengthFromValue( *hprop );
+		// Per §7.2.3: flex-basis: content always uses content-based sizing
+		// and skips the explicit main size property (width/height) check.
+		if ( !flexBasisContent ) {
+			if ( mainAxis.horizontal && child->getLayoutWidthPolicy() == SizePolicy::Fixed &&
+				 child->getUIStyle() ) {
+				const auto* wprop = child->getUIStyle()->getProperty( PropertyId::Width );
+				if ( wprop )
+					return child->lengthFromValue( *wprop );
+			}
+			if ( !mainAxis.horizontal && child->getLayoutHeightPolicy() == SizePolicy::Fixed &&
+				 child->getUIStyle() ) {
+				const auto* hprop = child->getUIStyle()->getProperty( PropertyId::Height );
+				if ( hprop )
+					return child->lengthFromValue( *hprop );
+			}
 		}
 
 		if ( mainAxis.horizontal )
-			intrinsic = child->getPixelsSize().getWidth();
+			return child->getPixelsSize().getWidth();
 		else
-			intrinsic = child->getPixelsSize().getHeight();
-
-		return intrinsic;
+			return child->getPixelsSize().getHeight();
 	}
 	return flexBasisValue;
 }
@@ -278,6 +281,35 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 		// Auto margins on the main axis are handled by the flex algorithm
 		// (CSS Flexbox §8.1), so we treat them as 0 here.
 		Rectf margin = item.widget->getLayoutPixelsMargin();
+
+		// CSS §4.2: Percentage margins on flex items always resolve against
+		// the flex container's inline size (width in horizontal writing mode).
+		// The widget system may resolve top/bottom percentage margins against
+		// the parent's height (ContainingBlockHeight), which is wrong for flex.
+		// Re-resolve any percentage margins against the flex container's width.
+		if ( item.widget->getUIStyle() ) {
+			const StyleSheetProperty* props[4] = {
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginTop ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginRight ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginBottom ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginLeft ),
+			};
+			Float sides[4] = { margin.Top, margin.Right, margin.Bottom, margin.Left };
+			for ( int i = 0; i < 4; i++ ) {
+				if ( props[i] && StyleSheetLength::isPercentage( props[i]->value() ) ) {
+					std::string val = props[i]->value();
+					String::toLowerInPlace( val );
+					String::replaceAll( val, "%", "" );
+					Float pct = 0.f;
+					String::fromString( pct, val );
+					sides[i] = mContainer->getPixelsSize().getWidth() * pct / 100.f;
+				}
+			}
+			margin.Top = sides[0];
+			margin.Right = sides[1];
+			margin.Bottom = sides[2];
+			margin.Left = sides[3];
+		}
 		if ( mainAxis.horizontal ) {
 			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginLeftAuto();
 			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginRightAuto();
@@ -326,21 +358,25 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.targetMainSize = containerInnerMain * pct / 100.f;
 			}
 		} else {
-			item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
-													item.flexBasisAuto, mainAxis );
+			item.targetMainSize =
+				resolveFlexBasis( item.widget, mDirection, item.flexBasisValue, item.flexBasisAuto,
+								  mainAxis, item.flexBasisContent );
 		}
 
-		if ( mainAxis.horizontal && item.widget->getLayoutWidthPolicy() == SizePolicy::Fixed &&
-			 item.widget->getUIStyle() ) {
-			const auto* wprop = item.widget->getUIStyle()->getProperty( PropertyId::Width );
-			if ( wprop )
-				item.targetMainSize = item.widget->lengthFromValue( *wprop );
-		} else if ( !mainAxis.horizontal &&
-					item.widget->getLayoutHeightPolicy() == SizePolicy::Fixed &&
-					item.widget->getUIStyle() ) {
-			const auto* hprop = item.widget->getUIStyle()->getProperty( PropertyId::Height );
-			if ( hprop )
-				item.targetMainSize = item.widget->lengthFromValue( *hprop );
+		// Per §7.2.3: flex-basis: content ignores the explicit main size property
+		if ( !item.flexBasisContent ) {
+			if ( mainAxis.horizontal && item.widget->getLayoutWidthPolicy() == SizePolicy::Fixed &&
+				 item.widget->getUIStyle() ) {
+				const auto* wprop = item.widget->getUIStyle()->getProperty( PropertyId::Width );
+				if ( wprop )
+					item.targetMainSize = item.widget->lengthFromValue( *wprop );
+			} else if ( !mainAxis.horizontal &&
+						item.widget->getLayoutHeightPolicy() == SizePolicy::Fixed &&
+						item.widget->getUIStyle() ) {
+				const auto* hprop = item.widget->getUIStyle()->getProperty( PropertyId::Height );
+				if ( hprop )
+					item.targetMainSize = item.widget->lengthFromValue( *hprop );
+			}
 		}
 
 		// For text node flex items, measure text content to determine intrinsic size.
@@ -1340,11 +1376,38 @@ void FlexLayouter::computeIntrinsicWidths() {
 			// size as a fallback since container size is not known here.
 			item.targetMainSize = getItemMainSize( item.widget, mainAxis );
 		} else {
-			item.targetMainSize = resolveFlexBasis( item.widget, mDirection, item.flexBasisValue,
-													item.flexBasisAuto, mainAxis );
+			item.targetMainSize =
+				resolveFlexBasis( item.widget, mDirection, item.flexBasisValue, item.flexBasisAuto,
+								  mainAxis, item.flexBasisContent );
 		}
 
 		Rectf margin = item.widget->getLayoutPixelsMargin();
+
+		// Re-resolve percentage margins against flex container's inline size
+		if ( item.widget->getUIStyle() ) {
+			const StyleSheetProperty* props[4] = {
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginTop ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginRight ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginBottom ),
+				item.widget->getUIStyle()->getProperty( PropertyId::MarginLeft ),
+			};
+			Float sides[4] = { margin.Top, margin.Right, margin.Bottom, margin.Left };
+			for ( int i = 0; i < 4; i++ ) {
+				if ( props[i] && StyleSheetLength::isPercentage( props[i]->value() ) ) {
+					std::string val = props[i]->asString();
+					String::toLowerInPlace( val );
+					String::replaceAll( val, "%", "" );
+					Float pct = 0.f;
+					String::fromString( pct, val );
+					sides[i] = mContainer->getPixelsSize().getWidth() * pct / 100.f;
+				}
+			}
+			margin.Top = sides[0];
+			margin.Right = sides[1];
+			margin.Bottom = sides[2];
+			margin.Left = sides[3];
+		}
+
 		if ( mainAxis.horizontal ) {
 			item.hasAutoMarginMainStart = item.widget->hasLayoutMarginLeftAuto();
 			item.hasAutoMarginMainEnd = item.widget->hasLayoutMarginRightAuto();

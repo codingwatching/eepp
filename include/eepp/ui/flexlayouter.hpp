@@ -23,6 +23,7 @@ class EE_API FlexLayouter : public UILayouter {
 		Float flexShrink;
 		Float flexBasisValue;
 		bool flexBasisAuto;
+		bool flexBasisContent;
 		bool flexBasisIsPercentage;
 		std::string flexBasisRaw;
 
@@ -58,6 +59,7 @@ class EE_API FlexLayouter : public UILayouter {
 			flexShrink( 1.f ),
 			flexBasisValue( 0.f ),
 			flexBasisAuto( true ),
+			flexBasisContent( false ),
 			flexBasisIsPercentage( false ),
 			alignSelf( CSSAlignSelf::Auto ),
 			outerMainSize( 0.f ),
@@ -105,7 +107,8 @@ class EE_API FlexLayouter : public UILayouter {
 	Axis getCrossAxis( CSSFlexDirection direction ) const;
 
 	Float resolveFlexBasis( UIWidget* child, CSSFlexDirection direction, Float flexBasisValue,
-							bool flexBasisAuto, const Axis& mainAxis );
+							bool flexBasisAuto, const Axis& mainAxis,
+							bool flexBasisContent = false );
 
 	Float getItemMainSize( UIWidget* child, const Axis& mainAxis ) const;
 

@@ -1903,3 +1903,148 @@ UTEST( FlexContainer, stretchWithFixedCrossSize ) {
 
 	Engine::destroySingleton();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G6: Percentage margins/paddings resolve against flex container inline size
+// ─────────────────────────────────────────────────────────────────────────────
+
+UTEST( FlexContainer, percentageMarginResolvesAgainstFlexContainerWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// Per CSS §4.2: percentage margins on flex items always resolve against
+	// the flex container's inline size (width), even for top/bottom margins.
+	// Container is 500x200. margin-top: 10% should give 50px (10% of 500), not 20px (10% of 200).
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "margin-top", "10%" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// margin-top: 10% of 500px = 50px. Item should be at Y=50.
+	EXPECT_NEAR( child->getPixelsPosition().y, 50.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, percentageMarginAllSidesResolveAgainstWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	// Per spec, BOTH margin-top and margin-bottom resolve against width.
+	// Container is 400x300. margin: 10% on all sides gives 40px (10% of 400).
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 400, 300 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	UIHTMLWidget* child = UIHTMLWidget::New();
+	child->setParent( flex );
+	child->setPixelsSize( 100, 50 );
+	child->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child->setStyleSheetProperty( StyleSheetProperty( "margin", "10%" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	// margin-left and margin-top should both be 40px (10% of 400px container width)
+	EXPECT_NEAR( child->getPixelsPosition().x, 40.f, 5.f );
+	EXPECT_NEAR( child->getPixelsPosition().y, 40.f, 5.f );
+
+	Engine::destroySingleton();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G9: flex-basis: content vs flex-basis: auto
+// ─────────────────────────────────────────────────────────────────────────────
+
+UTEST( FlexContainer, flexBasisContentUsesContentSize ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 500, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	UIHTMLWidget* child1 = UIHTMLWidget::New();
+	child1->setParent( flex );
+	child1->setPixelsSize( 100, 50 );
+	child1->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child1->setStyleSheetProperty( StyleSheetProperty( "flex-basis", "content" ) );
+
+	UIHTMLWidget* child2 = UIHTMLWidget::New();
+	child2->setParent( flex );
+	child2->setPixelsSize( 100, 50 );
+	child2->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	child2->setStyleSheetProperty( StyleSheetProperty( "flex-basis", "auto" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_GT( child1->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( child2->getPixelsSize().getWidth(), 0.f );
+	EXPECT_NEAR( child1->getPixelsSize().getWidth(), child2->getPixelsSize().getWidth(), 5.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( FlexContainer, flexBasisContentIgnoresExplicitWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Flex Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_flex_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* flex = UIHTMLWidget::New();
+	flex->setParent( sceneNode->getRoot() );
+	flex->setDisplay( CSSDisplay::Flex );
+	flex->setPixelsSize( 600, 200 );
+	flex->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	flex->setStyleSheetProperty( StyleSheetProperty( "align-items", "flex-start" ) );
+
+	UIHTMLWidget* childA = UIHTMLWidget::New();
+	childA->setParent( flex );
+	childA->setPixelsSize( 100, 50 );
+	childA->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	childA->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 auto" ) );
+	childA->setStyleSheetProperty( StyleSheetProperty( "width", "300px" ) );
+
+	UIHTMLWidget* childB = UIHTMLWidget::New();
+	childB->setParent( flex );
+	childB->setPixelsSize( 100, 50 );
+	childB->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	childB->setStyleSheetProperty( StyleSheetProperty( "flex", "1 1 content" ) );
+	childB->setStyleSheetProperty( StyleSheetProperty( "width", "300px" ) );
+
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_GT( childA->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( childB->getPixelsSize().getWidth(), 0.f );
+
+	Engine::destroySingleton();
+}
