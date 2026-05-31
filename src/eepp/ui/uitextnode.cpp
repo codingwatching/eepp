@@ -1,3 +1,5 @@
+#include <eepp/graphics/text.hpp>
+#include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uitextnode.hpp>
 
@@ -13,7 +15,9 @@ UITextNode::UITextNode() : UIWidget( "textnode" ) {
 	mFlags |= UI_HTML_ELEMENT;
 }
 
-UITextNode::~UITextNode() {}
+UITextNode::~UITextNode() {
+	eeSAFE_DELETE( mFlexText );
+}
 
 Uint32 UITextNode::getType() const {
 	return UI_TYPE_TEXTNODE;
@@ -24,7 +28,39 @@ bool UITextNode::isType( const Uint32& type ) const {
 }
 
 void UITextNode::draw() {
-	// Text nodes do not draw themselves; their parent handles rendering
+	if ( mText.empty() )
+		return;
+
+	Node* parent = getParent();
+	bool isFlexItem =
+		parent && parent->isType( UI_TYPE_HTML_WIDGET ) && parent->asType<UIHTMLWidget>()->isFlex();
+	if ( isFlexItem ) {
+		Text* flexText = getFlexText();
+		if ( flexText->getFont() ) {
+			flexText->setMaxWrapWidth( getPixelsSize().getWidth() );
+			Float alpha = getAlpha();
+			if ( alpha != 255.f )
+				flexText->setAlpha( (Uint8)( 255.f * alpha ) );
+			flexText->draw( mScreenPos.x, mScreenPos.y );
+		} else {
+			// Fallback: Text not yet configured by flex layouter — draw single-line
+			Node* n = parent;
+			while ( n ) {
+				if ( n->isType( UI_TYPE_RICHTEXT ) ) {
+					auto& fontConfig = n->asType<UIRichText>()->getRichText().getFontStyleConfig();
+					if ( fontConfig.Font ) {
+						FontStyleConfig fc = fontConfig;
+						Float alpha = getAlpha();
+						if ( alpha < 1.f )
+							fc.FontColor.a = (Uint8)( (Float)fc.FontColor.a * alpha );
+						Text::draw( mText, mScreenPos.trunc(), fc );
+					}
+					break;
+				}
+				n = n->getParent();
+			}
+		}
+	}
 }
 
 std::vector<PropertyId> UITextNode::getPropertiesImplemented() const {
@@ -74,6 +110,12 @@ bool UITextNode::isWhitespaceOnly() const {
 			return false;
 	}
 	return true;
+}
+
+Text* UITextNode::getFlexText() {
+	if ( mFlexText == nullptr )
+		mFlexText = Text::New();
+	return mFlexText;
 }
 
 }} // namespace EE::UI

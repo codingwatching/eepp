@@ -220,7 +220,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "",
+        "args": "--filter=\"UIHTML.FlexFormLayout\"",
         "command": "${project_root}/bin/unit_tests/eepp-unit_tests-debug",
         "name": "eepp-unit_tests-debug",
         "working_dir": "${project_root}/bin/unit_tests/"
@@ -377,7 +377,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "-c system --hn-dark",
+        "args": "-d1 https://asahilinux.org/2026/04/progress-report-7-0/",
         "command": "${project_root}/bin/eepp-ui-html-debug",
         "name": "eepp-ui-html-debug",
         "working_dir": "${project_root}/bin"

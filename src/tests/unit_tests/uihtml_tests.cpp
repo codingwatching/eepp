@@ -57,7 +57,7 @@ static void init_ui_test() {
 
 UTEST( UIHTMLTable, complexLayout ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
+		WindowSettings( 1024, 653, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
 						32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2071,7 +2071,7 @@ UTEST( UIHTMLDetails, lobstersInlineBlockCachesWidth ) {
 
 UTEST( UIBorder, renderingVariations ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Border Rendering Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Border Rendering Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2521,6 +2521,38 @@ UTEST( UIHTML, BodyHeightMiscalculationFixture ) {
 	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 3000.f );
 	EXPECT_LT( bodyWidget->getPixelsSize().getHeight(), 6000.f );
 
+	// Verify the nav layout: .wrap has justify-content: space-between,
+	// so .brand should be at the left and .links at the right.
+	auto nav = sceneNode->getRoot()->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	auto wrap = navWidget->findByClass( "wrap" );
+	ASSERT_TRUE( wrap != nullptr );
+	auto wrapWidget = wrap->asType<UIWidget>();
+
+	auto brand = wrapWidget->findByClass( "brand" );
+	ASSERT_TRUE( brand != nullptr );
+	auto brandWidget = brand->asType<UIWidget>();
+
+	auto links = wrapWidget->findByClass( "links" );
+	ASSERT_TRUE( links != nullptr );
+	auto linksWidget = links->asType<UIWidget>();
+
+	// With justify-content: space-between in a row-direction flex:
+	// .brand should be at the left side of .wrap (near padding edge).
+	EXPECT_LT( brandWidget->getPixelsPosition().x,
+			   wrapWidget->getPixelsSize().getWidth() * 0.25f );
+
+	// .links should be at the right side of .wrap, NOT next to .brand.
+	Float wrapW = wrapWidget->getPixelsSize().getWidth();
+	Float linksW = linksWidget->getPixelsSize().getWidth();
+	EXPECT_GT( linksWidget->getPixelsPosition().x, wrapW * 0.5f );
+
+	// .links should NOT occupy all available width — it must be content-sized.
+	EXPECT_GT( linksW, 0.f );
+	EXPECT_LT( linksW, wrapW * 0.5f );
+
 	Engine::destroySingleton();
 }
 
@@ -2586,7 +2618,7 @@ UTEST( UIHTML, ContactFormLayout ) {
 
 UTEST( UIBackground, imageAtlasPositioning ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 656, "Background Atlas Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test", WindowStyle::Default,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -3079,6 +3111,344 @@ UTEST( UIHTML, LiFloatLeft ) {
 
 	for ( size_t i = 1; i < livec.size(); i++ )
 		EXPECT_NEAR( refY, livec[i]->getPixelsPosition().y, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexCenterWebViewLikeLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1280, 720, "Flex Center WebView",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_center.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto postWrapper = sceneNode->getRoot()->findByClass( "post-wrapper" );
+	auto post = sceneNode->getRoot()->findByClass( "post" );
+	ASSERT_TRUE( postWrapper != nullptr );
+	ASSERT_TRUE( post != nullptr );
+
+	auto postWidget = post->asType<UIWidget>();
+
+	// In a real browser a div with width:100% inside a column flex container
+	// with align-items:center still spans the full cross axis because 100%
+	// resolves against the container.  The item should therefore sit flush with
+	// the container's left edge (plus any container padding).
+	EXPECT_NEAR( postWidget->getPixelsPosition().x, 0.f, 2.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexCenterNoTextNodeDisplacement ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Center Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_center.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto postWrapper = sceneNode->getRoot()->findByClass( "post-wrapper" );
+	ASSERT_TRUE( postWrapper != nullptr );
+	auto post = postWrapper->findByClass( "post" );
+	ASSERT_TRUE( post != nullptr );
+
+	// The post-wrapper is a column flex container.  Whitespace text nodes
+	// between the tags must not be treated as flex items, otherwise the
+	// .post child would be displaced downward.
+	auto postWrapperWidget = postWrapper->asType<UIWidget>();
+	auto postWidget = post->asType<UIWidget>();
+
+	Float postX = postWidget->getPixelsPosition().x;
+	Float postY = postWidget->getPixelsPosition().y;
+	Float wrapperTopPadding = postWrapperWidget->getPixelsPadding().Top;
+	Float postMarginTop = postWidget->getLayoutPixelsMargin().Top;
+	Float wrapperW = postWrapperWidget->getPixelsSize().getWidth();
+	Float postW = postWidget->getPixelsSize().getWidth();
+
+	// In a column flex container the first (and only) real flex item should
+	// sit right after the container's top padding plus its own margin-top.
+	EXPECT_NEAR( postY, wrapperTopPadding + postMarginTop, 2.f );
+
+	// The .post div has width: 100% so it should span the full cross axis.
+	// With align-items: center there is no free space, so x should be at the
+	// container's left padding (not displaced toward the right edge).
+	EXPECT_NEAR( postX, 0.f, 2.f );
+	EXPECT_GT( postW, wrapperW * 0.5f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, BlockSizeInfDoesNotHang ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Block Size Inf Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/block_size_inf.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	// If we got here without hanging, the test passes.
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexFormLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Flex Form Layout Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_form.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto form = sceneNode->getRoot()->findByClass( "newsletter-form" );
+	ASSERT_TRUE( form != nullptr );
+	auto formWidget = form->asType<UIWidget>();
+
+	// The form has display: flex with no explicit height; it must derive
+	// its height from the tallest flex item (the input or button).
+	EXPECT_GT( formWidget->getPixelsSize().getHeight(), 0.f );
+
+	// Find the email input and subscribe button within the form.
+	auto input = formWidget->findByTag( "input" );
+	auto button = formWidget->findByTag( "button" );
+	ASSERT_TRUE( input != nullptr );
+	ASSERT_TRUE( button != nullptr );
+	auto inputWidget = input->asType<UIWidget>();
+	auto buttonWidget = button->asType<UIWidget>();
+
+	// In a row flex container the button should sit to the right of the input.
+	Float inputRight = inputWidget->getPixelsPosition().x + inputWidget->getPixelsSize().getWidth();
+	EXPECT_GT( buttonWidget->getPixelsPosition().x, inputRight - 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexMediaQueriesLayout ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Media Queries Layout Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_mediaqueries.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+
+	// Header
+	auto header = bodyWidget->findByClass( "site-header" );
+	ASSERT_TRUE( header != nullptr );
+	auto headerWidget = header->asType<UIWidget>();
+
+	// Header logo (contains SVG + "Causality" text)
+	auto logo = headerWidget->findByClass( "header-logo" );
+	ASSERT_TRUE( logo != nullptr );
+	auto logoWidget = logo->asType<UIWidget>();
+
+	// Header wordmark (the "Causality" span)
+	auto wordmark = headerWidget->findByClass( "header-wordmark" );
+	ASSERT_TRUE( wordmark != nullptr );
+	auto wordmarkWidget = wordmark->asType<UIWidget>();
+
+	// Site nav
+	auto nav = headerWidget->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	// Header should have visible height (padding + content + padding)
+	EXPECT_GT( headerWidget->getPixelsSize().getHeight(), 80.f );
+
+	// Header should not exceed content width significantly
+	EXPECT_LE( headerWidget->getPixelsSize().getWidth(), 1024.f );
+
+	// The wordmark "Causality" should have positive width and height (visible text)
+	EXPECT_GT( wordmarkWidget->getPixelsSize().getWidth(), 10.f );
+	EXPECT_GT( wordmarkWidget->getPixelsSize().getHeight(), 5.f );
+
+	// The logo (flex item in header) should not extend outside the header
+	EXPECT_LE( logoWidget->getPixelsPosition().x + logoWidget->getPixelsSize().getWidth(),
+			   headerWidget->getPixelsPosition().x + headerWidget->getPixelsSize().getWidth() +
+				   1.f );
+
+	// Site nav should not overflow the header
+	EXPECT_LE( navWidget->getPixelsPosition().x + navWidget->getPixelsSize().getWidth(),
+			   headerWidget->getPixelsPosition().x + headerWidget->getPixelsSize().getWidth() +
+				   1.f );
+
+	// Essay nav
+	auto essayNav = bodyWidget->findByClass( "essay-nav" );
+	ASSERT_TRUE( essayNav != nullptr );
+	auto essayNavWidget = essayNav->asType<UIWidget>();
+
+	// The essay-nav link (<a>)
+	auto essayNavLink = essayNavWidget->findByClass( "essay-nav-prev" );
+	ASSERT_TRUE( essayNavLink != nullptr );
+	auto essayNavLinkWidget = essayNavLink->asType<UIWidget>();
+
+	// essay-nav should contain its link (link should not overflow in local coords)
+	Float linkLocalX = essayNavLinkWidget->getPixelsPosition().x;
+	Float linkLocalY = essayNavLinkWidget->getPixelsPosition().y;
+	Float linkLocalW = essayNavLinkWidget->getPixelsSize().getWidth();
+	Float linkLocalH = essayNavLinkWidget->getPixelsSize().getHeight();
+	Float navW = essayNavWidget->getPixelsSize().getWidth();
+	Float navH = essayNavWidget->getPixelsSize().getHeight();
+
+	EXPECT_GE( linkLocalX, -1.f );
+	EXPECT_LE( linkLocalX + linkLocalW, navW + 1.f );
+	EXPECT_GE( linkLocalY, -1.f );
+	EXPECT_LE( linkLocalY + linkLocalH, navH + 1.f );
+
+	// essay-nav should have visible size
+	EXPECT_GT( essayNavWidget->getPixelsSize().getHeight(), 10.f );
+	EXPECT_GT( essayNavWidget->getPixelsSize().getWidth(), 10.f );
+
+	// The essay-nav link contains two spans: label and title
+	// They should stack vertically (flex-direction: column on the <a>)
+	// so the link height should be at least the sum of both span heights
+	auto essayLabel = essayNavLinkWidget->findByClass( "essay-nav-label" );
+	auto essayTitle = essayNavLinkWidget->findByClass( "essay-nav-title" );
+	if ( essayLabel && essayTitle ) {
+		auto labelWidget = essayLabel->asType<UIWidget>();
+		auto titleWidget = essayTitle->asType<UIWidget>();
+		EXPECT_GT( essayNavLinkWidget->getPixelsSize().getHeight(),
+				   labelWidget->getPixelsSize().getHeight() +
+					   titleWidget->getPixelsSize().getHeight() - 1.f );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexAnchorInFlexNavVisible ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex Anchor in Flex Nav Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_mediaquery.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+
+	auto nav = bodyWidget->findByClass( "site-nav" );
+	ASSERT_TRUE( nav != nullptr );
+	auto navWidget = nav->asType<UIWidget>();
+
+	// The nav is a flex container; its <a> children are blockified flex items.
+	// Each <a> should have non-zero width and height (text must be visible).
+	for ( Uint32 i = 0; i < navWidget->getChildCount(); ++i ) {
+		auto c = navWidget->getChildAt( i );
+		auto cw = c->asType<UIWidget>();
+		if ( !cw || cw->getElementTag() != "a" )
+			continue;
+		EXPECT_GT( cw->getPixelsSize().getWidth(), 5.f );
+		EXPECT_GT( cw->getPixelsSize().getHeight(), 5.f );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexLiItemsWrapContentWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Flex LI Width Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/flex_li_width.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto menuContainer = sceneNode->getRoot()->findByClass( "menu-container" );
+	ASSERT_TRUE( menuContainer != nullptr );
+	auto menuWidget = menuContainer->asType<UIWidget>();
+
+	// The menu container is a flex row; its <li> children should wrap to
+	// their content width, not span the full container width.
+	Float containerWidth = menuWidget->getPixelsSize().getWidth();
+	Float containerPadding =
+		menuWidget->getPixelsPadding().Left + menuWidget->getPixelsPadding().Right;
+	Float contentWidth = containerWidth - containerPadding;
+
+	Float totalLiWidth = 0.f;
+	Uint32 liCount = 0;
+	for ( Uint32 i = 0; i < menuWidget->getChildCount(); ++i ) {
+		auto c = menuWidget->getChildAt( i );
+		if ( !c->isWidget() )
+			continue;
+		auto cw = c->asType<UIWidget>();
+		if ( cw->getElementTag() != "li" )
+			continue;
+
+		// Each <li> should be narrower than the container content width
+		EXPECT_LT( cw->getPixelsSize().getWidth(), contentWidth );
+
+		// Accumulate total width (including margin)
+		Rectf margin = cw->getLayoutPixelsMargin();
+		totalLiWidth += cw->getPixelsSize().getWidth() + margin.Left + margin.Right;
+		liCount++;
+	}
+
+	ASSERT_GT( liCount, (Uint32)0 );
+	// With 9 items and horizontal margins, the total should still fit without
+	// each item spanning the full container.
+	EXPECT_LT( totalLiWidth, contentWidth * (Float)liCount );
 
 	Engine::destroySingleton();
 }

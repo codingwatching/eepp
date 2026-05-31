@@ -12,6 +12,21 @@ namespace EE { namespace UI {
 
 class UILayouter;
 
+struct UIHTMLWidgetFlexState {
+	CSSFlexDirection direction{ CSSFlexDirection::Row };
+	CSSFlexWrap wrap{ CSSFlexWrap::NoWrap };
+	CSSJustifyContent justifyContent{ CSSJustifyContent::FlexStart };
+	CSSAlignItems alignItems{ CSSAlignItems::Stretch };
+	CSSAlignContent alignContent{ CSSAlignContent::Stretch };
+	CSSAlignSelf alignSelf{ CSSAlignSelf::Auto };
+	Float flexGrow{ 0.f };
+	Float flexShrink{ 1.f };
+	std::string flexBasis{ "auto" };
+	int order{ 0 };
+	std::string rowGap{ "0" };
+	std::string columnGap{ "0" };
+};
+
 class EE_API UIHTMLWidget : public UILayout {
   public:
 	static UIHTMLWidget* New();
@@ -33,6 +48,8 @@ class EE_API UIHTMLWidget : public UILayout {
 	CSSDisplay getDisplay() const { return mDisplay; }
 
 	void setDisplay( CSSDisplay display );
+
+	bool isFlex() const;
 
 	CSSPosition getCSSPosition() const { return mPosition; }
 
@@ -59,6 +76,72 @@ class EE_API UIHTMLWidget : public UILayout {
 	int getZIndex() const { return mZIndex; }
 
 	void setZIndex( int zIndex );
+
+	UIHTMLWidgetFlexState* getFlexState() const { return mFlexState; }
+
+	UIHTMLWidgetFlexState* ensureFlexState() {
+		if ( !mFlexState )
+			mFlexState = eeNew( UIHTMLWidgetFlexState, () );
+		return mFlexState;
+	}
+
+	CSSFlexDirection getFlexDirection() const {
+		return mFlexState ? mFlexState->direction : CSSFlexDirection::Row;
+	}
+	void setFlexDirection( CSSFlexDirection val );
+
+	CSSFlexWrap getFlexWrap() const { return mFlexState ? mFlexState->wrap : CSSFlexWrap::NoWrap; }
+	void setFlexWrap( CSSFlexWrap val );
+
+	CSSJustifyContent getJustifyContent() const {
+		return mFlexState ? mFlexState->justifyContent : CSSJustifyContent::FlexStart;
+	}
+	void setJustifyContent( CSSJustifyContent val );
+
+	CSSAlignItems getAlignItems() const {
+		return mFlexState ? mFlexState->alignItems : CSSAlignItems::Stretch;
+	}
+	void setAlignItems( CSSAlignItems val );
+
+	CSSAlignContent getAlignContent() const {
+		return mFlexState ? mFlexState->alignContent : CSSAlignContent::Stretch;
+	}
+	void setAlignContent( CSSAlignContent val );
+
+	CSSAlignSelf getAlignSelf() const {
+		return mFlexState ? mFlexState->alignSelf : CSSAlignSelf::Auto;
+	}
+	void setAlignSelf( CSSAlignSelf val );
+
+	CSSVisibility getVisibility() const { return mVisibility; }
+	void setVisibility( CSSVisibility val );
+
+	Float getFlexGrow() const { return mFlexState ? mFlexState->flexGrow : 0.f; }
+	void setFlexGrow( Float val );
+
+	Float getFlexShrink() const { return mFlexState ? mFlexState->flexShrink : 1.f; }
+	void setFlexShrink( Float val );
+
+	const std::string& getFlexBasis() const {
+		static const std::string sDefault( "auto" );
+		return mFlexState ? mFlexState->flexBasis : sDefault;
+	}
+	void setFlexBasis( const std::string& val );
+
+	int getOrder() const { return mFlexState ? mFlexState->order : 0; }
+	void setOrder( int val );
+
+	const std::string& getRowGap() const {
+		static const std::string sDefault( "0" );
+		return mFlexState ? mFlexState->rowGap : sDefault;
+	}
+	void setRowGap( const std::string& val );
+
+	const std::string& getColumnGap() const {
+		static const std::string sDefault( "0" );
+		return mFlexState ? mFlexState->columnGap : sDefault;
+	}
+	void setColumnGap( const std::string& val );
 
 	virtual std::vector<PropertyId> getPropertiesImplemented() const;
 
@@ -118,6 +201,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	CSSFloat mFloat{ CSSFloat::None };
 	CSSClear mClear{ CSSClear::None };
 	CSSBaselineAlignValue mBaselineAlign;
+	CSSVisibility mVisibility{ CSSVisibility::Visible };
 	std::string mTopEq{ "auto" };
 	std::string mRightEq{ "auto" };
 	std::string mBottomEq{ "auto" };
@@ -126,6 +210,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	int mZIndex{ 0 };
 	bool mOverflowCreatesBlockFormattingContext{ false };
 	UILayouter* mLayouter{ nullptr };
+	UIHTMLWidgetFlexState* mFlexState{ nullptr };
 	UnorderedMap<std::string, StyleSheetProperty> mDataProperties;
 
 	Uint32 mScrollCb{ 0 };

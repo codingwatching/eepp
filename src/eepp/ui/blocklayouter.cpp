@@ -9,6 +9,24 @@
 
 namespace EE { namespace UI {
 
+static bool isStretchedFlexItem( UIHTMLWidget* widget ) {
+	Node* parent = widget->getParent();
+	if ( !parent || !parent->isWidget() || !parent->isType( UI_TYPE_HTML_WIDGET ) )
+		return false;
+	UIHTMLWidget* parentHtml = parent->asType<UIHTMLWidget>();
+	if ( !parentHtml->isFlex() )
+		return false;
+
+	CSSAlignSelf alignSelf = widget->getAlignSelf();
+	if ( alignSelf == CSSAlignSelf::Stretch )
+		return true;
+
+	if ( alignSelf == CSSAlignSelf::Auto )
+		return parentHtml->getAlignItems() == CSSAlignItems::Stretch;
+
+	return false;
+}
+
 Float BlockLayouter::getMinIntrinsicWidth() {
 	computeIntrinsicWidths();
 	return mMinIntrinsicWidth;
@@ -56,7 +74,11 @@ void BlockLayouter::updateLayout() {
 	if ( rt == nullptr || mPacking )
 		return;
 
-	if ( widget->isInline() )
+	Node* parentNode = widget->getParent();
+	bool parentIsFlex = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+						parentNode->asType<UIHTMLWidget>()->isFlex();
+
+	if ( widget->isInline() && !parentIsFlex )
 		return;
 
 	mResizedCount = 0;
@@ -66,7 +88,7 @@ void BlockLayouter::updateLayout() {
 
 	bool preserveFloatConstrainedBFCWidth =
 		widget->establishesBlockFormattingContext() && !rt->getExternalFloatExclusions().empty();
-	if ( !preserveFloatConstrainedBFCWidth )
+	if ( !preserveFloatConstrainedBFCWidth && !parentIsFlex )
 		setMatchParentIfNeededVerticalGrowth();
 
 	const StyleSheetProperty* prop = nullptr;
@@ -111,7 +133,8 @@ void BlockLayouter::updateLayout() {
 	}
 
 	if ( totW != mContainer->getPixelsSize().getWidth() ||
-		 mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent )
+		 ( mContainer->getLayoutWidthPolicy() == SizePolicy::WrapContent &&
+		   !isStretchedFlexItem( widget ) ) )
 		mContainer->setInternalPixelsWidth( totW );
 
 	Float totH = mContainer->getPixelsSize().getHeight();
@@ -138,7 +161,8 @@ void BlockLayouter::updateLayout() {
 	}
 
 	if ( totH != mContainer->getPixelsSize().getHeight() ||
-		 mContainer->getLayoutHeightPolicy() == SizePolicy::WrapContent )
+		 ( mContainer->getLayoutHeightPolicy() == SizePolicy::WrapContent &&
+		   !isStretchedFlexItem( widget ) ) )
 		mContainer->setInternalPixelsHeight( totH );
 
 	mContainer->endAttributesTransaction();
