@@ -6,6 +6,7 @@
 #include <eepp/graphics/fonttruetype.hpp>
 #include <eepp/graphics/primitives.hpp>
 #include <eepp/graphics/richtext.hpp>
+#include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/scopedop.hpp>
@@ -54,6 +55,36 @@ static UI::UISceneNode* createRichTextScene() {
 static void destroyRichTextScene( UI::UISceneNode* sceneNode ) {
 	eeDelete( sceneNode );
 	Engine::destroySingleton();
+}
+
+static String richTextRenderedText( const RichText& richText ) {
+	String text;
+	const auto& lines = richText.getLines();
+	for ( size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex ) {
+		if ( lineIndex > 0 )
+			text += '\n';
+		for ( const auto& span : lines[lineIndex].spans ) {
+			if ( span.type == RichText::RenderSpan::Type::Text && span.text )
+				text += span.text->getString();
+		}
+	}
+	return text;
+}
+
+static String richTextLineText( const RichText& richText, size_t lineIndex ) {
+	String text;
+	const auto& lines = richText.getLines();
+	if ( lineIndex >= lines.size() )
+		return text;
+	for ( const auto& span : lines[lineIndex].spans ) {
+		if ( span.type == RichText::RenderSpan::Type::Text && span.text )
+			text += span.text->getString();
+	}
+	while ( !text.empty() && ( text.front() == '\n' || text.front() == '\r' ) )
+		text = text.substr( 1 );
+	while ( !text.empty() && ( text.back() == '\n' || text.back() == '\r' ) )
+		text.pop_back();
+	return text;
 }
 
 UTEST( RichText, basicFunctionality ) {
@@ -1574,6 +1605,183 @@ UTEST( UIRichText, WhitespaceCollapseCodeTest ) {
 	EXPECT_TRUE( foundDotSpace );
 
 	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapsePreserveSpacesAndBreaks ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt" white-space-collapse="preserve" white-space="pre-wrap">alpha  beta
+    gamma</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	const auto& richText = *rt->getRichTextPtr();
+	EXPECT_EQ( richText.getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( richTextLineText( richText, 0 ), "alpha  beta" );
+	EXPECT_STRINGEQ( richTextLineText( richText, 1 ), "    gamma" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapsePreserveBreaks ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt" white-space-collapse="preserve-breaks">alpha   beta
+    gamma</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	const auto& richText = *rt->getRichTextPtr();
+	EXPECT_EQ( richText.getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( richTextLineText( richText, 0 ), "alpha beta" );
+	EXPECT_STRINGEQ( richTextLineText( richText, 1 ), " gamma" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapsePreserveSpaces ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt" white-space-collapse="preserve-spaces">alpha	 beta
+    gamma</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	EXPECT_STRINGEQ( richTextRenderedText( *rt->getRichTextPtr() ), "alpha  beta     gamma" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapsePreserveSpacesNormalizesCRLF ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt" white-space-collapse="preserve-spaces">alpha&#13;&#10;beta</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	EXPECT_STRINGEQ( richTextRenderedText( *rt->getRichTextPtr() ), "alpha beta" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapseDiscard ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt" white-space-collapse="discard">alpha 	 beta
+    gamma</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	EXPECT_STRINGEQ( richTextRenderedText( *rt->getRichTextPtr() ), "alphabetagamma" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( UIRichText, WhiteSpaceCollapseAcrossInlineSpanBoundaries ) {
+	auto sceneNode = createRichTextScene();
+	ASSERT_TRUE( sceneNode != nullptr );
+
+	String xml = R"xml(
+		<RichText id="rt">alpha <span> beta</span> gamma</RichText>
+	)xml";
+
+	sceneNode->loadLayoutFromString( xml );
+	UI::UIRichText* rt = sceneNode->find<UI::UIRichText>( "rt" );
+	ASSERT_TRUE( rt != nullptr );
+
+	sceneNode->update( Time::Zero );
+
+	EXPECT_STRINGEQ( richTextRenderedText( *rt->getRichTextPtr() ), "alpha beta gamma" );
+
+	destroyRichTextScene( sceneNode );
+}
+
+UTEST( RichText, BreakSpacesWrapsAfterPreservedSpacesAndTabs ) {
+	Engine::instance()->createWindow( WindowSettings( 800, 600, "RichText Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ) );
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	ASSERT_TRUE( font->loaded() );
+	FontFamily::loadFromRegular( font );
+
+	FontStyleConfig style;
+	style.Font = font;
+	style.CharacterSize = 16;
+	auto textWidth = [&style]( const String& string, Uint32 tabWidth = 8 ) {
+		return Text::getTextWidth( string, style, tabWidth, TextHints::AllAscii );
+	};
+
+	RichText spacedText;
+	spacedText.setFontStyleConfig( style );
+	spacedText.setWhiteSpaceWrapMode( RichText::WhiteSpaceWrapMode::BreakSpaces );
+	spacedText.addSpan( "aa   bb" );
+	spacedText.setMaxWidth( textWidth( "aa   " ) + 1.f );
+	spacedText.getSize();
+	ASSERT_GE( spacedText.getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( richTextLineText( spacedText, 0 ), "aa   " );
+	EXPECT_STRINGEQ( richTextLineText( spacedText, 1 ), "bb" );
+	EXPECT_GT( spacedText.getLines()[0].width, textWidth( "aa" ) );
+
+	RichText onlySpaces;
+	onlySpaces.setFontStyleConfig( style );
+	onlySpaces.setWhiteSpaceWrapMode( RichText::WhiteSpaceWrapMode::BreakSpaces );
+	onlySpaces.addSpan( "     " );
+	onlySpaces.setMaxWidth( textWidth( "   " ) + 1.f );
+	onlySpaces.getSize();
+	ASSERT_GE( onlySpaces.getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( richTextLineText( onlySpaces, 0 ), "   " );
+	EXPECT_STRINGEQ( richTextLineText( onlySpaces, 1 ), "  " );
+
+	RichText tabText;
+	tabText.setFontStyleConfig( style );
+	tabText.setTabWidth( 4 );
+	tabText.setWhiteSpaceWrapMode( RichText::WhiteSpaceWrapMode::BreakSpaces );
+	tabText.addSpan( "a\tb" );
+	tabText.setMaxWidth( textWidth( "a\t", 4 ) + 1.f );
+	tabText.getSize();
+	ASSERT_GE( tabText.getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( richTextLineText( tabText, 0 ), "a\t" );
+	EXPECT_STRINGEQ( richTextLineText( tabText, 1 ), "b" );
+
+	Engine::destroySingleton();
 }
 
 UTEST( UIHTMLTable, basicLayout ) {

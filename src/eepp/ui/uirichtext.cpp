@@ -23,16 +23,73 @@
 
 namespace EE { namespace UI {
 
-UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string val ) {
-	String::toLowerInPlace( val );
-	if ( "preserve" == val )
+struct ProcessedText {
+	String::View view;
+	String storage;
+	bool owns{ false };
+
+	explicit ProcessedText( String::View source ) : view( source ) {}
+
+	bool empty() const { return view.empty(); }
+
+	std::size_t length() const { return view.length(); }
+
+	String::StringBaseType front() const { return view.front(); }
+
+	String::StringBaseType back() const { return view.back(); }
+
+	void setStorage( String&& value ) {
+		storage = std::move( value );
+		view = storage.view();
+		owns = true;
+	}
+
+	void removePrefix( std::size_t count ) {
+		if ( count == 0 || view.empty() )
+			return;
+		if ( owns ) {
+			storage.erase( 0, count );
+			view = storage.view();
+		} else {
+			view.remove_prefix( count );
+		}
+	}
+
+	void removeSuffix( std::size_t count ) {
+		if ( count == 0 || view.empty() )
+			return;
+		if ( owns ) {
+			for ( std::size_t i = 0; i < count && !storage.empty(); ++i )
+				storage.pop_back();
+			view = storage.view();
+		} else {
+			view.remove_suffix( count );
+		}
+	}
+};
+
+static bool sUseCodeEditorForPreCodeBlocks = false;
+
+static bool parseTabSizeCount( const std::string& value, Uint32& out ) {
+	Uint32 parsed = 0;
+	if ( !String::fromString( parsed, value ) || parsed == 0 )
+		return false;
+	out = parsed;
+	return true;
+}
+
+UIRichText::WhiteSpaceCollapse UIRichText::toWhiteSpaceCollapse( std::string_view val ) {
+	val = String::trim( val );
+	if ( String::iequals( val, "preserve" ) )
 		return WhiteSpaceCollapse::Preserve;
-	if ( "preserve-breaks" == val || "preserve-breaks" == val )
+	if ( String::iequals( val, "preserve-breaks" ) )
 		return WhiteSpaceCollapse::PreserveBreaks;
-	if ( "preserve-spaces" == val || "preserve-spaces" == val )
+	if ( String::iequals( val, "preserve-spaces" ) )
 		return WhiteSpaceCollapse::PreserveSpaces;
-	if ( "break-spaces" == val || "break-spaces" == val )
+	if ( String::iequals( val, "break-spaces" ) )
 		return WhiteSpaceCollapse::BreakSpaces;
+	if ( String::iequals( val, "discard" ) )
+		return WhiteSpaceCollapse::Discard;
 	return WhiteSpaceCollapse::Collapse;
 }
 
@@ -46,6 +103,8 @@ std::string UIRichText::fromWhiteSpaceCollapse( WhiteSpaceCollapse val ) {
 			return "preserve-spaces";
 		case WhiteSpaceCollapse::BreakSpaces:
 			return "break-spaces";
+		case WhiteSpaceCollapse::Discard:
+			return "discard";
 		case WhiteSpaceCollapse::Collapse:
 		default:
 			return "collapse";
@@ -62,10 +121,28 @@ std::string UIRichText::fromWhiteSpace( WhiteSpaceCollapse collapse, bool lineWr
 			return "break-spaces";
 		case WhiteSpaceCollapse::PreserveSpaces:
 			return lineWrap ? "preserve-spaces" : "preserve nowrap";
+		case WhiteSpaceCollapse::Discard:
+			return lineWrap ? "discard" : "discard nowrap";
 		case WhiteSpaceCollapse::Collapse:
 		default:
 			return lineWrap ? "normal" : "nowrap";
 	}
+}
+
+void UIRichText::setUseCodeEditorForPreCodeBlocks( bool enabled ) {
+	sUseCodeEditorForPreCodeBlocks = enabled;
+}
+
+bool UIRichText::getUseCodeEditorForPreCodeBlocks() {
+	return sUseCodeEditorForPreCodeBlocks;
+}
+
+static bool hasMarkdownViewAncestor( const Node* node ) {
+	for ( const Node* cur = node; cur; cur = cur->getParent() ) {
+		if ( cur->isType( UI_TYPE_MARKDOWNVIEW ) )
+			return true;
+	}
+	return false;
 }
 
 UIHTMLHtml* UIHTMLHtml::New( const std::string& tag ) {
@@ -272,6 +349,7 @@ UIRichText::UIRichText( const std::string& tag ) : UIHTMLWidget( tag ) {
 	}
 
 	mRichText.getFontStyleConfig().FontColor = Color::Black;
+	mRichText.setTabWidth( mTabSize );
 
 	setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::WrapContent );
 }
@@ -394,6 +472,27 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 		case PropertyId::TextIndent:
 			setTextIndentEq( attribute.value() );
 			break;
+		case PropertyId::TabSize: {
+			Uint32 tabSize = 0;
+			if ( parseTabSizeCount( attribute.value(), tabSize ) ) {
+				setTabSize( tabSize );
+			} else {
+				Float tabSizePx = lengthFromValue( attribute );
+				const auto& style = mRichText.getFontStyleConfig();
+				if ( tabSizePx > 0 && style.Font != nullptr ) {
+					bool bold = ( style.Style & Text::Style::Bold ) != 0;
+					bool italic = ( style.Style & Text::Style::Italic ) != 0;
+					Float spaceWidth = style.Font
+										   ->getGlyph( L' ', style.CharacterSize, bold, italic,
+													   style.OutlineThickness )
+										   .advance;
+					if ( spaceWidth > 0 )
+						setTabSize( eemax<Uint32>(
+							1, static_cast<Uint32>( std::round( tabSizePx / spaceWidth ) ) ) );
+				}
+			}
+			break;
+		}
 		case PropertyId::WhiteSpace:
 			applyWhiteSpace( attribute.value() );
 			break;
@@ -453,6 +552,8 @@ std::string UIRichText::getPropertyString( const PropertyDefinition* propertyDef
 			return mLineHeightEq.empty() ? "normal" : mLineHeightEq;
 		case PropertyId::TextIndent:
 			return mTextIndentEq.empty() ? "0" : mTextIndentEq;
+		case PropertyId::TabSize:
+			return String::toString( getTabSize() );
 		case PropertyId::WhiteSpace:
 			return fromWhiteSpace( mWhiteSpaceCollapse, mLineWrap );
 		case PropertyId::WhiteSpaceCollapse:
@@ -472,7 +573,8 @@ std::vector<PropertyId> UIRichText::getPropertiesImplemented() const {
 		PropertyId::TextStrokeWidth, PropertyId::TextStrokeColor,	 PropertyId::TextAlign,
 		PropertyId::SelectionColor,	 PropertyId::SelectionBackColor, PropertyId::TextSelection,
 		PropertyId::TextDecoration,	 PropertyId::LineHeight,		 PropertyId::TextIndent,
-		PropertyId::WhiteSpace,		 PropertyId::WhiteSpaceCollapse, PropertyId::TextTransform };
+		PropertyId::TabSize,		 PropertyId::WhiteSpace,		 PropertyId::WhiteSpaceCollapse,
+		PropertyId::TextTransform };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -700,27 +802,70 @@ void UIRichText::setLineWrap( bool lineWrap ) {
 	}
 }
 
-void UIRichText::applyWhiteSpace( std::string val ) {
-	String::toLowerInPlace( val );
-	String::trimInPlace( val );
-	if ( val == "normal" ) {
+void UIRichText::applyWhiteSpace( std::string_view val ) {
+	val = String::trim( val );
+	if ( val.empty() ) {
+		return;
+	}
+	if ( String::iequals( val, "normal" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::Collapse );
 		setLineWrap( true );
-	} else if ( val == "nowrap" ) {
+	} else if ( String::iequals( val, "nowrap" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::Collapse );
 		setLineWrap( false );
-	} else if ( val == "pre" ) {
+	} else if ( String::iequals( val, "pre" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::Preserve );
 		setLineWrap( false );
-	} else if ( val == "pre-wrap" ) {
+	} else if ( String::iequals( val, "pre-wrap" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::Preserve );
 		setLineWrap( true );
-	} else if ( val == "pre-line" ) {
+	} else if ( String::iequals( val, "pre-line" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::PreserveBreaks );
 		setLineWrap( true );
-	} else if ( val == "break-spaces" ) {
+	} else if ( String::iequals( val, "break-spaces" ) ) {
 		setWhiteSpaceCollapse( WhiteSpaceCollapse::BreakSpaces );
 		setLineWrap( true );
+	} else if ( String::iequals( val, "preserve-spaces" ) ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::PreserveSpaces );
+		setLineWrap( true );
+	} else if ( String::iequals( val, "preserve-breaks" ) ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::PreserveBreaks );
+		setLineWrap( true );
+	} else if ( String::iequals( val, "discard" ) ) {
+		setWhiteSpaceCollapse( WhiteSpaceCollapse::Discard );
+		setLineWrap( true );
+	} else {
+		bool foundCollapse = false;
+		bool foundWrap = false;
+		WhiteSpaceCollapse collapse = mWhiteSpaceCollapse;
+		bool lineWrap = mLineWrap;
+		String::readBySeparator(
+			val,
+			[&]( std::string_view token ) {
+				token = String::trim( token );
+				if ( !token.empty() ) {
+					if ( String::iequals( token, "wrap" ) ) {
+						lineWrap = true;
+						foundWrap = true;
+					} else if ( String::iequals( token, "nowrap" ) ) {
+						lineWrap = false;
+						foundWrap = true;
+					} else if ( String::iequals( token, "collapse" ) ||
+								String::iequals( token, "preserve" ) ||
+								String::iequals( token, "preserve-breaks" ) ||
+								String::iequals( token, "preserve-spaces" ) ||
+								String::iequals( token, "break-spaces" ) ||
+								String::iequals( token, "discard" ) ) {
+						collapse = toWhiteSpaceCollapse( token );
+						foundCollapse = true;
+					}
+				}
+			},
+			' ' );
+		if ( foundCollapse )
+			setWhiteSpaceCollapse( collapse );
+		if ( foundWrap )
+			setLineWrap( lineWrap );
 	}
 }
 
@@ -793,6 +938,21 @@ Float UIRichText::getTextIndentPx() const {
 	return mTextIndentPxCache;
 }
 
+Uint32 UIRichText::getTabSize() const {
+	return mTabSize;
+}
+
+UIRichText* UIRichText::setTabSize( Uint32 tabSize ) {
+	tabSize = eemax<Uint32>( 1, tabSize );
+	if ( mTabSize != tabSize ) {
+		mTabSize = tabSize;
+		mRichText.setTabWidth( mTabSize );
+		notifyLayoutAttrChange();
+		notifyLayoutAttrChangeParent();
+	}
+	return this;
+}
+
 const TextTransform::Value& UIRichText::getTextTransform() const {
 	return mTextTransform;
 }
@@ -812,8 +972,9 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 
 	for ( pugi::xml_node child = node.first_child(); child; child = child.next_sibling() ) {
 		if ( child.type() == pugi::node_element ) {
-			if ( mTag == "pre" && String::iequals( child.name(), "code" ) ) {
-				// Use a UICodeEditor for <pre><code>
+			if ( mTag == "pre" && String::iequals( child.name(), "code" ) &&
+				 ( sUseCodeEditorForPreCodeBlocks || hasMarkdownViewAncestor( this ) ) ) {
+				// Use a UICodeEditor for markdown <pre><code> blocks, or when explicitly enabled.
 				UICodeEditor* editor = UICodeEditor::NewWithTag( "code" );
 				if ( editor ) {
 					editor->setParent( this );
@@ -835,6 +996,8 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 					if ( langIt != mDataProperties.end() ) {
 						editor->applyProperty( langIt->second );
 					}
+					editor->getUIStyle()->applyInheritedProperties();
+					editor->onWidgetCreated();
 				}
 			} else if ( String::iequals( child.name(), "style" ) ) {
 				CSS::StyleSheetParser parser;
@@ -879,10 +1042,9 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 				}
 			}
 		} else if ( child.type() == pugi::node_pcdata ) {
-			String collapsed = UIRichText::collapseInternalWhitespace( child.value() );
 			UITextNode* textNode = UITextNode::New();
 			textNode->setParent( this );
-			textNode->setText( collapsed );
+			textNode->setText( child.value() );
 		}
 	}
 
@@ -948,6 +1110,294 @@ String UIRichText::UIRichText::collapseInternalWhitespace( const String& s ) {
 		}
 	}
 	return out;
+}
+
+static bool isCSSCollapsibleWhiteSpace( const String::StringBaseType& c ) {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+static bool isCSSSegmentBreak( const String::StringBaseType& c ) {
+	return c == '\n' || c == '\r';
+}
+
+static bool isSingleForcedLineBreak( String::View text ) {
+	return text.size() == 1 && text[0] == '\n';
+}
+
+static bool shouldCollapseAcrossTextRuns( UIRichText::WhiteSpaceCollapse collapse ) {
+	return collapse == UIRichText::WhiteSpaceCollapse::Collapse ||
+		   collapse == UIRichText::WhiteSpaceCollapse::PreserveBreaks;
+}
+
+static bool shouldTrimBlockBoundarySpace( UIRichText::WhiteSpaceCollapse collapse ) {
+	return collapse == UIRichText::WhiteSpaceCollapse::Collapse ||
+		   collapse == UIRichText::WhiteSpaceCollapse::PreserveBreaks ||
+		   collapse == UIRichText::WhiteSpaceCollapse::Discard;
+}
+
+static bool trimFinalSegmentBreakBeforeEndTag( ProcessedText& text ) {
+	if ( text.empty() )
+		return false;
+
+	if ( text.back() == '\n' ) {
+		std::size_t count = 1;
+		if ( text.length() > 1 && text.view[text.length() - 2] == '\r' )
+			count++;
+		text.removeSuffix( count );
+		return true;
+	}
+
+	if ( text.back() == '\r' ) {
+		text.removeSuffix( 1 );
+		return true;
+	}
+
+	return false;
+}
+
+static bool containsCarriageReturn( String::View text ) {
+	for ( auto c : text ) {
+		if ( c == '\r' )
+			return true;
+	}
+	return false;
+}
+
+static bool preserveSpacesNeedsTransform( String::View text ) {
+	for ( auto c : text ) {
+		if ( isCSSCollapsibleWhiteSpace( c ) && c != ' ' )
+			return true;
+	}
+	return false;
+}
+
+static bool preserveBreaksNeedsTransform( String::View text ) {
+	bool inSpace = false;
+	for ( std::size_t i = 0; i < text.size(); ++i ) {
+		auto c = text[i];
+		if ( isCSSSegmentBreak( c ) ) {
+			if ( c == '\r' )
+				return true;
+			inSpace = false;
+		} else if ( isCSSCollapsibleWhiteSpace( c ) ) {
+			if ( c != ' ' || inSpace )
+				return true;
+			inSpace = true;
+		} else {
+			inSpace = false;
+		}
+	}
+	return false;
+}
+
+static bool collapseNeedsTransform( String::View text ) {
+	bool inSpace = false;
+	for ( auto c : text ) {
+		if ( isCSSCollapsibleWhiteSpace( c ) ) {
+			if ( c != ' ' || inSpace )
+				return true;
+			inSpace = true;
+		} else {
+			inSpace = false;
+		}
+	}
+	return false;
+}
+
+static bool discardNeedsTransform( String::View text ) {
+	for ( auto c : text ) {
+		if ( isCSSCollapsibleWhiteSpace( c ) )
+			return true;
+	}
+	return false;
+}
+
+static ProcessedText processWhiteSpaceForLayout( String::View source,
+												 UIRichText::WhiteSpaceCollapse collapse,
+												 bool prevIsInline, bool nextIsInline,
+												 bool lastSpanEndsWithSpace,
+												 bool discardSegmentBreakBeforeEndTag ) {
+	ProcessedText text( source );
+	if ( text.empty() )
+		return text;
+
+	if ( discardSegmentBreakBeforeEndTag )
+		trimFinalSegmentBreakBeforeEndTag( text );
+
+	if ( text.empty() )
+		return text;
+
+	String out;
+	bool needsStorage = false;
+
+	switch ( collapse ) {
+		case UIRichText::WhiteSpaceCollapse::Preserve:
+		case UIRichText::WhiteSpaceCollapse::BreakSpaces:
+			needsStorage = containsCarriageReturn( text.view );
+			if ( needsStorage ) {
+				out.reserve( text.length() );
+				for ( std::size_t i = 0; i < text.length(); ++i ) {
+					if ( text.view[i] == '\r' ) {
+						out += '\n';
+						if ( i + 1 < text.length() && text.view[i + 1] == '\n' )
+							i++;
+					} else {
+						out += text.view[i];
+					}
+				}
+			}
+			break;
+		case UIRichText::WhiteSpaceCollapse::PreserveSpaces:
+			needsStorage = preserveSpacesNeedsTransform( text.view );
+			if ( needsStorage ) {
+				out.reserve( text.length() );
+				for ( std::size_t i = 0; i < text.length(); ++i ) {
+					if ( isCSSSegmentBreak( text.view[i] ) ) {
+						out += ' ';
+						if ( text.view[i] == '\r' && i + 1 < text.length() &&
+							 text.view[i + 1] == '\n' )
+							i++;
+					} else {
+						out += isCSSCollapsibleWhiteSpace( text.view[i] ) ? ' ' : text.view[i];
+					}
+				}
+			}
+			break;
+		case UIRichText::WhiteSpaceCollapse::PreserveBreaks:
+			needsStorage = preserveBreaksNeedsTransform( text.view );
+			if ( needsStorage ) {
+				out.reserve( text.length() );
+				bool inSpace = false;
+				for ( std::size_t i = 0; i < text.length(); ++i ) {
+					if ( isCSSSegmentBreak( text.view[i] ) ) {
+						out += '\n';
+						inSpace = false;
+						if ( text.view[i] == '\r' && i + 1 < text.length() &&
+							 text.view[i + 1] == '\n' )
+							i++;
+					} else if ( isCSSCollapsibleWhiteSpace( text.view[i] ) ) {
+						if ( !inSpace ) {
+							out += ' ';
+							inSpace = true;
+						}
+					} else {
+						out += text.view[i];
+						inSpace = false;
+					}
+				}
+			}
+			break;
+		case UIRichText::WhiteSpaceCollapse::Discard:
+			needsStorage = discardNeedsTransform( text.view );
+			if ( needsStorage ) {
+				out.reserve( text.length() );
+				for ( auto c : text.view ) {
+					if ( !isCSSCollapsibleWhiteSpace( c ) )
+						out += c;
+				}
+			}
+			break;
+		case UIRichText::WhiteSpaceCollapse::Collapse:
+		default:
+			needsStorage = collapseNeedsTransform( text.view );
+			if ( needsStorage ) {
+				out.reserve( text.length() );
+				bool inSpace = false;
+				for ( auto c : text.view ) {
+					if ( isCSSCollapsibleWhiteSpace( c ) ) {
+						if ( !inSpace ) {
+							out += ' ';
+							inSpace = true;
+						}
+					} else {
+						out += c;
+						inSpace = false;
+					}
+				}
+			}
+			break;
+	}
+
+	if ( needsStorage )
+		text.setStorage( std::move( out ) );
+
+	if ( shouldTrimBlockBoundarySpace( collapse ) ) {
+		if ( !prevIsInline && !text.empty() && text.front() == ' ' )
+			text.removePrefix( 1 );
+		if ( !nextIsInline && !text.empty() && text.back() == ' ' )
+			text.removeSuffix( 1 );
+		if ( lastSpanEndsWithSpace && !text.empty() && text.front() == ' ' )
+			text.removePrefix( 1 );
+	}
+
+	return text;
+}
+
+static void applyTextTransformValue( String& text, TextTransform::Value transform ) {
+	switch ( transform ) {
+		case TextTransform::LowerCase:
+			text = text.toLower();
+			break;
+		case TextTransform::UpperCase:
+			text = text.toUpper();
+			break;
+		case TextTransform::Capitalize:
+			text = text.capitalize();
+			break;
+		default:
+			break;
+	}
+}
+
+static String materializeTransformedText( String::View text, TextTransform::Value transform ) {
+	String transformed( text );
+	if ( transform != TextTransform::None )
+		applyTextTransformValue( transformed, transform );
+	return transformed;
+}
+
+static void addProcessedTextSpan( RichText& richText, ProcessedText&& text,
+								  const FontStyleConfig& style, bool inlineText,
+								  RichText::InlineSource source = {} ) {
+	if ( text.owns ) {
+		if ( inlineText )
+			richText.addInlineText( std::move( text.storage ), style, Rectf::Zero, Rectf::Zero, 0,
+									{}, source );
+		else
+			richText.addSpan( std::move( text.storage ), style, Rectf::Zero, Rectf::Zero, 0, {},
+							  source );
+		return;
+	}
+
+	if ( inlineText )
+		richText.addInlineText( text.view, style, Rectf::Zero, Rectf::Zero, 0, {}, source );
+	else
+		richText.addSpan( text.view, style, Rectf::Zero, Rectf::Zero, 0, {}, source );
+}
+
+static UIRichText::WhiteSpaceCollapse getEffectiveWhiteSpaceCollapse( Node* node,
+																	  UIRichText* fallback ) {
+	for ( Node* cur = node; cur; cur = cur->getParent() ) {
+		if ( cur->isType( UI_TYPE_TEXTSPAN ) || cur->isType( UI_TYPE_RICHTEXT ) )
+			return cur->asType<UIRichText>()->getWhiteSpaceCollapse();
+	}
+	return fallback ? fallback->getWhiteSpaceCollapse() : UIRichText::WhiteSpaceCollapse::Collapse;
+}
+
+static RichText::WhiteSpaceWrapMode
+toRichTextWhiteSpaceWrapMode( UIRichText::WhiteSpaceCollapse collapse ) {
+	switch ( collapse ) {
+		case UIRichText::WhiteSpaceCollapse::BreakSpaces:
+			return RichText::WhiteSpaceWrapMode::BreakSpaces;
+		case UIRichText::WhiteSpaceCollapse::Preserve:
+		case UIRichText::WhiteSpaceCollapse::PreserveSpaces:
+			return RichText::WhiteSpaceWrapMode::Preserve;
+		case UIRichText::WhiteSpaceCollapse::Collapse:
+		case UIRichText::WhiteSpaceCollapse::PreserveBreaks:
+		case UIRichText::WhiteSpaceCollapse::Discard:
+		default:
+			return RichText::WhiteSpaceWrapMode::Normal;
+	}
 }
 
 static Float getAtomicInlineBoxBaseline( UIWidget* widget, const Sizef& widgetSize,
@@ -1115,16 +1565,19 @@ static Drawable* getInlineBorderDrawable( UIWidget* widget ) {
 
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
 	richText.clear();
-	if ( container->isType( UI_TYPE_RICHTEXT ) ) {
+	if ( container->isType( UI_TYPE_RICHTEXT ) || container->isType( UI_TYPE_TEXTSPAN ) ) {
 		auto* uiRt = static_cast<UIRichText*>( container );
 		richText.setLineHeight( uiRt->getLineHeightPx() );
 		richText.setTextIndent( uiRt->getTextIndentPx() );
 		richText.setLineWrap( uiRt->getLineWrap() );
+		richText.setTabWidth( uiRt->getTabSize() );
+		richText.setWhiteSpaceWrapMode(
+			toRichTextWhiteSpaceWrapMode( uiRt->getWhiteSpaceCollapse() ) );
 	}
-	bool shouldCollapse = container->isType( UI_TYPE_RICHTEXT )
-							  ? static_cast<UIRichText*>( container )->getWhiteSpaceCollapse() ==
-									WhiteSpaceCollapse::Collapse
-							  : true;
+	UIRichText* containerRichText =
+		container->isType( UI_TYPE_RICHTEXT ) || container->isType( UI_TYPE_TEXTSPAN )
+			? container->asType<UIRichText>()
+			: nullptr;
 	bool lastSpanEndsWithSpace = false;
 	Float maxWidth = 0;
 	bool isInlineBlockTextSpan =
@@ -1176,22 +1629,6 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		return TextTransform::None;
 	};
 
-	auto applyTextTransform = []( String& text, TextTransform::Value tt ) {
-		switch ( tt ) {
-			case TextTransform::LowerCase:
-				text = text.toLower();
-				break;
-			case TextTransform::UpperCase:
-				text = text.toUpper();
-				break;
-			case TextTransform::Capitalize:
-				text = text.capitalize();
-				break;
-			default:
-				break;
-		}
-	};
-
 	if ( container->isType( UI_TYPE_TEXTSPAN ) ) {
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
 		Node* parentNode = container->getParent();
@@ -1202,19 +1639,23 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		if ( !selfSpan->getText().empty() &&
 			 ( !selfSpan->isInline() || parentIsFlex || parentIsGrid ) &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
-			String::View selfText = selfSpan->getText().view();
-			String transformed;
+			auto collapse = getEffectiveWhiteSpaceCollapse( selfSpan, containerRichText );
+			richText.setWhiteSpaceWrapMode( toRichTextWhiteSpaceWrapMode( collapse ) );
+			auto selfText = processWhiteSpaceForLayout( selfSpan->getText().view(), collapse, true,
+														true, lastSpanEndsWithSpace,
+														selfSpan->getFirstChild() == nullptr );
 			auto tt = getEffectiveTextTransform( selfSpan );
-			if ( tt != TextTransform::None ) {
-				transformed = selfText;
-				applyTextTransform( transformed, tt );
-				selfText = transformed.view();
-			}
 			FontStyleConfig style = selfSpan->getFontStyleConfig();
 			style.BackgroundColor = Color::Transparent;
-			richText.addSpan( selfText, style, Rectf::Zero, Rectf::Zero, 0, {} );
-			if ( shouldCollapse )
-				lastSpanEndsWithSpace = !selfText.empty() && selfText.back() == ' ';
+			bool endsWithSpace = shouldCollapseAcrossTextRuns( collapse ) && !selfText.empty() &&
+								 selfText.back() == ' ';
+			if ( tt != TextTransform::None )
+				richText.addSpan( materializeTransformedText( selfText.view, tt ), style,
+								  Rectf::Zero, Rectf::Zero, 0, {} );
+			else
+				addProcessedTextSpan( richText, std::move( selfText ), style, false );
+			if ( shouldCollapseAcrossTextRuns( collapse ) )
+				lastSpanEndsWithSpace = endsWithSpace;
 		}
 	}
 
@@ -1258,7 +1699,6 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 		if ( node->isTextNode() ) {
 			UITextNode* textNode = node->asType<UITextNode>();
-			String text = textNode->getText();
 
 			Node* prev = findLogicalPrev( node );
 			bool prevIsInline =
@@ -1274,28 +1714,33 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				return htmlWidget->getCSSFloat() != CSSFloat::None || htmlWidget->isOutOfFlow();
 			};
 
-			if ( shouldCollapse && textNode->isWhitespaceOnly() &&
+			auto collapse =
+				getEffectiveWhiteSpaceCollapse( textNode->getParent(), containerRichText );
+			richText.setWhiteSpaceWrapMode( toRichTextWhiteSpaceWrapMode( collapse ) );
+
+			if ( collapse == WhiteSpaceCollapse::Collapse && textNode->isWhitespaceOnly() &&
 				 ( !prevIsInline || isFloatingOrOutOfFlow( prev ) ) &&
 				 ( !nextIsInline || isFloatingOrOutOfFlow( next ) ) ) {
 				textNode->setLayoutCharCount( 0 );
 				return;
 			}
 
-			// Strip leading space if prev is not inline (block boundary)
-			if ( !prevIsInline && !text.empty() && text[0] == ' ' )
-				text = text.substr( 1 );
+			auto text = processWhiteSpaceForLayout(
+				textNode->getText().view(), collapse, prevIsInline, nextIsInline,
+				lastSpanEndsWithSpace, textNode->getNextNode() == nullptr );
+			auto tt = getEffectiveTextTransform( textNode );
+			String transformed;
+			if ( tt != TextTransform::None ) {
+				transformed = materializeTransformedText( text.view, tt );
+				text.view = transformed.view();
+				text.owns = false;
+			}
 
-			// Strip trailing space if next is not inline
-			if ( !nextIsInline && !text.empty() && text.back() == ' ' )
-				text = text.substr( 0, text.size() - 1 );
-
-			if ( shouldCollapse && lastSpanEndsWithSpace && !text.empty() && text[0] == ' ' )
-				text = text.substr( 1 );
-
-			{
-				auto tt = getEffectiveTextTransform( textNode );
-				if ( tt != TextTransform::None )
-					applyTextTransform( text, tt );
+			if ( isSingleForcedLineBreak( text.view ) ) {
+				textNode->setLayoutCharCount( text.length() );
+				richText.addLineBreak();
+				lastSpanEndsWithSpace = false;
+				return;
 			}
 
 			if ( text.empty() ) {
@@ -1305,7 +1750,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 			textNode->setLayoutCharCount( text.length() );
 
-			if ( shouldCollapse )
+			if ( shouldCollapseAcrossTextRuns( collapse ) )
 				lastSpanEndsWithSpace = text.back() == ' ';
 
 			FontStyleConfig style;
@@ -1316,12 +1761,21 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			} else {
 				style = richText.getFontStyleConfig();
 			}
-			if ( inlineBoxDepth > 0 )
-				richText.addInlineText( text, style, Rectf::Zero, Rectf::Zero, 0, {},
-										toRichTextTextSource( textNode ) );
-			else
-				richText.addSpan( text, style, Rectf::Zero, Rectf::Zero, 0, {},
-								  toRichTextTextSource( textNode ) );
+			if ( inlineBoxDepth > 0 ) {
+				if ( tt != TextTransform::None )
+					richText.addInlineText( std::move( transformed ), style, Rectf::Zero,
+											Rectf::Zero, 0, {}, toRichTextTextSource( textNode ) );
+				else
+					addProcessedTextSpan( richText, std::move( text ), style, true,
+										  toRichTextTextSource( textNode ) );
+			} else {
+				if ( tt != TextTransform::None )
+					richText.addSpan( std::move( transformed ), style, Rectf::Zero, Rectf::Zero, 0,
+									  {}, toRichTextTextSource( textNode ) );
+				else
+					addProcessedTextSpan( richText, std::move( text ), style, false,
+										  toRichTextTextSource( textNode ) );
+			}
 			return;
 		}
 
@@ -1375,8 +1829,6 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			inlineBoxDepth++;
 
 			if ( hasOwnText ) {
-				String::View spanText = span->getText().view();
-
 				Node* prev = findLogicalPrev( node );
 				bool prevIsInline =
 					prev && prev->isWidget() && prev->asType<UIWidget>()->isInlineDisplay();
@@ -1385,29 +1837,26 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				bool nextIsInline =
 					next && next->isWidget() && next->asType<UIWidget>()->isInlineDisplay();
 
-				if ( !prevIsInline && !spanText.empty() && spanText[0] == ' ' )
-					spanText = spanText.substr( 1 );
-				if ( !nextIsInline && !spanText.empty() && spanText.back() == ' ' )
-					spanText = spanText.substr( 0, spanText.size() - 1 );
-
-				if ( shouldCollapse && lastSpanEndsWithSpace && !spanText.empty() &&
-					 spanText[0] == ' ' )
-					spanText = spanText.substr( 1 );
-
-				String transformed;
+				auto collapse = getEffectiveWhiteSpaceCollapse( span, containerRichText );
+				richText.setWhiteSpaceWrapMode( toRichTextWhiteSpaceWrapMode( collapse ) );
+				auto spanText = processWhiteSpaceForLayout(
+					span->getText().view(), collapse, prevIsInline, nextIsInline,
+					lastSpanEndsWithSpace, span->getFirstChild() == nullptr );
 				auto tt = getEffectiveTextTransform( span );
 				if ( tt != TextTransform::None ) {
-					transformed = spanText;
-					applyTextTransform( transformed, tt );
-					spanText = transformed.view();
+					String transformed = materializeTransformedText( spanText.view, tt );
+					spanText.setStorage( std::move( transformed ) );
 				}
 
 				if ( !spanText.empty() ) {
-					richText.addInlineText( spanText, span->getFontStyleConfig(), Rectf::Zero,
-											Rectf::Zero, 0, {} );
-					span->setLayoutCharCount( spanText.length() );
-					if ( shouldCollapse )
-						lastSpanEndsWithSpace = spanText.back() == ' ';
+					auto spanTextLength = spanText.length();
+					bool endsWithSpace = shouldCollapseAcrossTextRuns( collapse ) &&
+										 !spanText.empty() && spanText.back() == ' ';
+					addProcessedTextSpan( richText, std::move( spanText ),
+										  span->getFontStyleConfig(), true );
+					span->setLayoutCharCount( spanTextLength );
+					if ( shouldCollapseAcrossTextRuns( collapse ) )
+						lastSpanEndsWithSpace = endsWithSpace;
 				} else {
 					span->setLayoutCharCount( 0 );
 				}
@@ -1422,7 +1871,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 				spanChild = spanChild->getNextNode();
 			}
 
-			if ( shouldCollapse && span->isInlineBlock() )
+			if ( shouldCollapseAcrossTextRuns(
+					 getEffectiveWhiteSpaceCollapse( span, containerRichText ) ) &&
+				 span->isInlineBlock() )
 				lastSpanEndsWithSpace = true;
 
 			inlineBoxDepth--;

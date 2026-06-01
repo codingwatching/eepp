@@ -226,6 +226,7 @@ enum class PropertyId : Uint32 {
 	LineSpacing = String::hash( "line-spacing" ),
 	LineHeight = String::hash( "line-height" ),
 	TextIndent = String::hash( "text-indent" ),
+	TabSize = String::hash( "tab-size" ),
 	GravityOwner = String::hash( "gravity-owner" ),
 	Href = String::hash( "href" ),
 	Focusable = String::hash( "focusable" ),

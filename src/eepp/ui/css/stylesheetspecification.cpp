@@ -234,6 +234,7 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "line-spacing", "", true ).setType( PropertyType::NumberLength );
 	registerProperty( "line-height", "", true ).setType( PropertyType::NumberLength );
 	registerProperty( "text-indent", "", true ).setType( PropertyType::NumberLength );
+	registerProperty( "tab-size", "8", true ).setType( PropertyType::String );
 	registerProperty( "text-stroke-width", "", true )
 		.setType( PropertyType::NumberLength )
 		.addAlias( "fontoutlinethickness" );

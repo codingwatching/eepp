@@ -79,7 +79,7 @@ h5 { font-size: 0.83em; font-weight: bold; margin: 1.67em 0; }
 h6 { font-size: 0.67em; font-weight: bold; margin: 2.33em 0; }
 
 p { margin: 1em 0; }
-pre { margin: 1em 0; }
+pre { margin: 1em 0; white-space: pre; }
 blockquote { margin: 1em 0; }
 hr { margin: 0.5em 0; background-color: gray; height: 1dp; }
 ul, ol, dl { margin: 1em 0; }

@@ -14,14 +14,18 @@
 #include <eepp/ui/tools/htmlformatter.hpp>
 #include <eepp/ui/tools/uiwidgetinspector.hpp>
 #include <eepp/ui/uicheckbox.hpp>
+#include <eepp/ui/uicodeeditor.hpp>
 #include <eepp/ui/uihtmldetails.hpp>
 #include <eepp/ui/uihtmlinput.hpp>
 #include <eepp/ui/uihtmltable.hpp>
 #include <eepp/ui/uihtmltextarea.hpp>
 #include <eepp/ui/uihtmltextinput.hpp>
+#include <eepp/ui/uimarkdownview.hpp>
 #include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uiradiobutton.hpp>
+#include <eepp/ui/uirichtext.hpp>
 #include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uitextnode.hpp>
 #include <eepp/ui/uitextspan.hpp>
 #include <eepp/ui/uitheme.hpp>
 #include <eepp/ui/uithememanager.hpp>
@@ -48,12 +52,45 @@ static void init_ui_test() {
 	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
 	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
 	FontFamily::loadFromRegular( font );
+	FontTrueType* monospace = FontTrueType::New( "monospace" );
+	monospace->loadFromFile( "../assets/fonts/DejaVuSansMono.ttf" );
+	FontFamily::loadFromRegular( monospace );
 
 	UI::UISceneNode* sceneNode = UI::UISceneNode::New();
 	SceneManager::instance()->add( sceneNode );
 	sceneNode->setColorSchemePreference( ColorSchemePreference::Light );
 	UI::UIThemeManager* themeManager = sceneNode->getUIThemeManager();
 	themeManager->setDefaultFont( font );
+}
+
+static String uiHtmlRenderedText( const RichText& richText ) {
+	String text;
+	const auto& lines = richText.getLines();
+	for ( size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex ) {
+		if ( lineIndex > 0 )
+			text += '\n';
+		for ( const auto& span : lines[lineIndex].spans ) {
+			if ( span.type == RichText::RenderSpan::Type::Text && span.text )
+				text += span.text->getString();
+		}
+	}
+	return text;
+}
+
+static String uiHtmlLineText( const RichText& richText, size_t lineIndex ) {
+	String text;
+	const auto& lines = richText.getLines();
+	if ( lineIndex >= lines.size() )
+		return text;
+	for ( const auto& span : lines[lineIndex].spans ) {
+		if ( span.type == RichText::RenderSpan::Type::Text && span.text )
+			text += span.text->getString();
+	}
+	while ( !text.empty() && ( text.front() == '\n' || text.front() == '\r' ) )
+		text = text.substr( 1 );
+	while ( !text.empty() && ( text.back() == '\n' || text.back() == '\r' ) )
+		text.pop_back();
+	return text;
 }
 
 UTEST( UIHTMLTable, complexLayout ) {
@@ -618,6 +655,322 @@ UTEST( UIHTML, WhiteSpaceNowrapContinuesInlineContentAfterOverflow ) {
 	EXPECT_EQ( second->getRichTextPtr()->getLines().size(), (size_t)1 );
 	EXPECT_NEAR( first->convertToWorldSpace( { 0, 0 } ).y,
 				 second->convertToWorldSpace( { 0, 0 } ).y, 1.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceCollapsePreCodePreservesIndentation ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<pre id="pre"><code id="code">if (x) {
+    return 1;
+}</code></pre>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* pre = sceneNode->getRoot()->find( "pre" )->asType<UIRichText>();
+	auto* code = sceneNode->getRoot()->find( "code" );
+	ASSERT_TRUE( pre != nullptr );
+	ASSERT_TRUE( code != nullptr );
+
+	EXPECT_FALSE( code->isType( UI_TYPE_CODEEDITOR ) );
+	EXPECT_GE( pre->getRichTextPtr()->getLines().size(), (size_t)3 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 0 ), "if (x) {" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 1 ), "    return 1;" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 2 ), "}" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, PreCodeSimpleFixtureKeepsCompactCodeLines ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/pre.code.html", html ) );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	SceneManager::instance()->update();
+
+	UIRichText* pre = nullptr;
+	Node* code = nullptr;
+	sceneNode->getRoot()->forEachNode( [&pre, &code]( Node* node ) {
+		if ( node->isWidget() && node->asType<UIWidget>()->getElementTag() == "pre" )
+			pre = node->asType<UIRichText>();
+		if ( node->isWidget() && node->asType<UIWidget>()->getElementTag() == "code" )
+			code = node;
+	} );
+	ASSERT_TRUE( pre != nullptr );
+	ASSERT_TRUE( code != nullptr );
+	EXPECT_FALSE( code->isType( UI_TYPE_CODEEDITOR ) );
+	auto* codeSpan = code->asType<UITextSpan>();
+	ASSERT_TRUE( codeSpan != nullptr );
+
+	const auto& lines = pre->getRichTextPtr()->getLines();
+	ASSERT_GE( lines.size(), (size_t)3 );
+	ASSERT_LE( lines.size(), (size_t)4 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 0 ), "void main() {" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 1 ), "    printf(\"Hello World\");" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 2 ), "}" );
+	if ( lines.size() == 4 )
+		EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 3 ), "" );
+	ASSERT_FALSE( lines[1].spans.empty() );
+	ASSERT_TRUE( lines[1].spans[0].text != nullptr );
+	ASSERT_FALSE( lines[1].spans[0].text->getString().empty() );
+	EXPECT_TRUE( lines[1].spans[0].text->getString()[0] != '\n' );
+	ASSERT_FALSE( lines[2].spans.empty() );
+	ASSERT_TRUE( lines[2].spans[0].text != nullptr );
+	ASSERT_FALSE( lines[2].spans[0].text->getString().empty() );
+	EXPECT_TRUE( lines[2].spans[0].text->getString()[0] != '\n' );
+
+	ASSERT_EQ( codeSpan->getHitBoxes().size(), (size_t)3 );
+	Float expectedLineHeight = pre->getLineHeightPx();
+	if ( expectedLineHeight <= 0.f ) {
+		for ( const auto& span : lines[0].spans ) {
+			if ( span.type == RichText::RenderSpan::Type::Text && span.text &&
+				 !span.text->getString().empty() ) {
+				const auto& fontStyle = span.text->getFontStyleConfig();
+				ASSERT_TRUE( fontStyle.Font != nullptr );
+				expectedLineHeight = fontStyle.Font->getLineSpacing( fontStyle.CharacterSize );
+				break;
+			}
+		}
+	}
+	ASSERT_GT( expectedLineHeight, 0.f );
+	Float compactLineLimit = expectedLineHeight * 1.25f;
+	for ( size_t i = 1; i < 3; ++i ) {
+		Float lineDelta = lines[i].y - lines[i - 1].y;
+		EXPECT_LE( lineDelta, compactLineLimit );
+		EXPECT_LE( lines[i].height, compactLineLimit );
+
+		const Rectf& prev = codeSpan->getHitBoxes()[i - 1];
+		const Rectf& cur = codeSpan->getHitBoxes()[i];
+		EXPECT_NEAR( cur.Top - prev.Top, lineDelta, 1.f );
+		EXPECT_LE( cur.Top - prev.Top, compactLineLimit );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, PreCodeFixtureDiscardsFinalNewlineBeforeEndTag ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/pre.code.2.html", html ) );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	SceneManager::instance()->update();
+
+	UIRichText* pre = nullptr;
+	Node* code = nullptr;
+	sceneNode->getRoot()->forEachNode( [&pre, &code]( Node* node ) {
+		if ( node->isWidget() && node->asType<UIWidget>()->getElementTag() == "pre" )
+			pre = node->asType<UIRichText>();
+		if ( node->isWidget() && node->asType<UIWidget>()->getElementTag() == "code" )
+			code = node;
+	} );
+	ASSERT_TRUE( pre != nullptr );
+	ASSERT_TRUE( code != nullptr );
+	EXPECT_FALSE( code->isType( UI_TYPE_CODEEDITOR ) );
+
+	const auto& lines = pre->getRichTextPtr()->getLines();
+	ASSERT_EQ( lines.size(), (size_t)3 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 0 ), "int x = 42;" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 1 ), "const char* y = \"hello\";" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 2 ), "int z = foo(x, y);" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, PreCodeUsesCodeEditorOnlyForMarkdownAncestorOrGlobalOptIn ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( R"xml(
+		<markdownview id="md">
+			<pre id="md_pre"><code id="md_code" class="language-cpp">void main() {
+    printf("Hello World");
+}</code></pre>
+		</markdownview>
+	)xml" );
+	SceneManager::instance()->update();
+
+	auto* markdownCode = sceneNode->getRoot()->find( "md_code" );
+	ASSERT_TRUE( markdownCode != nullptr );
+	ASSERT_TRUE( markdownCode->isType( UI_TYPE_CODEEDITOR ) );
+	EXPECT_TRUE( markdownCode->asType<UICodeEditor>()->getDocument().getText().find( "printf" ) !=
+				 String::InvalidPos );
+
+	Engine::destroySingleton();
+
+	init_ui_test();
+	sceneNode = SceneManager::instance()->getUISceneNode();
+	UIRichText::setUseCodeEditorForPreCodeBlocks( true );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<pre id="pre"><code id="code">int value = 1;</code></pre>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* optInCode = sceneNode->getRoot()->find( "code" );
+	ASSERT_TRUE( optInCode != nullptr );
+	EXPECT_TRUE( optInCode->isType( UI_TYPE_CODEEDITOR ) );
+	UIRichText::setUseCodeEditorForPreCodeBlocks( false );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, PreCodeBlockFixtureKeepsCompactCodeLines ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/pre_code_block.html", html ) );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+	SceneManager::instance()->update();
+
+	UIRichText* pre = nullptr;
+	sceneNode->getRoot()->forEachNode( [&pre]( Node* node ) {
+		if ( pre == nullptr && node->isWidget() &&
+			 node->asType<UIWidget>()->getElementTag() == "pre" )
+			pre = node->asType<UIRichText>();
+	} );
+	ASSERT_TRUE( pre != nullptr );
+
+	const auto& lines = pre->getRichTextPtr()->getLines();
+	ASSERT_EQ( lines.size(), (size_t)19 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 0 ), "let stepper () =" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 1 ),
+					 "    // Execute a single instruction" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *pre->getRichTextPtr(), 18 ), "    mCycles " );
+
+	Float expectedLineHeight = pre->getLineHeightPx();
+	ASSERT_GT( expectedLineHeight, 0.f );
+	Float compactLineLimit = expectedLineHeight * 1.25f;
+	for ( size_t i = 1; i < lines.size(); ++i ) {
+		EXPECT_LE( lines[i].y - lines[i - 1].y, compactLineLimit );
+		EXPECT_LE( lines[i].height, compactLineLimit );
+	}
+
+	std::vector<UITextSpan*> codeLineSpans;
+	for ( size_t i = 1; i <= 19; ++i ) {
+		auto* lineSpan = sceneNode->getRoot()->find<UITextSpan>( String::format( "cb1-%zu", i ) );
+		ASSERT_TRUE( lineSpan != nullptr );
+		ASSERT_EQ( lineSpan->getHitBoxes().size(), (size_t)1 );
+		EXPECT_LE( lineSpan->getHitBoxes()[0].getHeight(), compactLineLimit );
+		codeLineSpans.push_back( lineSpan );
+	}
+	for ( size_t i = 1; i < codeLineSpans.size(); ++i ) {
+		const Rectf& prev = codeLineSpans[i - 1]->getHitBoxes()[0];
+		const Rectf& cur = codeLineSpans[i]->getHitBoxes()[0];
+		Float prevTop = codeLineSpans[i - 1]->getPixelsPosition().y + prev.Top;
+		Float curTop = codeLineSpans[i]->getPixelsPosition().y + cur.Top;
+		EXPECT_NEAR( curTop - prevTop, lines[i].y - lines[i - 1].y, 1.f );
+		EXPECT_LE( curTop - prevTop, compactLineLimit );
+	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceCollapsePreLinePreservesBreaksOnly ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<div id="preline" style="white-space: pre-line">alpha   beta
+    gamma</div>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* preline = sceneNode->getRoot()->find( "preline" )->asType<UIRichText>();
+	ASSERT_TRUE( preline != nullptr );
+
+	EXPECT_EQ( preline->getRichTextPtr()->getLines().size(), (size_t)2 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *preline->getRichTextPtr(), 0 ), "alpha beta" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *preline->getRichTextPtr(), 1 ), " gamma" );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceCollapseBreakSpacesAffectsIntrinsicWidth ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<div id="normal" style="white-space: pre-wrap; font-size: 16px">     </div>
+			<div id="breakspaces" style="white-space: break-spaces; font-size: 16px">     </div>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* normal = sceneNode->getRoot()->find( "normal" )->asType<UIRichText>();
+	auto* breakSpaces = sceneNode->getRoot()->find( "breakspaces" )->asType<UIRichText>();
+	ASSERT_TRUE( normal != nullptr );
+	ASSERT_TRUE( breakSpaces != nullptr );
+
+	EXPECT_LT( normal->getMinIntrinsicWidth(), breakSpaces->getMinIntrinsicWidth() );
+	EXPECT_GT( breakSpaces->getMinIntrinsicWidth(), 0.f );
+	EXPECT_STRINGEQ( uiHtmlRenderedText( *breakSpaces->getRichTextPtr() ), "     " );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, WhiteSpaceCollapsePreservedTabsUseTabSize ) {
+	init_ui_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( R"html(
+		<body>
+			<pre id="tab2" style="font-family: monospace; font-size: 16px; tab-size: 2">a	b</pre>
+			<pre id="tab8" style="font-family: monospace; font-size: 16px; tab-size: 8">a	b</pre>
+			<pre id="tabpx" style="font-family: monospace; font-size: 16px; tab-size: 32px">a	b</pre>
+		</body>
+	)html" ) );
+	SceneManager::instance()->update();
+
+	auto* tab2 = sceneNode->getRoot()->find( "tab2" )->asType<UIRichText>();
+	auto* tab8 = sceneNode->getRoot()->find( "tab8" )->asType<UIRichText>();
+	auto* tabpx = sceneNode->getRoot()->find( "tabpx" )->asType<UIRichText>();
+	ASSERT_TRUE( tab2 != nullptr );
+	ASSERT_TRUE( tab8 != nullptr );
+	ASSERT_TRUE( tabpx != nullptr );
+
+	ASSERT_EQ( tab2->getRichTextPtr()->getLines().size(), (size_t)1 );
+	ASSERT_EQ( tab8->getRichTextPtr()->getLines().size(), (size_t)1 );
+	ASSERT_EQ( tabpx->getRichTextPtr()->getLines().size(), (size_t)1 );
+	EXPECT_STRINGEQ( uiHtmlLineText( *tab2->getRichTextPtr(), 0 ), "a\tb" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *tab8->getRichTextPtr(), 0 ), "a\tb" );
+	EXPECT_STRINGEQ( uiHtmlLineText( *tabpx->getRichTextPtr(), 0 ), "a\tb" );
+	EXPECT_EQ( tab2->getTabSize(), 2u );
+	EXPECT_EQ( tab8->getTabSize(), 8u );
+	EXPECT_GT( tabpx->getTabSize(), 2u );
+
+	const Float tab2Width = tab2->getRichTextPtr()->getLines()[0].width;
+	const Float tab8Width = tab8->getRichTextPtr()->getLines()[0].width;
+	const Float tabpxWidth = tabpx->getRichTextPtr()->getLines()[0].width;
+	EXPECT_GT( tab8Width, tab2Width );
+	EXPECT_GT( tabpxWidth, tab2Width );
+
+	ASSERT_FALSE( tab2->getRichTextPtr()->getLines()[0].spans.empty() );
+	ASSERT_FALSE( tab8->getRichTextPtr()->getLines()[0].spans.empty() );
+	ASSERT_FALSE( tabpx->getRichTextPtr()->getLines()[0].spans.empty() );
+	ASSERT_TRUE( tab2->getRichTextPtr()->getLines()[0].spans[0].text != nullptr );
+	ASSERT_TRUE( tab8->getRichTextPtr()->getLines()[0].spans[0].text != nullptr );
+	ASSERT_TRUE( tabpx->getRichTextPtr()->getLines()[0].spans[0].text != nullptr );
+	EXPECT_EQ( tab2->getRichTextPtr()->getLines()[0].spans[0].text->getTabWidth(), 2u );
+	EXPECT_EQ( tab8->getRichTextPtr()->getLines()[0].spans[0].text->getTabWidth(), 8u );
+	EXPECT_EQ( tabpx->getRichTextPtr()->getLines()[0].spans[0].text->getTabWidth(),
+			   tabpx->getTabSize() );
 
 	Engine::destroySingleton();
 }
@@ -3001,7 +3354,7 @@ UTEST( UIHTML, AnchorsSizing ) {
 			continue;
 		EXPECT_GT( a->getPixelsSize().getHeight(), 0 );
 		if ( !a->getText().empty() && a->getFontStyleConfig().Font ) {
-			String text = a->getText();
+			String text = UIRichText::collapseInternalWhitespace( a->getText() );
 			text.trim();
 			if ( !text.empty() )
 				EXPECT_GE( a->getPixelsSize().getWidth(),
