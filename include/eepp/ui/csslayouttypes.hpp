@@ -14,6 +14,8 @@ enum class CSSDisplay {
 	ListItem,
 	Flex,
 	InlineFlex,
+	Grid,
+	InlineGrid,
 	None,
 	Table,
 	TableRow,
@@ -160,6 +162,27 @@ struct EE_API CSSBaselineAlignmentHelper {
 	static std::string_view toString( const CSSBaselineAlignValue& val );
 
 	static CSSBaselineAlignValue fromKeyword( std::string_view val );
+};
+
+enum class CSSGridAutoFlow { Row, Column };
+
+struct EE_API CSSGridAutoFlowHelper {
+	static std::string toString( CSSGridAutoFlow val );
+	static CSSGridAutoFlow fromString( std::string_view val );
+};
+
+enum class CSSJustifyItems { Normal, Stretch, Start, End, Center, FlexStart, FlexEnd };
+
+struct EE_API CSSJustifyItemsHelper {
+	static std::string toString( CSSJustifyItems val );
+	static CSSJustifyItems fromString( std::string_view val );
+};
+
+enum class CSSJustifySelf { Auto, Normal, Stretch, Start, End, Center, FlexStart, FlexEnd };
+
+struct EE_API CSSJustifySelfHelper {
+	static std::string toString( CSSJustifySelf val );
+	static CSSJustifySelf fromString( std::string_view val );
 };
 
 enum class CSSVisibility { Visible, Hidden, Collapse };

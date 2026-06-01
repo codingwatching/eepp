@@ -178,6 +178,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	if ( !FileSystem::fileExists( "assets/html/reddit_old_thread_files/reddit.ETA_etA2z5U.css" ) ) {
+
 		Engine::destroySingleton();
 		UTEST_SKIP( "old Reddit fixture CSS asset is not readable" );
 	}
@@ -348,8 +349,8 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 			  << ") "
 			  << "header=(" << headerPos.x << "," << headerPos.y << " "
 			  << header->asType<UIWidget>()->getPixelsSize().getWidth() << "x"
-			  << header->asType<UIWidget>()->getPixelsSize().getHeight() << " offset="
-			  << header->asType<UIWidget>()->getPixelsContentOffset().Left << ","
+			  << header->asType<UIWidget>()->getPixelsSize().getHeight()
+			  << " offset=" << header->asType<UIWidget>()->getPixelsContentOffset().Left << ","
 			  << header->asType<UIWidget>()->getPixelsContentOffset().Top << ","
 			  << header->asType<UIWidget>()->getPixelsContentOffset().Right << ","
 			  << header->asType<UIWidget>()->getPixelsContentOffset().Bottom << ") "
@@ -2589,8 +2590,7 @@ UTEST( UIHTML, BodyHeightMiscalculationFixture ) {
 
 	// With justify-content: space-between in a row-direction flex:
 	// .brand should be at the left side of .wrap (near padding edge).
-	EXPECT_LT( brandWidget->getPixelsPosition().x,
-			   wrapWidget->getPixelsSize().getWidth() * 0.25f );
+	EXPECT_LT( brandWidget->getPixelsPosition().x, wrapWidget->getPixelsSize().getWidth() * 0.25f );
 
 	// .links should be at the right side of .wrap, NOT next to .brand.
 	Float wrapW = wrapWidget->getPixelsSize().getWidth();

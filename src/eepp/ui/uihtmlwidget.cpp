@@ -78,6 +78,7 @@ UIHTMLWidget::~UIHTMLWidget() {
 		mScrollTarget->removeEventListener( mScrollCb );
 	eeSAFE_DELETE( mLayouter );
 	eeSAFE_DELETE( mFlexState );
+	eeSAFE_DELETE( mGridState );
 }
 
 UILayouter* UIHTMLWidget::getLayouter() {
@@ -114,11 +115,11 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 		mNodeFlags |= NODE_FLAG_OVER_FIND_ALLOWED;
 
 		if ( mDisplay == CSSDisplay::InlineBlock || mDisplay == CSSDisplay::Inline ||
-			 mDisplay == CSSDisplay::InlineFlex ) {
+			 mDisplay == CSSDisplay::InlineFlex || mDisplay == CSSDisplay::InlineGrid ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::MatchParent )
 				setLayoutWidthPolicy( SizePolicy::WrapContent );
 		} else if ( mDisplay == CSSDisplay::Block || mDisplay == CSSDisplay::ListItem ||
-					mDisplay == CSSDisplay::Flex ) {
+					mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::Grid ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::WrapContent &&
 				 mPosition != CSSPosition::Absolute && mPosition != CSSPosition::Fixed )
 				setLayoutWidthPolicy( SizePolicy::MatchParent );
@@ -136,6 +137,10 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 
 bool UIHTMLWidget::isFlex() const {
 	return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex;
+}
+
+bool UIHTMLWidget::isGrid() const {
+	return mDisplay == CSSDisplay::Grid || mDisplay == CSSDisplay::InlineGrid;
 }
 
 Float UIHTMLWidget::getBaseline() const {
@@ -223,37 +228,38 @@ void UIHTMLWidget::setNeedsOrderSort( bool val ) {
 }
 
 void UIHTMLWidget::drawChildren() {
+	bool needsFlexDirectionReverse = false;
 	if ( isFlex() ) {
 		CSSFlexDirection dir = getFlexDirection();
-		bool needsDirectionReverse =
+		needsFlexDirectionReverse =
 			dir == CSSFlexDirection::RowReverse || dir == CSSFlexDirection::ColumnReverse;
-		if ( mNeedsOrderSort || needsDirectionReverse ) {
-			std::vector<Node*> sortedChildren;
-			for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
-				sortedChildren.push_back( child );
+	}
 
-			if ( mNeedsOrderSort ) {
-				std::stable_sort(
-					sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
-						int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
-										 ? static_cast<UIHTMLWidget*>( a )->getOrder()
-										 : 0;
-						int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
-										 ? static_cast<UIHTMLWidget*>( b )->getOrder()
-										 : 0;
-						return aOrder < bOrder;
-					} );
-			}
+	if ( mNeedsOrderSort || needsFlexDirectionReverse ) {
+		std::vector<Node*> sortedChildren;
+		for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
+			sortedChildren.push_back( child );
 
-			if ( needsDirectionReverse )
-				std::reverse( sortedChildren.begin(), sortedChildren.end() );
-
-			for ( auto* child : sortedChildren ) {
-				if ( child->isVisible() )
-					child->nodeDraw();
-			}
-			return;
+		if ( mNeedsOrderSort ) {
+			std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+				int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
+								 ? static_cast<UIHTMLWidget*>( a )->getOrder()
+								 : 0;
+				int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
+								 ? static_cast<UIHTMLWidget*>( b )->getOrder()
+								 : 0;
+				return aOrder < bOrder;
+			} );
 		}
+
+		if ( needsFlexDirectionReverse )
+			std::reverse( sortedChildren.begin(), sortedChildren.end() );
+
+		for ( auto* child : sortedChildren ) {
+			if ( child->isVisible() )
+				child->nodeDraw();
+		}
+		return;
 	}
 	Node::drawChildren();
 }
@@ -354,6 +360,118 @@ void UIHTMLWidget::setColumnGap( const std::string& val ) {
 	}
 }
 
+void UIHTMLWidget::setGridTemplateRows( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateRows != val ) {
+		gs->templateRows = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridTemplateColumns( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateColumns != val ) {
+		gs->templateColumns = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridTemplateAreas( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateAreas != val ) {
+		gs->templateAreas = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoRows( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoRows != val ) {
+		gs->autoRows = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoColumns( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoColumns != val ) {
+		gs->autoColumns = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoFlow( CSSGridAutoFlow val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoFlow != val ) {
+		gs->autoFlow = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoFlowDense( bool val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoFlowDense != val ) {
+		gs->autoFlowDense = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridRowStart( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->rowStart != val ) {
+		gs->rowStart = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridRowEnd( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->rowEnd != val ) {
+		gs->rowEnd = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridColumnStart( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->columnStart != val ) {
+		gs->columnStart = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridColumnEnd( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->columnEnd != val ) {
+		gs->columnEnd = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridArea( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->area != val ) {
+		gs->area = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setJustifyItems( CSSJustifyItems val ) {
+	auto* gs = ensureGridState();
+	if ( gs->justifyItems != val ) {
+		gs->justifyItems = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setJustifySelf( CSSJustifySelf val ) {
+	auto* gs = ensureGridState();
+	if ( gs->justifySelf != val ) {
+		gs->justifySelf = val;
+		notifyLayoutAttrChange();
+	}
+}
+
 std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 	auto props = UILayout::getPropertiesImplemented();
 	auto local = { PropertyId::Display,
@@ -380,7 +498,24 @@ std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 				   PropertyId::Order,
 				   PropertyId::ColumnGap,
 				   PropertyId::RowGap,
-				   PropertyId::Gap };
+				   PropertyId::Gap,
+				   PropertyId::GridTemplateRows,
+				   PropertyId::GridTemplateColumns,
+				   PropertyId::GridTemplateAreas,
+				   PropertyId::GridTemplate,
+				   PropertyId::GridAutoRows,
+				   PropertyId::GridAutoColumns,
+				   PropertyId::GridAutoFlow,
+				   PropertyId::Grid,
+				   PropertyId::GridRowStart,
+				   PropertyId::GridRowEnd,
+				   PropertyId::GridColumnStart,
+				   PropertyId::GridColumnEnd,
+				   PropertyId::GridRow,
+				   PropertyId::GridColumn,
+				   PropertyId::GridArea,
+				   PropertyId::JustifyItems,
+				   PropertyId::JustifySelf };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -435,6 +570,32 @@ std::string UIHTMLWidget::getPropertyString( const PropertyDefinition* propertyD
 			return getRowGap();
 		case PropertyId::ColumnGap:
 			return getColumnGap();
+		case PropertyId::GridTemplateRows:
+			return getGridTemplateRows();
+		case PropertyId::GridTemplateColumns:
+			return getGridTemplateColumns();
+		case PropertyId::GridTemplateAreas:
+			return getGridTemplateAreas();
+		case PropertyId::GridAutoRows:
+			return getGridAutoRows();
+		case PropertyId::GridAutoColumns:
+			return getGridAutoColumns();
+		case PropertyId::GridAutoFlow:
+			return CSSGridAutoFlowHelper::toString( getGridAutoFlow() );
+		case PropertyId::GridRowStart:
+			return getGridRowStart();
+		case PropertyId::GridRowEnd:
+			return getGridRowEnd();
+		case PropertyId::GridColumnStart:
+			return getGridColumnStart();
+		case PropertyId::GridColumnEnd:
+			return getGridColumnEnd();
+		case PropertyId::GridArea:
+			return getGridArea();
+		case PropertyId::JustifyItems:
+			return CSSJustifyItemsHelper::toString( getJustifyItems() );
+		case PropertyId::JustifySelf:
+			return CSSJustifySelfHelper::toString( getJustifySelf() );
 		default:
 			return UILayout::getPropertyString( propertyDef );
 	}
@@ -545,6 +706,64 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::ColumnGap: {
 			setColumnGap( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridTemplateRows: {
+			setGridTemplateRows( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridTemplateColumns: {
+			setGridTemplateColumns( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridTemplateAreas: {
+			setGridTemplateAreas( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoRows: {
+			setGridAutoRows( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoColumns: {
+			setGridAutoColumns( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoFlow: {
+			std::string val = attribute.asString();
+			String::toLowerInPlace( val );
+			setGridAutoFlowDense( val.find( "dense" ) != std::string::npos );
+			if ( val.find( "column" ) != std::string::npos )
+				setGridAutoFlow( CSSGridAutoFlow::Column );
+			else
+				setGridAutoFlow( CSSGridAutoFlow::Row );
+			return true;
+		}
+		case PropertyId::GridRowStart: {
+			setGridRowStart( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridRowEnd: {
+			setGridRowEnd( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridColumnStart: {
+			setGridColumnStart( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridColumnEnd: {
+			setGridColumnEnd( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridArea: {
+			setGridArea( attribute.asString() );
+			return true;
+		}
+		case PropertyId::JustifyItems: {
+			setJustifyItems( CSSJustifyItemsHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::JustifySelf: {
+			setJustifySelf( CSSJustifySelfHelper::fromString( attribute.asString() ) );
 			return true;
 		}
 		default:

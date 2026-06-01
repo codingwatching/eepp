@@ -288,6 +288,23 @@ enum class PropertyId : Uint32 {
 	RowGap = String::hash( "row-gap" ),
 	ColumnGap = String::hash( "column-gap" ),
 	Gap = String::hash( "gap" ),
+	GridTemplateRows = String::hash( "grid-template-rows" ),
+	GridTemplateColumns = String::hash( "grid-template-columns" ),
+	GridTemplateAreas = String::hash( "grid-template-areas" ),
+	GridTemplate = String::hash( "grid-template" ),
+	GridAutoRows = String::hash( "grid-auto-rows" ),
+	GridAutoColumns = String::hash( "grid-auto-columns" ),
+	GridAutoFlow = String::hash( "grid-auto-flow" ),
+	Grid = String::hash( "grid" ),
+	GridRowStart = String::hash( "grid-row-start" ),
+	GridRowEnd = String::hash( "grid-row-end" ),
+	GridColumnStart = String::hash( "grid-column-start" ),
+	GridColumnEnd = String::hash( "grid-column-end" ),
+	GridRow = String::hash( "grid-row" ),
+	GridColumn = String::hash( "grid-column" ),
+	GridArea = String::hash( "grid-area" ),
+	JustifyItems = String::hash( "justify-items" ),
+	JustifySelf = String::hash( "justify-self" ),
 };
 
 enum class PropertyType : Uint32 {

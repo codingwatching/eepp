@@ -1197,7 +1197,10 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 		Node* parentNode = container->getParent();
 		bool parentIsFlex = parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
 							parentNode->asType<UIHTMLWidget>()->isFlex();
-		if ( !selfSpan->getText().empty() && ( !selfSpan->isInline() || parentIsFlex ) &&
+		bool parentIsGrid = parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+							parentNode->asType<UIHTMLWidget>()->isGrid();
+		if ( !selfSpan->getText().empty() &&
+			 ( !selfSpan->isInline() || parentIsFlex || parentIsGrid ) &&
 			 NULL != selfSpan->getFontStyleConfig().Font ) {
 			String::View selfText = selfSpan->getText().view();
 			String transformed;

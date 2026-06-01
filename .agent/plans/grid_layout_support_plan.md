@@ -860,3 +860,82 @@ Do not checkpoint a failing phase as complete.
 - Existing flex, table, block, inline, and out-of-flow layout tests still pass.
 - `.agent/rules/html-layout-architecture.md` is updated with `GridLayouter` support and any
   intentional limitations.
+
+## Bug Tracking
+
+### FIXED (34)
+
+| # | Bug | Test |
+|---|-----|------|
+| 1 | Stack overflow: `setPixelsSize` on container → re-layout cycle | `UIHTML.GridDownloadLayout` |
+| 2 | Missing `mPacking` guard + transaction | `UIHTML.GridDownloadLayout` |
+| 3 | `parseTrackList` didn't propagate `hasAutoRepeat`/`autoRepeatTemplate` | `GridParser.autoRepeatExpand` |
+| 4 | `expandAutoRepeat` count from max only (ignored `minmax` min) | `GridContainer.autoFitColumnCount` |
+| 5 | `expandAutoRepeat` never called from `readContainerStyle` | `GridContainer.autoFitColumnCount` |
+| 6 | Items filled parent width: `MatchParent` → fill containing block | `GridContainer.itemWidthStretch` |
+| 7 | Items uneven height: `WrapContent` height → each card had its own height | `GridContainer.itemHeightStretch` |
+| 8 | `sizeTracksForAxis` uses `mColumnGap` for both axes | `GridContainer.rowGapWorks` |
+| 9 | Unsigned underflow `tracks.size()-1` when empty | `GridContainer.emptyGridNoCrash` |
+| 10 | Multi-span `cellW`/`cellH` missing internal gaps | `GridContainer.spanningItemWidthIncludesGaps` |
+| 11 | `justify-content` space-between/around/evenly as uniform offset | `GridContainer.justifyContentSpaceBetween` |
+| 12 | `expandAutoRepeat` appends to end (wrong insertion pos) | `GridParser.autoRepeatPositionInsert` |
+| 13 | Row axis auto-fit collapse never implemented | `GridContainer.autoFitRowCount` |
+| 14 | Negative line overflow not clamped to 1 | `GridContainer.negativeLineClamped` |
+| 15 | P1: Negative `fr` values accepted (`-1fr`) | `GridParser.rejectNegativeFr` |
+| 16 | P2: `isNumber()` accepts malformed decimals `12.34.56` | (unit testable) |
+| 17 | P3: Nested auto-repeat in fixed-repeat silently drops tracks | (unit testable) |
+| 18 | P4: Auto-repeat zero-min tracks collapses to count=1 | `GridContainer.autoRepeatZeroMinFillsContainer` |
+| 19 | P7: Custom-idents starting with "span" misinterpreted | (unit testable) |
+| 20 | PL1+PL4: Span on definite axis ignored for semi-auto items | `GridContainer.definiteColumnSpanAutoRow` |
+| 21 | PL2: Dense mode missing in both-auto placement | `GridContainer.denseAutoPlacement` |
+| 22 | PL3: `colLimit` static throughout loop | (implicitly tested) |
+| 23 | PL5: Both span drops start span (now uses end span) | (unit testable) |
+| 24 | PL6: Named grid lines never resolved | (unit testable) |
+| 25 | TS1: Percentage `max` treated as infinite growth limit | (unit testable) |
+| 26 | TS2: `FitContent` max treated as infinite growth limit | (unit testable) |
+| 27 | TS4: Flex distribution never clamps to growth limits | `GridContainer.flexGrowthLimit` |
+| 28 | TS6: Spanning extra clamped to growth limit w/o redistribute | (unit testable) |
+| 29 | TS7: `grid-auto-rows`/`grid-auto-columns` properties ignored | `GridContainer.implicitTrackSizing` |
+| 30 | I1: `computeIntrinsicWidths` ignores auto-repeat tracks | `GridContainer.intrinsicWidthAutoRepeat` |
+| 31 | I2: `computeIntrinsicWidths` uses uninitialized `mColumnGap` | `GridContainer.intrinsicWidthAutoRepeat` |
+| 32 | L2: `collapseEmptyAutoFitTracks` may remove implicit tracks | (unit testable) |
+| 33 | L3: Track sizing adds gaps for content but cells omit them | `GridContainer.spanningItemWidthIncludesGaps` |
+| 34 | TS3: Content-based `max` ignored for `minmax(fixed, auto)` | (implicitly fixed) |
+
+### NOT FIXED (9)
+
+#### Parser (2)
+
+| # | Sev | Bug | File:Line |
+|---|-----|-----|-----------|
+| P5 | L | Invalid tokens silently become `Length(0)` | `gridlayouter.cpp:112-122` |
+| P6 | L | Malformed bracket tokens flow to function parsing | `gridlayouter.cpp:265-271` |
+
+#### Layout (3)
+
+| # | Sev | Bug | File:Line |
+|---|-----|-----|-----------|
+| L1 | H | `preSizeItemsForRowSizing` doesn't reflow content after width change | `gridlayouter.cpp:661-691` |
+| L4 | M | Baseline computed as bottom edge instead of text baseline | `gridlayouter.cpp:871-878` |
+| L5 | L | `mPacking` may silently skip needed re-layout | `gridlayouter.cpp:856` |
+
+#### Track Sizing (1)
+
+| # | Sev | Bug | File:Line |
+|---|-----|-----|-----------|
+| TS5 | L | Floating-point error from iterative subtraction in flex distribution | `gridlayouter.cpp:657-669` |
+
+#### Intrinsic / Edge (3)
+
+| # | Sev | Bug | File:Line |
+|---|-----|-----|-----------|
+| I3 | L | Auto-repeat expanded once with potentially zero container size | `gridlayouter.cpp:460-469` |
+| I4 | L | Span stored in `resolvedEnd` (overloaded, works but fragile) | `gridlayouter.cpp:1009-1024` |
+| I5 | L | Negative `contentBoxSize` not handled | `gridlayouter.cpp:486-492` |
+
+### Stats
+
+- **Total bugs found**: 43
+- **Fixed**: 34
+- **Unfixed**: 9
+- **By severity**: 1 High, 1 Medium, 7 Low (remaining)
