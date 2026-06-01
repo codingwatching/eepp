@@ -1,11 +1,11 @@
 #include <algorithm>
 #include <cctype>
-#include <set>
 #include <eepp/core/string.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/gridlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uitextnode.hpp>
+#include <set>
 
 namespace EE { namespace UI {
 
@@ -100,8 +100,7 @@ static GridTrackBreadth parseTrackBreadth( std::string_view token ) {
 	}
 
 	// Check for fr unit
-	if ( token.size() > 2 && token[token.size() - 1] == 'r' &&
-		 token[token.size() - 2] == 'f' ) {
+	if ( token.size() > 2 && token[token.size() - 1] == 'r' && token[token.size() - 2] == 'f' ) {
 		std::string_view numPart = token.substr( 0, token.size() - 2 );
 		if ( isNumber( numPart ) ) {
 			breadth.type = GridTrackBreadthType::Flex;
@@ -121,6 +120,11 @@ static GridTrackBreadth parseTrackBreadth( std::string_view token ) {
 	if ( len.getUnit() == CSS::StyleSheetLength::Percentage ) {
 		breadth.type = GridTrackBreadthType::Percentage;
 		breadth.value = len.getValue();
+		return breadth;
+	}
+	char first = token.front();
+	if ( first != '.' && ( first < '0' || first > '9' ) ) {
+		breadth.valid = false;
 		return breadth;
 	}
 	breadth.type = GridTrackBreadthType::Length;
@@ -241,12 +245,9 @@ static bool parseLineNames( std::string_view token, SmallVector<std::string, 2>&
 static bool isValidTrackBreadthType( const GridTrackBreadth& b ) {
 	if ( !b.valid )
 		return false;
-	return b.type == GridTrackBreadthType::Auto ||
-		   b.type == GridTrackBreadthType::MinContent ||
-		   b.type == GridTrackBreadthType::MaxContent ||
-		   b.type == GridTrackBreadthType::Length ||
-		   b.type == GridTrackBreadthType::Percentage ||
-		   b.type == GridTrackBreadthType::Flex;
+	return b.type == GridTrackBreadthType::Auto || b.type == GridTrackBreadthType::MinContent ||
+		   b.type == GridTrackBreadthType::MaxContent || b.type == GridTrackBreadthType::Length ||
+		   b.type == GridTrackBreadthType::Percentage || b.type == GridTrackBreadthType::Flex;
 }
 
 // ── Public API ──
@@ -279,6 +280,11 @@ GridTrackList GridTrackParser::parseTrackList( const std::string& value ) {
 		if ( token.front() == '[' && token.back() == ']' ) {
 			parseLineNames( token, pendingBeforeNames );
 			continue;
+		}
+
+		if ( token.front() == '[' || token.back() == ']' ) {
+			result.valid = false;
+			return result;
 		}
 
 		// Function tokens: ident(...)
@@ -432,16 +438,15 @@ void GridTrackParser::expandAutoRepeat( GridTrackList& list, Float availableSize
 // ── GridLayouter ──
 
 void GridLayouter::readContainerStyle() {
-	UIHTMLWidget* grid = mContainer->isType( UI_TYPE_HTML_WIDGET )
-							  ? mContainer->asType<UIHTMLWidget>()
-							  : nullptr;
+	UIHTMLWidget* grid =
+		mContainer->isType( UI_TYPE_HTML_WIDGET ) ? mContainer->asType<UIHTMLWidget>() : nullptr;
 	if ( !grid )
 		return;
 
-	mColumnGap = mContainer->lengthFromValue( grid->getColumnGap(),
-											  CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
-	mRowGap = mContainer->lengthFromValue( grid->getRowGap(),
-										   CSS::PropertyRelativeTarget::ContainingBlockHeight, 0.f );
+	mColumnGap = mContainer->lengthFromValue(
+		grid->getColumnGap(), CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
+	mRowGap = mContainer->lengthFromValue(
+		grid->getRowGap(), CSS::PropertyRelativeTarget::ContainingBlockHeight, 0.f );
 	mTemplateAreas = GridAreasParser::parseAreas( grid->getGridTemplateAreas() );
 	mAutoFlowDense = grid->getGridAutoFlowDense();
 
@@ -468,12 +473,11 @@ void GridLayouter::readContainerStyle() {
 	// Record explicit count before auto-repeat expansion
 	mExplicitColCount = colList.tracks.size();
 	{
-		Float contentW = mContainer->getPixelsSize().getWidth()
-						 - mContainer->getPixelsContentOffset().Left
-						 - mContainer->getPixelsContentOffset().Right;
-		if ( contentW < 0.f )
-			contentW = 0.f;
-		GridTrackParser::expandAutoRepeat( colList, contentW, mColumnGap );
+		Float contentW = mContainer->getPixelsSize().getWidth() -
+						 mContainer->getPixelsContentOffset().Left -
+						 mContainer->getPixelsContentOffset().Right;
+		if ( contentW > 0.f )
+			GridTrackParser::expandAutoRepeat( colList, contentW, mColumnGap );
 	}
 	mColumns.clear();
 	mColLineNames.clear();
@@ -495,12 +499,11 @@ void GridLayouter::readContainerStyle() {
 	mRowAutoRepeatIsFit = rowList.autoRepeatIsFit;
 	mExplicitRowCount = rowList.tracks.size();
 	{
-		Float contentH = mContainer->getPixelsSize().getHeight()
-						 - mContainer->getPixelsContentOffset().Top
-						 - mContainer->getPixelsContentOffset().Bottom;
-		if ( contentH < 0.f )
-			contentH = 0.f;
-		GridTrackParser::expandAutoRepeat( rowList, contentH, mRowGap );
+		Float contentH = mContainer->getPixelsSize().getHeight() -
+						 mContainer->getPixelsContentOffset().Top -
+						 mContainer->getPixelsContentOffset().Bottom;
+		if ( contentH > 0.f )
+			GridTrackParser::expandAutoRepeat( rowList, contentH, mRowGap );
 	}
 	mRows.clear();
 	mRowLineNames.clear();
@@ -570,6 +573,8 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 	Float contentEnd = isColumns ? mContainer->getPixelsContentOffset().Right
 								 : mContainer->getPixelsContentOffset().Bottom;
 	Float contentBoxSize = containerSize - contentOffset - contentEnd;
+	if ( contentBoxSize < 0.f )
+		contentBoxSize = 0.f;
 	bool hasDefiniteSize = mContainer->getLayoutWidthPolicy() != SizePolicy::WrapContent;
 	if ( !isColumns )
 		hasDefiniteSize = mContainer->getLayoutHeightPolicy() != SizePolicy::WrapContent;
@@ -592,8 +597,7 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 		}
 		if ( track.definition.max.type == GridTrackBreadthType::Length )
 			track.growthLimit = track.definition.max.value;
-		else if ( track.definition.max.type == GridTrackBreadthType::Percentage &&
-				  hasDefiniteSize )
+		else if ( track.definition.max.type == GridTrackBreadthType::Percentage && hasDefiniteSize )
 			track.growthLimit = track.definition.max.value * contentBoxSize / 100.f;
 		else if ( track.definition.max.type == GridTrackBreadthType::FitContent )
 			track.growthLimit = track.definition.max.value;
@@ -616,8 +620,8 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 
 		// Only update auto/min-content/max-content tracks (non-spanning)
 		if ( span == 1 && ( track.definition.min.type == GridTrackBreadthType::Auto ||
-			 track.definition.min.type == GridTrackBreadthType::MinContent ||
-			 track.definition.min.type == GridTrackBreadthType::MaxContent ) ) {
+							track.definition.min.type == GridTrackBreadthType::MinContent ||
+							track.definition.min.type == GridTrackBreadthType::MaxContent ) ) {
 			Float itemSize = isColumns ? item.widget->getPixelsSize().getWidth()
 									   : item.widget->getPixelsSize().getHeight();
 			if ( itemSize > track.baseSize )
@@ -659,6 +663,14 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 					tracks[i].baseSize += add;
 					extra -= add;
 					anyGrew = true;
+				}
+			}
+			if ( extra > 0.f ) {
+				for ( int i = spanStart; i < spanEnd; ++i ) {
+					if ( tracks[i].baseSize < tracks[i].growthLimit ) {
+						tracks[i].baseSize += extra;
+						break;
+					}
 				}
 			}
 		}
@@ -731,6 +743,13 @@ void GridLayouter::preSizeItemsForRowSizing() {
 
 		item.widget->setLayoutWidthPolicy( SizePolicy::Fixed );
 		item.widget->setPixelsSize( cellW, item.widget->getPixelsSize().getHeight() );
+
+		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
+			auto* childHtml = item.widget->asType<UIHTMLWidget>();
+			auto* layouter = childHtml->getLayouter();
+			if ( layouter && !layouter->isPacking() )
+				childHtml->updateLayout();
+		}
 	}
 }
 
@@ -740,8 +759,8 @@ void GridLayouter::applyLayout() {
 	colLines.push_back( 0.f );
 	for ( const auto& col : mColumns )
 		colLines.push_back( colLines.back() + col.baseSize );
-	Float totalWidth =
-		colLines.back() + static_cast<Float>( std::max( 0, (int)mColumns.size() - 1 ) ) * mColumnGap;
+	Float totalWidth = colLines.back() +
+					   static_cast<Float>( std::max( 0, (int)mColumns.size() - 1 ) ) * mColumnGap;
 
 	std::vector<Float> rowLines;
 	rowLines.push_back( 0.f );
@@ -833,10 +852,12 @@ void GridLayouter::applyLayout() {
 		int rs = item.resolvedRowStart - 1;
 		int re = item.resolvedRowEnd - 1;
 
-		if ( cs < 0 ) cs = 0;
+		if ( cs < 0 )
+			cs = 0;
 		if ( ce >= static_cast<int>( colLines.size() ) )
 			ce = static_cast<int>( colLines.size() ) - 1;
-		if ( rs < 0 ) rs = 0;
+		if ( rs < 0 )
+			rs = 0;
 		if ( re >= static_cast<int>( rowLines.size() ) )
 			re = static_cast<int>( rowLines.size() ) - 1;
 
@@ -909,11 +930,14 @@ void GridLayouter::updateLayout() {
 		return;
 
 	mPacking = true;
+	struct PackingGuard {
+		bool& flag;
+		~PackingGuard() { flag = false; }
+	} guard{ mPacking };
 	mIntrinsicWidthsDirty = false;
 
-	UIHTMLWidget* grid = mContainer->isType( UI_TYPE_HTML_WIDGET )
-							 ? mContainer->asType<UIHTMLWidget>()
-							 : nullptr;
+	UIHTMLWidget* grid =
+		mContainer->isType( UI_TYPE_HTML_WIDGET ) ? mContainer->asType<UIHTMLWidget>() : nullptr;
 	readContainerStyle();
 	collectGridItems();
 	resolveDefinitePlacements();
@@ -951,8 +975,6 @@ void GridLayouter::updateLayout() {
 			break;
 		}
 	}
-
-	mPacking = false;
 }
 
 void GridLayouter::collectGridItems() {
@@ -1010,8 +1032,9 @@ void GridLayouter::collectGridItems() {
 
 	// Sort by order (stable sort preserves source order for equal orders)
 	if ( mItems.size() > 1 ) {
-		std::stable_sort( mItems.begin(), mItems.end(),
-						  []( const GridItem& a, const GridItem& b ) { return a.order < b.order; } );
+		std::stable_sort( mItems.begin(), mItems.end(), []( const GridItem& a, const GridItem& b ) {
+			return a.order < b.order;
+		} );
 	}
 }
 
@@ -1160,9 +1183,9 @@ void GridLayouter::resolveDefinitePlacements() {
 	mMaxColumn = explicitCols;
 	mMaxRow = explicitRows;
 
-	auto resolveNamedLine =
-		[]( const UnorderedMap<std::string, std::vector<int>>& lineNames,
-			const std::string& nameId, int lineNumber, int explicitCount ) -> int {
+	auto resolveNamedLine = []( const UnorderedMap<std::string, std::vector<int>>& lineNames,
+								const std::string& nameId, int lineNumber,
+								int explicitCount ) -> int {
 		auto it = lineNames.find( nameId );
 		if ( it == lineNames.end() || it->second.empty() )
 			return 0; // unresolved
@@ -1196,14 +1219,14 @@ void GridLayouter::resolveDefinitePlacements() {
 
 		// Resolve named lines to line numbers
 		if ( !startCol.nameId.empty() )
-			startCol.lineNumber =
-				resolveNamedLine( mColLineNames, startCol.nameId, startCol.lineNumber, explicitCols );
+			startCol.lineNumber = resolveNamedLine( mColLineNames, startCol.nameId,
+													startCol.lineNumber, explicitCols );
 		if ( !endCol.nameId.empty() )
 			endCol.lineNumber =
 				resolveNamedLine( mColLineNames, endCol.nameId, endCol.lineNumber, explicitCols );
 		if ( !startRow.nameId.empty() )
-			startRow.lineNumber =
-				resolveNamedLine( mRowLineNames, startRow.nameId, startRow.lineNumber, explicitRows );
+			startRow.lineNumber = resolveNamedLine( mRowLineNames, startRow.nameId,
+													startRow.lineNumber, explicitRows );
 		if ( !endRow.nameId.empty() )
 			endRow.lineNumber =
 				resolveNamedLine( mRowLineNames, endRow.nameId, endRow.lineNumber, explicitRows );
@@ -1213,10 +1236,32 @@ void GridLayouter::resolveDefinitePlacements() {
 		resolveAxisPlacement( startRow, endRow, explicitRows, item.resolvedRowStart,
 							  item.resolvedRowEnd );
 
+		// Normalize span fields: resolvedEnd can be overloaded as a span count
+		// when the start is auto. Extract into explicit rowSpan/columnSpan.
+		auto normalizeSpan = []( int& resolvedStart, int& resolvedEnd, int& outSpan ) {
+			if ( resolvedStart > 0 && resolvedEnd > 0 ) {
+				outSpan = resolvedEnd - resolvedStart;
+			} else if ( resolvedStart > 0 && resolvedEnd == 0 ) {
+				outSpan = resolvedStart;
+				resolvedStart = 0;
+			} else if ( resolvedStart == 0 && resolvedEnd > 0 ) {
+				outSpan = resolvedEnd;
+				resolvedEnd = 0;
+			}
+			// else both 0: outSpan stays default 1
+		};
+		normalizeSpan( item.resolvedColumnStart, item.resolvedColumnEnd, item.columnSpan );
+		normalizeSpan( item.resolvedRowStart, item.resolvedRowEnd, item.rowSpan );
+
 		if ( item.resolvedColumnEnd > mMaxColumn )
 			mMaxColumn = item.resolvedColumnEnd;
 		if ( item.resolvedRowEnd > mMaxRow )
 			mMaxRow = item.resolvedRowEnd;
+		// Auto axes with span: need at least span columns/rows for implicit tracks
+		if ( item.resolvedColumnStart == 0 && item.columnSpan > mMaxColumn )
+			mMaxColumn = item.columnSpan;
+		if ( item.resolvedRowStart == 0 && item.rowSpan > mMaxRow )
+			mMaxRow = item.rowSpan;
 	}
 }
 
@@ -1255,16 +1300,8 @@ void GridLayouter::autoPlaceItems() {
 		if ( !colAuto && !rowAuto )
 			continue;
 
-		int sw = 1;
-		int sh = 1;
-		if ( !colAuto && item.resolvedColumnStart > 0 && item.resolvedColumnEnd > 0 )
-			sw = item.resolvedColumnEnd - item.resolvedColumnStart;
-		else if ( colAuto && item.resolvedColumnEnd > 0 )
-			sw = item.resolvedColumnEnd;
-		if ( !rowAuto && item.resolvedRowStart > 0 && item.resolvedRowEnd > 0 )
-			sh = item.resolvedRowEnd - item.resolvedRowStart;
-		else if ( rowAuto && item.resolvedRowEnd > 0 )
-			sh = item.resolvedRowEnd;
+		int sw = item.columnSpan;
+		int sh = item.rowSpan;
 
 		if ( !colAuto && rowAuto ) {
 			int c = item.resolvedColumnStart;
@@ -1388,14 +1425,13 @@ void GridLayouter::computeIntrinsicWidths() {
 	mMinIntrinsicWidth = 0.f;
 	mMaxIntrinsicWidth = 0.f;
 
-	UIHTMLWidget* grid = mContainer->isType( UI_TYPE_HTML_WIDGET )
-							 ? mContainer->asType<UIHTMLWidget>()
-							 : nullptr;
+	UIHTMLWidget* grid =
+		mContainer->isType( UI_TYPE_HTML_WIDGET ) ? mContainer->asType<UIHTMLWidget>() : nullptr;
 	if ( !grid )
 		return;
 
-	Float gap = mContainer->lengthFromValue( grid->getColumnGap(),
-											 CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
+	Float gap = mContainer->lengthFromValue(
+		grid->getColumnGap(), CSS::PropertyRelativeTarget::ContainingBlockWidth, 0.f );
 
 	GridTrackList colList = GridTrackParser::parseTrackList( grid->getGridTemplateColumns() );
 	if ( !colList.valid || colList.none )
@@ -1516,9 +1552,9 @@ GridAreaTemplate GridAreasParser::parseAreas( const std::string& value ) {
 		std::vector<std::string> tokens = String::split( clean, ' ' );
 		for ( auto& t : tokens )
 			t = String::trim( t );
-		tokens.erase(
-			std::remove_if( tokens.begin(), tokens.end(), []( const std::string& s ) { return s.empty(); } ),
-			tokens.end() );
+		tokens.erase( std::remove_if( tokens.begin(), tokens.end(),
+									  []( const std::string& s ) { return s.empty(); } ),
+					  tokens.end() );
 		if ( expectedCols == 0 )
 			expectedCols = tokens.size();
 		if ( tokens.size() != expectedCols ) {
@@ -1564,7 +1600,7 @@ GridAreaTemplate GridAreasParser::parseAreas( const std::string& value ) {
 
 		GridAreaTemplate::Area area;
 		area.startRow = minR + 1; // convert to 1-based lines
-		area.endRow = maxR + 2; // exclusive
+		area.endRow = maxR + 2;	  // exclusive
 		area.startColumn = minC + 1;
 		area.endColumn = maxC + 2;
 		result.areas[kv.first] = area;
@@ -1579,7 +1615,7 @@ bool GridAreasParser::isValidAreas( const std::string& value ) {
 }
 
 std::vector<std::string> GridAreasParser::getLineNamesForRowLine( const GridAreaTemplate& tmpl,
-																 int line ) {
+																  int line ) {
 	std::vector<std::string> names;
 	for ( const auto& kv : tmpl.areas ) {
 		if ( kv.second.startRow == line )
@@ -1590,8 +1626,8 @@ std::vector<std::string> GridAreasParser::getLineNamesForRowLine( const GridArea
 	return names;
 }
 
-std::vector<std::string>
-GridAreasParser::getLineNamesForColumnLine( const GridAreaTemplate& tmpl, int line ) {
+std::vector<std::string> GridAreasParser::getLineNamesForColumnLine( const GridAreaTemplate& tmpl,
+																	 int line ) {
 	std::vector<std::string> names;
 	for ( const auto& kv : tmpl.areas ) {
 		if ( kv.second.startColumn == line )

@@ -2,6 +2,7 @@
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/flexlayouter.hpp>
+#include <eepp/ui/gridlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayouter.hpp>
 #include <eepp/ui/uilayoutermanager.hpp>
@@ -144,9 +145,15 @@ bool UIHTMLWidget::isGrid() const {
 }
 
 Float UIHTMLWidget::getBaseline() const {
-	if ( isFlex() && mLayouter ) {
-		auto* flex = reinterpret_cast<FlexLayouter*>( mLayouter );
-		return flex->getBaseline();
+	if ( mLayouter ) {
+		if ( isFlex() ) {
+			auto* flex = reinterpret_cast<FlexLayouter*>( mLayouter );
+			return flex->getBaseline();
+		}
+		if ( isGrid() ) {
+			auto* grid = reinterpret_cast<GridLayouter*>( mLayouter );
+			return grid->getBaseline();
+		}
 	}
 	if ( mBaselineAlign.type == CSSBaselineAlignment::Length )
 		return mBaselineAlign.value;

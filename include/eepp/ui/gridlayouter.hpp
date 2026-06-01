@@ -78,6 +78,8 @@ struct EE_API GridItem {
 	int resolvedRowEnd{ 0 };
 	int resolvedColumnStart{ 0 };
 	int resolvedColumnEnd{ 0 };
+	int columnSpan{ 1 };
+	int rowSpan{ 1 };
 	CSSJustifySelf justifySelf{ CSSJustifySelf::Stretch };
 	CSSAlignSelf alignSelf{ CSSAlignSelf::Stretch };
 	bool isTextNode{ false };
@@ -101,9 +103,10 @@ struct EE_API GridAreaTemplate {
 struct EE_API GridAreasParser {
 	static GridAreaTemplate parseAreas( const std::string& value );
 	static bool isValidAreas( const std::string& value );
-	static std::vector<std::string> getLineNamesForRowLine( const GridAreaTemplate& tmpl, int line );
-	static std::vector<std::string> getLineNamesForColumnLine( const GridAreaTemplate& tmpl,
+	static std::vector<std::string> getLineNamesForRowLine( const GridAreaTemplate& tmpl,
 															int line );
+	static std::vector<std::string> getLineNamesForColumnLine( const GridAreaTemplate& tmpl,
+															   int line );
 };
 
 struct EE_API GridLineResult {

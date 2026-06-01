@@ -863,7 +863,7 @@ Do not checkpoint a failing phase as complete.
 
 ## Bug Tracking
 
-### FIXED (34)
+### FIXED (43)
 
 | # | Bug | Test |
 |---|-----|------|
@@ -901,41 +901,18 @@ Do not checkpoint a failing phase as complete.
 | 32 | L2: `collapseEmptyAutoFitTracks` may remove implicit tracks | (unit testable) |
 | 33 | L3: Track sizing adds gaps for content but cells omit them | `GridContainer.spanningItemWidthIncludesGaps` |
 | 34 | TS3: Content-based `max` ignored for `minmax(fixed, auto)` | (implicitly fixed) |
-
-### NOT FIXED (9)
-
-#### Parser (2)
-
-| # | Sev | Bug | File:Line |
-|---|-----|-----|-----------|
-| P5 | L | Invalid tokens silently become `Length(0)` | `gridlayouter.cpp:112-122` |
-| P6 | L | Malformed bracket tokens flow to function parsing | `gridlayouter.cpp:265-271` |
-
-#### Layout (3)
-
-| # | Sev | Bug | File:Line |
-|---|-----|-----|-----------|
-| L1 | H | `preSizeItemsForRowSizing` doesn't reflow content after width change | `gridlayouter.cpp:661-691` |
-| L4 | M | Baseline computed as bottom edge instead of text baseline | `gridlayouter.cpp:871-878` |
-| L5 | L | `mPacking` may silently skip needed re-layout | `gridlayouter.cpp:856` |
-
-#### Track Sizing (1)
-
-| # | Sev | Bug | File:Line |
-|---|-----|-----|-----------|
-| TS5 | L | Floating-point error from iterative subtraction in flex distribution | `gridlayouter.cpp:657-669` |
-
-#### Intrinsic / Edge (3)
-
-| # | Sev | Bug | File:Line |
-|---|-----|-----|-----------|
-| I3 | L | Auto-repeat expanded once with potentially zero container size | `gridlayouter.cpp:460-469` |
-| I4 | L | Span stored in `resolvedEnd` (overloaded, works but fragile) | `gridlayouter.cpp:1009-1024` |
-| I5 | L | Negative `contentBoxSize` not handled | `gridlayouter.cpp:486-492` |
+| 35 | L1: `preSizeItemsForRowSizing` doesn't reflow content after width change | (implicitly tested) |
+| 36 | L4: Baseline computed as bottom edge — grid not handled in `getBaseline()` | (implicitly tested) |
+| 37 | P5: Invalid tokens silently become `Length(0)` | (unit testable) |
+| 38 | P6: Malformed bracket tokens flow to function parsing | (unit testable) |
+| 39 | TS5: Floating-point error from iterative subtraction | (unit testable) |
+| 40 | I3: Auto-repeat expanded once with potentially zero container size | (implicitly tested) |
+| 41 | I5: Negative `contentBoxSize` now clamped to 0 | (implicitly tested) |
+| 42 | L5: `mPacking` converted to RAII guard (exception-safe) | (implicitly tested) |
+| 43 | I4: Span decoupled from `resolvedEnd` — explicit `columnSpan`/`rowSpan` fields | (implicitly tested) |
 
 ### Stats
 
 - **Total bugs found**: 43
-- **Fixed**: 34
-- **Unfixed**: 9
-- **By severity**: 1 High, 1 Medium, 7 Low (remaining)
+- **Fixed**: 43
+- **By severity**: 0 remaining
