@@ -474,6 +474,17 @@ static void invalidateInlineItemText( std::vector<RichText::InlineItem>& items )
 	}
 }
 
+static void setInlineItemTextTabWidth( std::vector<RichText::InlineItem>& items, Uint32 tabWidth ) {
+	for ( auto& item : items ) {
+		if ( item.isTextRun() ) {
+			if ( item.asTextRun().text )
+				item.asTextRun().text->setTabWidth( tabWidth );
+		} else if ( item.isBox() ) {
+			setInlineItemTextTabWidth( item.asBox().children, tabWidth );
+		}
+	}
+}
+
 struct InlineAncestorRef {
 	RichText::RenderSpan::InlinePath path;
 	const RichText::InlineItem::Box* box{ nullptr };
@@ -717,7 +728,8 @@ class RichTextInlineLayouter {
 		return false;
 	}
 
-	static Float getMinIntrinsicWidth( const std::vector<RichText::InlineItem>& inlineItems ) {
+	static Float getMinIntrinsicWidth( const std::vector<RichText::InlineItem>& inlineItems,
+									   RichText::WhiteSpaceWrapMode whiteSpaceWrapMode ) {
 		Float minW = 0;
 		for ( const auto& run : buildLayoutRuns( inlineItems ) ) {
 			const auto& payload = run.payload;
@@ -726,27 +738,39 @@ class RichTextInlineLayouter {
 				if ( !span || span->getString().empty() )
 					continue;
 				const String& s = span->getString();
-				size_t start = 0;
-				size_t end = 0;
-				while ( start < s.size() ) {
-					while ( start < s.size() && ( s[start] == ' ' || s[start] == '\t' ||
-												  s[start] == '\n' || s[start] == '\r' ) )
-						start++;
-					end = start;
-					while ( end < s.size() && !( s[end] == ' ' || s[end] == '\t' ||
-												 s[end] == '\n' || s[end] == '\r' ) )
-						end++;
-					if ( start < end ) {
-						minW = std::max(
-							minW,
-							Text::getTextWidth( s.substr( start, end - start ),
-												span->getFontStyleConfig() ) +
-								payload.margin.Left + payload.margin.Right + payload.padding.Left +
+				Float spacing = payload.margin.Left + payload.margin.Right + payload.padding.Left +
 								payload.padding.Right +
 								inlineAncestorStartSpacing( inlineItems, payload.inlinePath ) +
-								inlineAncestorEndSpacing( inlineItems, payload.inlinePath ) );
+								inlineAncestorEndSpacing( inlineItems, payload.inlinePath );
+				if ( whiteSpaceWrapMode == RichText::WhiteSpaceWrapMode::BreakSpaces ) {
+					for ( size_t i = 0; i < s.size(); ++i ) {
+						if ( s[i] == '\n' || s[i] == '\r' )
+							continue;
+						minW = std::max(
+							minW, Text::getTextWidth( s.substr( i, 1 ), span->getFontStyleConfig(),
+													  span->getTabWidth(), span->getTextHints() ) +
+									  spacing );
 					}
-					start = end;
+				} else {
+					size_t start = 0;
+					size_t end = 0;
+					while ( start < s.size() ) {
+						while ( start < s.size() && ( s[start] == ' ' || s[start] == '\t' ||
+													  s[start] == '\n' || s[start] == '\r' ) )
+							start++;
+						end = start;
+						while ( end < s.size() && !( s[end] == ' ' || s[end] == '\t' ||
+													 s[end] == '\n' || s[end] == '\r' ) )
+							end++;
+						if ( start < end ) {
+							minW = std::max( minW, Text::getTextWidth(
+													   s.substr( start, end - start ),
+													   span->getFontStyleConfig(),
+													   span->getTabWidth(), span->getTextHints() ) +
+													   spacing );
+						}
+						start = end;
+					}
 				}
 			} else if ( payload.type == RichText::RenderSpan::Type::Drawable ) {
 				if ( payload.drawable )
@@ -777,17 +801,17 @@ class RichTextInlineLayouter {
 				curX += payload.margin.Left + payload.padding.Left +
 						inlineAncestorStartSpacing( inlineItems, payload.inlinePath );
 				while ( ( end = s.find( '\n', start ) ) != String::InvalidPos ) {
-					curX +=
-						Text::getTextWidth( s.substr( start, end - start ),
-											span->getFontStyleConfig(), 4, span->getTextHints() );
+					curX += Text::getTextWidth( s.substr( start, end - start ),
+												span->getFontStyleConfig(), span->getTabWidth(),
+												span->getTextHints() );
 					maxW = std::max(
 						maxW, curX + payload.margin.Right + payload.padding.Right +
 								  inlineAncestorEndSpacing( inlineItems, payload.inlinePath ) );
 					curX = 0;
 					start = end + 1;
 				}
-				curX += Text::getTextWidth( s.substr( start ), span->getFontStyleConfig(), 4,
-											span->getTextHints() ) +
+				curX += Text::getTextWidth( s.substr( start ), span->getFontStyleConfig(),
+											span->getTabWidth(), span->getTextHints() ) +
 						payload.margin.Right + payload.padding.Right +
 						inlineAncestorEndSpacing( inlineItems, payload.inlinePath );
 			} else if ( payload.type == RichText::RenderSpan::Type::Drawable ) {
@@ -863,7 +887,8 @@ class RichTextInlineLayouter {
 	static LayoutResult layoutNoFloats( const std::vector<RichText::InlineItem>& inlineItems,
 										Float maxLayoutWidth, Float textIndent, Uint32 align,
 										Float forcedLineHeight, const FontStyleConfig& defaultStyle,
-										bool lineWrap ) {
+										bool lineWrap,
+										RichText::WhiteSpaceWrapMode whiteSpaceWrapMode ) {
 		LayoutResult result;
 		result.lines.push_back( RichText::RenderParagraph() );
 
@@ -895,14 +920,20 @@ class RichTextInlineLayouter {
 				addInlineSpacingToCurrentLine( result, curX,
 											   inlineStartSpacing( payload, inlineItems ) );
 
-				LineWrapInfoEx wrapInfo = computeTextWraps( payload, fontStyle, maxLayoutWidth,
-															lineWrap && maxLayoutWidth > 0, curX );
+				LineWrapInfoEx wrapInfo =
+					computeTextWraps( payload, fontStyle, maxLayoutWidth,
+									  lineWrap && maxLayoutWidth > 0, curX, whiteSpaceWrapMode );
 
 				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 					size_t startIdx = wrapInfo.wraps[i];
 					size_t endIdx = wrapInfo.wraps[i + 1];
-					bool isNewline =
-						( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
+					bool startsWithNewline =
+						startIdx < endIdx && span->getString()[startIdx] == '\n';
+					bool isNewline = startsWithNewline && endIdx - startIdx == 1;
+					if ( startsWithNewline && !isNewline ) {
+						curCharIdx++;
+						startIdx++;
+					}
 
 					if ( !isNewline ) {
 						appendTextRenderSpan( result.lines.back(), payload, fontStyle, startIdx,
@@ -994,10 +1025,12 @@ class RichTextInlineLayouter {
 		return result;
 	}
 
-	static LayoutResult layoutWithFloats(
-		const std::vector<RichText::InlineItem>& inlineItems, Float maxLayoutWidth,
-		Float textIndent, Uint32 align, Float forcedLineHeight, const FontStyleConfig& defaultStyle,
-		const std::vector<RichText::FloatExclusion>& externalFloatExclusions, bool lineWrap ) {
+	static LayoutResult
+	layoutWithFloats( const std::vector<RichText::InlineItem>& inlineItems, Float maxLayoutWidth,
+					  Float textIndent, Uint32 align, Float forcedLineHeight,
+					  const FontStyleConfig& defaultStyle,
+					  const std::vector<RichText::FloatExclusion>& externalFloatExclusions,
+					  bool lineWrap, RichText::WhiteSpaceWrapMode whiteSpaceWrapMode ) {
 		LayoutResult result;
 		result.lines.push_back( RichText::RenderParagraph() );
 
@@ -1109,14 +1142,19 @@ class RichTextInlineLayouter {
 				if ( maxLayoutWidth > 0 && maxLayoutWidth < effW )
 					effW = maxLayoutWidth;
 
-				LineWrapInfoEx wrapInfo =
-					computeTextWraps( payload, fontStyle, effW, lineWrap && effW > 0, curX );
+				LineWrapInfoEx wrapInfo = computeTextWraps(
+					payload, fontStyle, effW, lineWrap && effW > 0, curX, whiteSpaceWrapMode );
 
 				for ( size_t i = 0; i < wrapInfo.wraps.size() - 1; ++i ) {
 					size_t startIdx = wrapInfo.wraps[i];
 					size_t endIdx = wrapInfo.wraps[i + 1];
-					bool isNewline =
-						( endIdx - startIdx == 1 && span->getString()[startIdx] == '\n' );
+					bool startsWithNewline =
+						startIdx < endIdx && span->getString()[startIdx] == '\n';
+					bool isNewline = startsWithNewline && endIdx - startIdx == 1;
+					if ( startsWithNewline && !isNewline ) {
+						curCharIdx++;
+						startIdx++;
+					}
 
 					if ( !isNewline ) {
 						appendTextRenderSpan( result.lines.back(), payload, fontStyle, startIdx,
@@ -1591,13 +1629,113 @@ class RichTextInlineLayouter {
 			result.lines.back().width += spacing;
 	}
 
+	static bool isBreakSpacesWrapChar( String::StringBaseType ch ) {
+		return ch == ' ' || ch == '\t';
+	}
+
+	static Float breakSpacesTextWidth( const String& string, size_t start, size_t end,
+									   const FontStyleConfig& fontStyle, Uint32 tabWidth,
+									   Uint32 textHints ) {
+		if ( end <= start )
+			return 0.f;
+		return Text::getTextWidth( string.substr( start, end - start ), fontStyle, tabWidth,
+								   textHints );
+	}
+
+	static LineWrapInfoEx computeBreakSpacesTextWraps( const RichText::RenderSpan& span,
+													   const FontStyleConfig& fontStyle,
+													   Float wrapWidth, bool shouldWrap,
+													   Float curX ) {
+		LineWrapInfoEx wrapInfo;
+		const String& string = span.text->getString();
+		wrapInfo.wraps.push_back( 0 );
+
+		if ( string.empty() )
+			return wrapInfo;
+
+		const Uint32 tabWidth = span.text->getTabWidth();
+		const Uint32 textHints = span.text->getTextHints();
+		size_t lineStart = 0;
+		size_t lastBreakAfter = String::InvalidPos;
+		Float lineBaseX = curX;
+
+		auto visualStart = [&string]( size_t start ) {
+			return start < string.size() && string[start] == '\n' ? start + 1 : start;
+		};
+		auto pushWrap = [&wrapInfo]( size_t index, Float width ) {
+			if ( wrapInfo.wraps.back() != static_cast<Int64>( index ) ) {
+				wrapInfo.wrapsWidth.push_back( std::ceil( width ) );
+				wrapInfo.wraps.push_back( index );
+			}
+		};
+
+		for ( size_t idx = 0; idx < string.size(); ++idx ) {
+			if ( string[idx] == '\n' ) {
+				pushWrap( idx,
+						  lineBaseX + breakSpacesTextWidth( string, visualStart( lineStart ), idx,
+															fontStyle, tabWidth, textHints ) );
+				lineStart = idx;
+				lastBreakAfter = String::InvalidPos;
+				lineBaseX = 0.f;
+				continue;
+			}
+
+			size_t start = visualStart( lineStart );
+			Float candidateWidth =
+				lineBaseX +
+				breakSpacesTextWidth( string, start, idx + 1, fontStyle, tabWidth, textHints );
+
+			if ( shouldWrap && wrapWidth > 0 && candidateWidth > wrapWidth ) {
+				if ( lastBreakAfter != String::InvalidPos && lastBreakAfter > lineStart ) {
+					pushWrap( lastBreakAfter,
+							  lineBaseX + breakSpacesTextWidth( string, start, lastBreakAfter,
+																fontStyle, tabWidth, textHints ) );
+					lineStart = lastBreakAfter;
+					lastBreakAfter = String::InvalidPos;
+					lineBaseX = 0.f;
+				} else if ( isBreakSpacesWrapChar( string[idx] ) ) {
+					pushWrap( idx + 1, candidateWidth );
+					lineStart = idx + 1;
+					lastBreakAfter = String::InvalidPos;
+					lineBaseX = 0.f;
+					continue;
+				} else if ( idx > start ) {
+					pushWrap( idx, lineBaseX + breakSpacesTextWidth( string, start, idx, fontStyle,
+																	 tabWidth, textHints ) );
+					lineStart = idx;
+					lastBreakAfter = String::InvalidPos;
+					lineBaseX = 0.f;
+				}
+			}
+
+			if ( isBreakSpacesWrapChar( string[idx] ) && lineStart <= idx )
+				lastBreakAfter = idx + 1;
+		}
+
+		if ( !string.empty() && string[string.size() - 1] != '\n' ) {
+			wrapInfo.wrapsWidth.push_back(
+				std::ceil( lineBaseX + breakSpacesTextWidth( string, visualStart( lineStart ),
+															 string.size(), fontStyle, tabWidth,
+															 span.text->getTextHints() ) ) );
+		}
+
+		if ( wrapInfo.wraps.back() != static_cast<Int64>( string.size() ) )
+			wrapInfo.wraps.push_back( string.size() );
+
+		return wrapInfo;
+	}
+
 	static LineWrapInfoEx computeTextWraps( const RichText::RenderSpan& span,
 											const FontStyleConfig& fontStyle, Float wrapWidth,
-											bool shouldWrap, Float curX ) {
+											bool shouldWrap, Float curX,
+											RichText::WhiteSpaceWrapMode whiteSpaceWrapMode ) {
+		if ( whiteSpaceWrapMode == RichText::WhiteSpaceWrapMode::BreakSpaces )
+			return computeBreakSpacesTextWraps( span, fontStyle, wrapWidth, shouldWrap, curX );
+
 		LineWrapInfoEx wrapInfo = LineWrap::computeLineBreaksEx(
 			span.text->getString(), fontStyle, wrapWidth > 0 ? wrapWidth : 1e9f,
-			shouldWrap ? LineWrapMode::Word : LineWrapMode::NoWrap, false, 4, 0.f,
-			span.text->getTextHints(), false, curX );
+			shouldWrap ? LineWrapMode::Word : LineWrapMode::NoWrap, false, span.text->getTabWidth(),
+			0.f, span.text->getTextHints(), false, curX );
 
 		if ( wrapInfo.wraps.empty() ||
 			 wrapInfo.wraps.back() != (Float)span.text->getString().size() )
@@ -1656,6 +1794,7 @@ class RichTextInlineLayouter {
 		FontStyleConfig renderStyle = fontStyle;
 		renderStyle.Style |= inlineAncestorTextDecoration( inlineItems, payload.inlinePath );
 		renderSpanText->setStyleConfig( renderStyle );
+		renderSpanText->setTabWidth( payload.text->getTabWidth() );
 
 		Float height = getTextRunLineHeight( payload.text, payload.lineHeight );
 		Float ascent = getTextBaseline( payload.text, payload.lineHeight );
@@ -1864,15 +2003,22 @@ class RichTextInlineLayouter {
 
 } // namespace
 
-void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
-						const Rectf& padding, Float lineHeight,
-						const BaselineAlignValue& baselineAlign, InlineSource source ) {
+template <typename TextType> static void setTextString( Text& text, TextType&& string ) {
+	text.setString( std::forward<TextType>( string ) );
+}
+
+template <typename TextType>
+void RichText::addSpanImpl( TextType&& text, const FontStyleConfig& style, const Rectf& margin,
+							const Rectf& padding, Float lineHeight,
+							const BaselineAlignValue& baselineAlign, InlineSource source ) {
 	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
+	const bool hasText = !text.empty();
 	auto span = std::make_shared<Text>();
-	span->setString( text );
+	setTextString( *span, std::forward<TextType>( text ) );
 	span->setStyleConfig( style );
+	span->setTabWidth( mTabWidth );
 
 	InlineItem item;
 	InlineItem::Box box;
@@ -1882,7 +2028,7 @@ void RichText::addSpan( const String& text, const FontStyleConfig& style, const 
 	box.baselineAlign = baselineAlign;
 	box.participatesInLineMetrics = false;
 	box.contributesInlineSpacing = false;
-	if ( !text.empty() || margin != Rectf::Zero || padding != Rectf::Zero || lineHeight > 0 ) {
+	if ( hasText || margin != Rectf::Zero || padding != Rectf::Zero || lineHeight > 0 ) {
 		InlineItem textItem;
 		auto& run = textItem.asTextRun();
 		run.text = span;
@@ -1897,6 +2043,24 @@ void RichText::addSpan( const String& text, const FontStyleConfig& style, const 
 	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( item ) );
 
 	invalidateLayout();
+}
+
+void RichText::addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
+						const Rectf& padding, Float lineHeight,
+						const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addSpanImpl( text, style, margin, padding, lineHeight, baselineAlign, source );
+}
+
+void RichText::addSpan( const String::View& text, const FontStyleConfig& style, const Rectf& margin,
+						const Rectf& padding, Float lineHeight,
+						const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addSpanImpl( text, style, margin, padding, lineHeight, baselineAlign, source );
+}
+
+void RichText::addSpan( String&& text, const FontStyleConfig& style, const Rectf& margin,
+						const Rectf& padding, Float lineHeight,
+						const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addSpanImpl( std::move( text ), style, margin, padding, lineHeight, baselineAlign, source );
 }
 
 void RichText::addDrawable( std::shared_ptr<Drawable> drawable ) {
@@ -1976,17 +2140,19 @@ void RichText::popInlineBox() {
 		mInlinePath.pop_back();
 }
 
-void RichText::addInlineText( const String& text, const FontStyleConfig& style, const Rectf& margin,
-							  const Rectf& padding, Float lineHeight,
-							  const BaselineAlignValue& baselineAlign, InlineSource source ) {
+template <typename TextType>
+void RichText::addInlineTextImpl( TextType&& text, const FontStyleConfig& style,
+								  const Rectf& margin, const Rectf& padding, Float lineHeight,
+								  const BaselineAlignValue& baselineAlign, InlineSource source ) {
 	if ( text.empty() && margin == Rectf::Zero && padding == Rectf::Zero && lineHeight == 0 )
 		return;
 
 	InlineItem textItem;
 	auto& run = textItem.asTextRun();
 	run.text = std::make_shared<Text>();
-	run.text->setString( text );
+	setTextString( *run.text, std::forward<TextType>( text ) );
 	run.text->setStyleConfig( style );
+	run.text->setTabWidth( mTabWidth );
 	run.source = source;
 	run.margin = margin;
 	run.padding = padding;
@@ -1996,6 +2162,25 @@ void RichText::addInlineText( const String& text, const FontStyleConfig& style, 
 
 	resolveInlinePath( mInlineItems, mInlinePath )->push_back( std::move( textItem ) );
 	invalidateLayout();
+}
+
+void RichText::addInlineText( const String& text, const FontStyleConfig& style, const Rectf& margin,
+							  const Rectf& padding, Float lineHeight,
+							  const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addInlineTextImpl( text, style, margin, padding, lineHeight, baselineAlign, source );
+}
+
+void RichText::addInlineText( const String::View& text, const FontStyleConfig& style,
+							  const Rectf& margin, const Rectf& padding, Float lineHeight,
+							  const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addInlineTextImpl( text, style, margin, padding, lineHeight, baselineAlign, source );
+}
+
+void RichText::addInlineText( String&& text, const FontStyleConfig& style, const Rectf& margin,
+							  const Rectf& padding, Float lineHeight,
+							  const BaselineAlignValue& baselineAlign, InlineSource source ) {
+	addInlineTextImpl( std::move( text ), style, margin, padding, lineHeight, baselineAlign,
+					   source );
 }
 
 void RichText::addInlineAtomicBox( const Sizef& size, InlineFloat floatType, InlineClear clearType,
@@ -2018,6 +2203,14 @@ void RichText::addInlineAtomicBox( const Sizef& size, InlineFloat floatType, Inl
 
 void RichText::addSpan( const String& text, const FontStyleConfig& style ) {
 	addSpan( text, style, Rectf::Zero, Rectf::Zero );
+}
+
+void RichText::addSpan( const String::View& text, const FontStyleConfig& style ) {
+	addSpan( text, style, Rectf::Zero, Rectf::Zero );
+}
+
+void RichText::addSpan( String&& text, const FontStyleConfig& style ) {
+	addSpan( std::move( text ), style, Rectf::Zero, Rectf::Zero );
 }
 
 void RichText::addSpan( const String& text, Font* font, Uint32 characterSize, Color color,
@@ -2075,6 +2268,22 @@ void RichText::setLineWrap( bool lineWrap ) {
 	}
 }
 
+void RichText::setWhiteSpaceWrapMode( WhiteSpaceWrapMode mode ) {
+	if ( mWhiteSpaceWrapMode != mode ) {
+		mWhiteSpaceWrapMode = mode;
+		invalidateLayout();
+	}
+}
+
+void RichText::setTabWidth( Uint32 tabWidth ) {
+	tabWidth = eemax<Uint32>( 1, tabWidth );
+	if ( mTabWidth != tabWidth ) {
+		mTabWidth = tabWidth;
+		setInlineItemTextTabWidth( mInlineItems, mTabWidth );
+		invalidateLayout();
+	}
+}
+
 bool RichText::setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions ) {
 	if ( mExternalFloatExclusions == exclusions )
 		return false;
@@ -2090,7 +2299,7 @@ void RichText::invalidate() {
 }
 
 Float RichText::getMinIntrinsicWidth() {
-	return RichTextInlineLayouter::getMinIntrinsicWidth( mInlineItems );
+	return RichTextInlineLayouter::getMinIntrinsicWidth( mInlineItems, mWhiteSpaceWrapMode );
 }
 
 Float RichText::getMaxIntrinsicWidth() {
@@ -2106,8 +2315,9 @@ void RichText::updateLayout() {
 
 	// ─── Inline layouter fast path: no floats or clears ─────────────
 	if ( !hasFloats ) {
-		auto result = RichTextInlineLayouter::layoutNoFloats(
-			mInlineItems, mMaxWidth, mTextIndent, mAlign, mLineHeight, mDefaultStyle, mLineWrap );
+		auto result = RichTextInlineLayouter::layoutNoFloats( mInlineItems, mMaxWidth, mTextIndent,
+															  mAlign, mLineHeight, mDefaultStyle,
+															  mLineWrap, mWhiteSpaceWrapMode );
 		mLines = std::move( result.lines );
 		mSize = result.size;
 		mTotalCharacterCount = result.totalCharacterCount;
@@ -2116,9 +2326,9 @@ void RichText::updateLayout() {
 		return;
 	}
 
-	auto result = RichTextInlineLayouter::layoutWithFloats( mInlineItems, mMaxWidth, mTextIndent,
-															mAlign, mLineHeight, mDefaultStyle,
-															mExternalFloatExclusions, mLineWrap );
+	auto result = RichTextInlineLayouter::layoutWithFloats(
+		mInlineItems, mMaxWidth, mTextIndent, mAlign, mLineHeight, mDefaultStyle,
+		mExternalFloatExclusions, mLineWrap, mWhiteSpaceWrapMode );
 	mLines = std::move( result.lines );
 	mSize = result.size;
 	mTotalCharacterCount = result.totalCharacterCount;

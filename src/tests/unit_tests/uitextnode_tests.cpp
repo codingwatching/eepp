@@ -954,7 +954,7 @@ UTEST( UITextNode_EdgeCases, EmptyTextNodesDontAffectLayout ) {
 	if ( child ) {
 		EXPECT_TRUE( child->isTextNode() );
 		UITextNode* textNode = static_cast<UITextNode*>( child );
-		EXPECT_TRUE( textNode->getText().empty() || String::trim( textNode->getText() ).empty() );
+		EXPECT_EQ( textNode->getLayoutCharCount(), (size_t)0 );
 	}
 
 	destroyRichTextScene( sceneNode );
