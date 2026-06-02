@@ -1,5 +1,5 @@
-#ifndef EE_GRAPHICS_LINEARGRADIENTDRAWABLE_HPP
-#define EE_GRAPHICS_LINEARGRADIENTDRAWABLE_HPP
+#ifndef EE_GRAPHICS_RADIALGRADIENTDRAWABLE_HPP
+#define EE_GRAPHICS_RADIALGRADIENTDRAWABLE_HPP
 
 #include <eepp/graphics/drawable.hpp>
 #include <eepp/system/color.hpp>
@@ -7,20 +7,23 @@
 
 namespace EE { namespace Graphics {
 
-class EE_API LinearGradientDrawable : public Drawable {
+class EE_API RadialGradientDrawable : public Drawable {
   public:
 	struct ColorStop {
-		Float position{ 0 }; /* 0.0 to 1.0 */
+		Float position{ 0 };
 		Color color;
 
 		ColorStop() : color( Color::White ) {}
 		ColorStop( Float pos, const Color& col ) : position( pos ), color( col ) {}
 	};
 
-	static LinearGradientDrawable* New();
-	static LinearGradientDrawable* NewRepeating();
+	enum ShapeType { CIRCLE, ELLIPSE };
+	enum Extent { CLOSEST_SIDE, FARTHEST_SIDE, CLOSEST_CORNER, FARTHEST_CORNER };
 
-	LinearGradientDrawable( Drawable::Type drawableType = LINEARGRADIENT );
+	static RadialGradientDrawable* New();
+	static RadialGradientDrawable* NewRepeating();
+
+	RadialGradientDrawable( Drawable::Type drawableType = RADIALGRADIENT );
 
 	virtual Sizef getSize();
 
@@ -38,9 +41,17 @@ class EE_API LinearGradientDrawable : public Drawable {
 
 	void setColorStops( std::vector<ColorStop> stops );
 
-	Float getAngle() const;
+	ShapeType getShape() const;
 
-	void setAngle( Float angleDegrees );
+	void setShape( ShapeType shape );
+
+	Extent getExtent() const;
+
+	void setExtent( Extent extent );
+
+	const Vector2f& getCenter() const;
+
+	void setCenter( const Vector2f& centerNormalized );
 
 	void setSize( const Sizef& size );
 
@@ -48,7 +59,9 @@ class EE_API LinearGradientDrawable : public Drawable {
 
   protected:
 	std::vector<ColorStop> mColorStops;
-	Float mAngle{ 180.f }; /* CSS angle: 0=to top, 90=to right, 180=to bottom (default) */
+	ShapeType mShape{ CIRCLE };
+	Extent mExtent{ FARTHEST_CORNER };
+	Vector2f mCenter{ 0.5f, 0.5f };
 	Sizef mSize;
 };
 
