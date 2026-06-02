@@ -1,3 +1,4 @@
+#include <eepp/core/debug.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/text.hpp>
 #include <eepp/scene/scenemanager.hpp>
@@ -111,7 +112,10 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 			Color color = attribute.asColor();
 			if ( color == Color::Transparent &&
 				 attribute.getValue().find( "var(" ) != std::string::npos ) {
-				// Do not set unresolved colors
+#ifdef EE_DEBUG
+				eePRINTL( "UITextSpan: unresolved var() in Color value for <%s>: '%s'",
+						  getElementTag().c_str(), attribute.getValue().c_str() );
+#endif
 				break;
 			}
 			setFontColor( color );
@@ -729,9 +733,6 @@ bool UIAnchorSpan::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::Href:
 			setHref( attribute.asString() );
-			break;
-		case PropertyId::Color:
-			setFontColor( attribute.asColor() );
 			break;
 		default:
 			UITextSpan::applyProperty( attribute );

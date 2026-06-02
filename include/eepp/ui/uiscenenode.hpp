@@ -610,6 +610,24 @@ class EE_API UISceneNode : public SceneNode {
 	void setColorSchemePreference( const ColorSchemePreference& colorSchemePreference );
 
 	/**
+	 * @brief Gets the current contrast preference.
+	 * @return The ContrastPreference.
+	 */
+	ContrastPreference getContrastPreference() const;
+
+	/**
+	 * @brief Sets the contrast preference from extended preference.
+	 * @param contrastPreference The extended ContrastExtPreference.
+	 */
+	void setContrastPreference( const ContrastExtPreference& contrastPreference );
+
+	/**
+	 * @brief Sets the contrast preference directly.
+	 * @param contrastPreference The ContrastPreference.
+	 */
+	void setContrastPreference( const ContrastPreference& contrastPreference );
+
+	/**
 	 * @brief Gets the maximum invalidation depth.
 	 *
 	 * This controls how many times the update cycle will re-process dirty
@@ -771,6 +789,7 @@ class EE_API UISceneNode : public SceneNode {
 	UnorderedSet<UILayout*> mDirtyLayouts;
 	std::vector<std::pair<Float, std::string>> mTimes;
 	ColorSchemePreference mColorSchemePreference{ ColorSchemePreference::Dark };
+	ContrastPreference mContrastPreference{ ContrastPreference::NoPreference };
 	Uint32 mMaxInvalidationDepth{ 2 };
 	Node* mCurParent{ nullptr };
 	Uint32 mCurOnSizeChangeListener{ 0 };

@@ -284,24 +284,36 @@ void UIStyle::applyLightDarkValue( std::string& value ) {
 }
 
 void UIStyle::setVariableFromValue( StyleSheetProperty* property, const std::string& value ) {
-	if ( !property->getVarCache().empty() ) {
-		std::string newValue( value );
-		for ( auto& var : property->getVarCache() ) {
-			for ( auto& val : var.variableList ) {
-				StyleSheetVariable variable( getVariable( val ) );
-				if ( !variable.isEmpty() ) {
-					String::replaceAll( newValue, var.definition, variable.getValue() );
-					break;
+	if ( property->getVarCache().empty() && !property->isLightDarkValue() )
+		return;
+
+	std::string newValue( value );
+	static constexpr int maxDepth = 16;
+
+	for ( int depth = 0; depth < maxDepth; depth++ ) {
+		bool changed = false;
+		if ( !property->getVarCache().empty() ) {
+			auto varCacheCopy = property->getVarCache();
+			for ( auto& var : varCacheCopy ) {
+				for ( auto& val : var.variableList ) {
+					StyleSheetVariable variable( getVariable( val ) );
+					if ( !variable.isEmpty() ) {
+						String::replaceAll( newValue, var.definition, variable.getValue() );
+						changed = true;
+						break;
+					}
 				}
 			}
 		}
-		if ( property->isLightDarkValue() )
+		if ( property->isLightDarkValue() ) {
 			applyLightDarkValue( newValue );
+			changed = true;
+		}
+		if ( !changed )
+			break;
 		property->setValue( newValue );
-	} else if ( property->isLightDarkValue() ) {
-		std::string newValue( value );
-		applyLightDarkValue( newValue );
-		property->setValue( newValue );
+		if ( property->getVarCache().empty() && !property->isLightDarkValue() )
+			break;
 	}
 }
 
