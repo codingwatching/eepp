@@ -70,6 +70,24 @@ bool UITextSpan::isInlineBlock() const {
 	return mDisplay == CSSDisplay::InlineBlock && getCSSFloat() == CSSFloat::None && !isOutOfFlow();
 }
 
+void UITextSpan::onDisplayChange() {
+	bool nowInline = isInline();
+	if ( nowInline && getFontBackgroundColor() == Color::Transparent ) {
+		const Color& widgetBg = getBackgroundColor();
+		if ( widgetBg != Color::Transparent ) {
+			setFontBackgroundColor( widgetBg );
+			setBackgroundColor( Color::Transparent );
+		}
+	} else if ( !nowInline && getBackgroundColor() == Color::Transparent ) {
+		const Color& fontBg = getFontBackgroundColor();
+		if ( fontBg != Color::Transparent ) {
+			setBackgroundColor( fontBg );
+			setFontBackgroundColor( Color::Transparent );
+		}
+	}
+	UIHTMLWidget::onDisplayChange();
+}
+
 void UITextSpan::draw() {
 	// When a UITextSpan is a flex item it is laid out independently by the
 	// flex container (blockification per CSS Flexbox §4). In that case the
@@ -100,7 +118,13 @@ bool UITextSpan::applyProperty( const StyleSheetProperty& attribute ) {
 			break;
 		}
 		case PropertyId::BackgroundColor:
-			setFontBackgroundColor( attribute.asColor() );
+			if ( isInline() ) {
+				setBackgroundColor( Color::Transparent );
+				setFontBackgroundColor( attribute.asColor() );
+			} else {
+				setFontBackgroundColor( Color::Transparent );
+				setBackgroundColor( attribute.asColor() );
+			}
 			break;
 		case PropertyId::TextShadowColor:
 			setFontShadowColor( attribute.asColor() );

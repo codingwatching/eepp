@@ -432,8 +432,13 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 			break;
 		}
 		case PropertyId::BackgroundColor:
-			setBackgroundColor( attribute.asColor() );
-			setFontBackgroundColor( attribute.asColor() );
+			if ( isInline() ) {
+				setBackgroundColor( Color::Transparent );
+				setFontBackgroundColor( attribute.asColor() );
+			} else {
+				setFontBackgroundColor( Color::Transparent );
+				setBackgroundColor( attribute.asColor() );
+			}
 			break;
 		case PropertyId::TextShadowColor:
 			setFontShadowColor( attribute.asColor() );
