@@ -48,40 +48,20 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	Float cx = w * 0.5f;
 	Float cy = h * 0.5f;
 
-	Float tVals[4];
-	int validCount = 0;
-
-	auto addT = [&]( Float t, Float px, Float py ) {
-		if ( !std::isfinite( t ) )
-			return;
-		if ( px >= -0.001f && px <= w + 0.001f && py >= -0.001f && py <= h + 0.001f ) {
-			tVals[validCount++] = t;
-		}
-	};
-
-	if ( std::abs( dx ) > 0.0001f ) {
-		Float tLeft = -cx / dx;
-		addT( tLeft, 0, cy + tLeft * dy );
-		Float tRight = ( w - cx ) / dx;
-		addT( tRight, w, cy + tRight * dy );
-	}
-	if ( std::abs( dy ) > 0.0001f ) {
-		Float tTop = -cy / dy;
-		addT( tTop, cx + tTop * dx, 0 );
-		Float tBottom = ( h - cy ) / dy;
-		addT( tBottom, cx + tBottom * dx, h );
-	}
-
-	if ( validCount < 2 )
-		return;
-
-	Float tMin = tVals[0];
-	Float tMax = tVals[0];
-	for ( int i = 1; i < validCount; i++ ) {
-		if ( tVals[i] < tMin )
-			tMin = tVals[i];
-		if ( tVals[i] > tMax )
-			tMax = tVals[i];
+	// CSS: gradient-line endpoints are found by projecting each corner
+	// of the box onto the gradient direction.  For diagonal angles this
+	// gives a corner-to-corner line, whereas intersecting with the four
+	// edges would produce a shorter line — and degenerate perpendicular
+	// segments near the corners.
+	Float corners[4][2] = { { 0, 0 }, { w, 0 }, { w, h }, { 0, h } };
+	Float tMin = ( corners[0][0] - cx ) * dx + ( corners[0][1] - cy ) * dy;
+	Float tMax = tMin;
+	for ( int i = 1; i < 4; i++ ) {
+		Float t = ( corners[i][0] - cx ) * dx + ( corners[i][1] - cy ) * dy;
+		if ( t < tMin )
+			tMin = t;
+		if ( t > tMax )
+			tMax = t;
 	}
 
 	if ( std::abs( tMax - tMin ) < 0.0001f )
@@ -99,7 +79,6 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	std::sort( stops.begin(), stops.end(),
 			   []( const ColorStop& a, const ColorStop& b ) { return a.value < b.value; } );
 
-
 	Float px = -dy;
 	Float py = dx;
 
@@ -107,6 +86,29 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	sBR->setTexture( NULL );
 	sBR->setBlendMode( BlendMode::Alpha() );
 	sBR->quadsBegin();
+
+	// Helper: compute a perpendicular segment that always spans the box.
+	// When the perpendicular line through (gx,gy) only grazes a corner we
+	// extend the segment so the quad-to-quad tiling fills the whole box.
+	auto perpSeg = [&]( Float gx, Float gy ) {
+		Float ds[4];
+		// signed dist along perpendicular from (gx,gy) to each corner
+		ds[0] = ( -gx ) * px + ( -gy ) * py;
+		ds[1] = ( w - gx ) * px + ( -gy ) * py;
+		ds[2] = ( w - gx ) * px + ( h - gy ) * py;
+		ds[3] = ( -gx ) * px + ( h - gy ) * py;
+		Float dMin = ds[0];
+		Float dMax = ds[0];
+		for ( int i = 1; i < 4; i++ ) {
+			if ( ds[i] < dMin )
+				dMin = ds[i];
+			if ( ds[i] > dMax )
+				dMax = ds[i];
+		}
+		Vector2f a( gx + dMin * px + position.x, gy + dMin * py + position.y );
+		Vector2f b( gx + dMax * px + position.x, gy + dMax * py + position.y );
+		return std::make_pair( a, b );
+	};
 
 	if ( isRepeating() ) {
 		Float firstPos = stops.front().value;
@@ -143,16 +145,14 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Float frac1 = ( clip1 - p0 ) / bw;
 				const Color& sc0 = stops[i].color;
 				const Color& sc1 = stops[i + 1].color;
-				Color cc0(
-					(Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
-					(Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
-					(Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
-					(Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
-				Color cc1(
-					(Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
-					(Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
-					(Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
-					(Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
+				Color cc0( (Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
+						   (Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
+						   (Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
+						   (Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
+				Color cc1( (Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
+						   (Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
+						   (Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
+						   (Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
 
 				Float tc0 = tMin + clip0 * txLen;
 				Float tc1 = tMin + clip1 * txLen;
@@ -161,69 +161,13 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Float gx1 = cx + tc1 * dx;
 				Float gy1 = cy + tc1 * dy;
 
-				Float ptVals0[4];
-				int ptCount0 = 0;
-				auto addPT0 = [&]( Float pt, Float qx, Float qy ) {
-					if ( !std::isfinite( pt ) )
-						return;
-					if ( qx >= -0.001f && qx <= w + 0.001f && qy >= -0.001f && qy <= h + 0.001f )
-						ptVals0[ptCount0++] = pt;
-				};
-				if ( std::abs( px ) > 0.0001f ) {
-					Float ptLeft = -gx0 / px;
-					addPT0( ptLeft, 0, gy0 + ptLeft * py );
-					Float ptRight = ( w - gx0 ) / px;
-					addPT0( ptRight, w, gy0 + ptRight * py );
-				}
-				if ( std::abs( py ) > 0.0001f ) {
-					Float ptTop = -gy0 / py;
-					addPT0( ptTop, gx0 + ptTop * px, 0 );
-					Float ptBottom = ( h - gy0 ) / py;
-					addPT0( ptBottom, gx0 + ptBottom * px, h );
-				}
-				if ( ptCount0 < 2 )
-					continue;
-				Float ptMin0 = ptVals0[0], ptMax0 = ptVals0[0];
-				for ( int j = 1; j < ptCount0; j++ ) {
-					if ( ptVals0[j] < ptMin0 )
-						ptMin0 = ptVals0[j];
-					if ( ptVals0[j] > ptMax0 )
-						ptMax0 = ptVals0[j];
-				}
-				Vector2f a0( gx0 + ptMin0 * px + position.x, gy0 + ptMin0 * py + position.y );
-				Vector2f b0( gx0 + ptMax0 * px + position.x, gy0 + ptMax0 * py + position.y );
+				auto seg0 = perpSeg( gx0, gy0 );
+				Vector2f a0 = seg0.first;
+				Vector2f b0 = seg0.second;
 
-				Float ptVals1[4];
-				int ptCount1 = 0;
-				auto addPT1 = [&]( Float pt, Float qx, Float qy ) {
-					if ( !std::isfinite( pt ) )
-						return;
-					if ( qx >= -0.001f && qx <= w + 0.001f && qy >= -0.001f && qy <= h + 0.001f )
-						ptVals1[ptCount1++] = pt;
-				};
-				if ( std::abs( px ) > 0.0001f ) {
-					Float ptLeft = -gx1 / px;
-					addPT1( ptLeft, 0, gy1 + ptLeft * py );
-					Float ptRight = ( w - gx1 ) / px;
-					addPT1( ptRight, w, gy1 + ptRight * py );
-				}
-				if ( std::abs( py ) > 0.0001f ) {
-					Float ptTop = -gy1 / py;
-					addPT1( ptTop, gx1 + ptTop * px, 0 );
-					Float ptBottom = ( h - gy1 ) / py;
-					addPT1( ptBottom, gx1 + ptBottom * px, h );
-				}
-				if ( ptCount1 < 2 )
-					continue;
-				Float ptMin1 = ptVals1[0], ptMax1 = ptVals1[0];
-				for ( int j = 1; j < ptCount1; j++ ) {
-					if ( ptVals1[j] < ptMin1 )
-						ptMin1 = ptVals1[j];
-					if ( ptVals1[j] > ptMax1 )
-						ptMax1 = ptVals1[j];
-				}
-				Vector2f a1( gx1 + ptMin1 * px + position.x, gy1 + ptMin1 * py + position.y );
-				Vector2f b1( gx1 + ptMax1 * px + position.x, gy1 + ptMax1 * py + position.y );
+				auto seg1 = perpSeg( gx1, gy1 );
+				Vector2f a1 = seg1.first;
+				Vector2f b1 = seg1.second;
 
 				Color fc0 = ( mColor.a == 255 ) ? cc0 : Color( cc0 ).blendAlpha( mColor.a );
 				Color fc1 = ( mColor.a == 255 ) ? cc1 : Color( cc1 ).blendAlpha( mColor.a );
@@ -232,6 +176,12 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 			}
 		}
 	} else {
+		// CSS: first and last color extend to the box boundaries (pad mode)
+		if ( stops.front().value > 0.f )
+			stops.insert( stops.begin(), ColorStop( 0.f, stops.front().color ) );
+		if ( stops.back().value < 1.f )
+			stops.push_back( ColorStop( 1.f, stops.back().color ) );
+
 		struct PerpSeg {
 			Vector2f a;
 			Vector2f b;
@@ -240,49 +190,13 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 		segments.reserve( stops.size() );
 
 		for ( size_t i = 0; i < stops.size(); i++ ) {
-			PerpSeg seg;
 			Float t = tMin + stops[i].value * txLen;
 			Float gx = cx + t * dx;
 			Float gy = cy + t * dy;
-
-			Float ptVals[4];
-			int ptCount = 0;
-
-			auto addPT = [&]( Float pt, Float qx, Float qy ) {
-				if ( !std::isfinite( pt ) )
-					return;
-				if ( qx >= -0.001f && qx <= w + 0.001f && qy >= -0.001f && qy <= h + 0.001f ) {
-					ptVals[ptCount++] = pt;
-				}
-			};
-
-			if ( std::abs( px ) > 0.0001f ) {
-				Float ptLeft = -gx / px;
-				addPT( ptLeft, 0, gy + ptLeft * py );
-				Float ptRight = ( w - gx ) / px;
-				addPT( ptRight, w, gy + ptRight * py );
-			}
-			if ( std::abs( py ) > 0.0001f ) {
-				Float ptTop = -gy / py;
-				addPT( ptTop, gx + ptTop * px, 0 );
-				Float ptBottom = ( h - gy ) / py;
-				addPT( ptBottom, gx + ptBottom * px, h );
-			}
-
-			if ( ptCount < 2 )
-				return;
-
-			Float ptMin = ptVals[0];
-			Float ptMax = ptVals[0];
-			for ( int j = 1; j < ptCount; j++ ) {
-				if ( ptVals[j] < ptMin )
-					ptMin = ptVals[j];
-				if ( ptVals[j] > ptMax )
-					ptMax = ptVals[j];
-			}
-
-			seg.a = Vector2f( gx + ptMin * px + position.x, gy + ptMin * py + position.y );
-			seg.b = Vector2f( gx + ptMax * px + position.x, gy + ptMax * py + position.y );
+			auto segPair = perpSeg( gx, gy );
+			PerpSeg seg;
+			seg.a = segPair.first;
+			seg.b = segPair.second;
 			segments.push_back( seg );
 		}
 
