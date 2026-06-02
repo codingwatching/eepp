@@ -228,6 +228,9 @@ void UIHTMLWidget::setOffsets( const Rectf& offsets ) {
 
 void UIHTMLWidget::setZIndex( int zIndex ) {
 	mZIndex = zIndex;
+	Node* p = getParent();
+	if ( p && p->isType( UI_TYPE_HTML_WIDGET ) )
+		p->asType<UIHTMLWidget>()->updateZIndexSortFlag();
 }
 
 void UIHTMLWidget::setNeedsOrderSort( bool val ) {
@@ -235,40 +238,54 @@ void UIHTMLWidget::setNeedsOrderSort( bool val ) {
 }
 
 void UIHTMLWidget::drawChildren() {
-	bool needsFlexDirectionReverse = false;
+	bool flexSort = false;
+	bool directionReverse = false;
+
 	if ( isFlex() ) {
 		CSSFlexDirection dir = getFlexDirection();
-		needsFlexDirectionReverse =
+		directionReverse =
 			dir == CSSFlexDirection::RowReverse || dir == CSSFlexDirection::ColumnReverse;
+		flexSort = mNeedsOrderSort || directionReverse;
 	}
 
-	if ( mNeedsOrderSort || needsFlexDirectionReverse ) {
-		std::vector<Node*> sortedChildren;
-		for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
-			sortedChildren.push_back( child );
-
-		if ( mNeedsOrderSort ) {
-			std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
-				int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
-								 ? static_cast<UIHTMLWidget*>( a )->getOrder()
-								 : 0;
-				int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
-								 ? static_cast<UIHTMLWidget*>( b )->getOrder()
-								 : 0;
-				return aOrder < bOrder;
-			} );
-		}
-
-		if ( needsFlexDirectionReverse )
-			std::reverse( sortedChildren.begin(), sortedChildren.end() );
-
-		for ( auto* child : sortedChildren ) {
-			if ( child->isVisible() )
-				child->nodeDraw();
-		}
+	if ( !flexSort && !mNeedsZIndexSort ) {
+		UILayout::drawChildren();
 		return;
 	}
-	Node::drawChildren();
+
+	SmallVector<Node*, 127> sortedChildren;
+	for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
+		sortedChildren.push_back( child );
+
+	if ( flexSort && mNeedsOrderSort ) {
+		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+			int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
+							 ? a->asType<UIHTMLWidget>()->getOrder()
+							 : 0;
+			int bOrder = ( b->isWidget() && b->isType( UI_TYPE_HTML_WIDGET ) )
+							 ? b->asType<UIHTMLWidget>()->getOrder()
+							 : 0;
+			return aOrder < bOrder;
+		} );
+	}
+
+	if ( flexSort && directionReverse )
+		std::reverse( sortedChildren.begin(), sortedChildren.end() );
+
+	if ( mNeedsZIndexSort ) {
+		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+			int aZ =
+				( a->isType( UI_TYPE_HTML_WIDGET ) ) ? a->asType<UIHTMLWidget>()->getZIndex() : 0;
+			int bZ =
+				( b->isType( UI_TYPE_HTML_WIDGET ) ) ? b->asType<UIHTMLWidget>()->getZIndex() : 0;
+			return aZ < bZ;
+		} );
+	}
+
+	for ( auto* child : sortedChildren ) {
+		if ( child->isVisible() )
+			child->nodeDraw();
+	}
 }
 
 void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {
@@ -838,7 +855,7 @@ void UIHTMLWidget::positionOutOfFlowChildren() {
 	Node* child = mChild;
 	while ( child ) {
 		if ( child->isWidget() && child->isType( UI_TYPE_HTML_WIDGET ) ) {
-			UIHTMLWidget* htmlChild = static_cast<UIHTMLWidget*>( child );
+			UIHTMLWidget* htmlChild = child->asType<UIHTMLWidget>();
 			CSSPosition pos = htmlChild->getCSSPosition();
 			if ( pos == CSSPosition::Absolute || pos == CSSPosition::Fixed ) {
 				htmlChild->updateOutOfFlowPosition();
