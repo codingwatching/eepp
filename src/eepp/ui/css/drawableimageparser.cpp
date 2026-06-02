@@ -4,6 +4,7 @@
 #include <eepp/graphics/drawablesearcher.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/lineargradientdrawable.hpp>
+#include <eepp/graphics/radialgradientdrawable.hpp>
 #include <eepp/graphics/rectangledrawable.hpp>
 #include <eepp/graphics/triangledrawable.hpp>
 #include <eepp/scene/scenemanager.hpp>
@@ -22,8 +23,31 @@ struct ColorStopResult {
 	bool valid{ false };
 	bool isHint{ false };
 	Color color;
-	Float position{ -1.f }; /* -1 = not specified */
+	Float position{ -1.f };		  /* -1 = not specified */
+	Float secondPosition{ -1.f }; /* -1 = single-position stop */
 };
+
+static Float parsePositionValue( const std::string& token ) {
+	if ( token.empty() )
+		return -1.f;
+	Float val;
+	if ( token.back() == '%' ) {
+		std::string num = token.substr( 0, token.size() - 1 );
+		if ( String::fromString( val, num ) )
+			return eemax( 0.f, eemin( 100.f, val ) ) / 100.f;
+		return -1.f;
+	}
+	if ( token.size() > 2 && ( token.substr( token.size() - 2 ) == "px" ||
+							   token.substr( token.size() - 2 ) == "dp" ) ) {
+		std::string num = token.substr( 0, token.size() - 2 );
+		if ( String::fromString( val, num ) )
+			return eemax( 0.f, eemin( 100.f, val ) ) / 100.f;
+		return -1.f;
+	}
+	if ( String::fromString( val, token ) )
+		return eemax( 0.f, eemin( 100.f, val ) ) / 100.f;
+	return -1.f;
+}
 
 static ColorStopResult parseColorStop( const std::string& stopStr ) {
 	ColorStopResult result;
@@ -45,7 +69,7 @@ static ColorStopResult parseColorStop( const std::string& stopStr ) {
 		}
 	}
 
-	// Find the last whitespace that separates color from position
+	// Find the last whitespace that separates color from position(s)
 	size_t lastSpace = std::string::npos;
 	for ( size_t i = str.size(); i > 0; i-- ) {
 		if ( str[i - 1] == ' ' ) {
@@ -69,23 +93,38 @@ static ColorStopResult parseColorStop( const std::string& stopStr ) {
 		return result;
 	}
 
-	// Try to parse the position part
 	String::trimInPlace( posPart );
-	Float posVal = -1.f;
-	if ( !posPart.empty() ) {
-		if ( posPart.back() == '%' ) {
-			std::string num = posPart.substr( 0, posPart.size() - 1 );
-			if ( String::fromString( posVal, num ) ) {
-				posVal = eemax( 0.f, eemin( 100.f, posVal ) ) / 100.f;
+	String::trimInPlace( colorPart );
+
+	// Try to split colorPart further for two-length stops (e.g. "red 0 10px")
+	if ( !Color::isColorString( colorPart ) ) {
+		size_t innerSpace = std::string::npos;
+		for ( size_t i = colorPart.size(); i > 0; i-- ) {
+			if ( colorPart[i - 1] == ' ' ) {
+				innerSpace = i - 1;
+				break;
 			}
-		} else {
-			if ( String::fromString( posVal, posPart ) ) {
-				posVal = eemax( 0.f, eemin( 100.f, posVal ) ) / 100.f;
+		}
+		if ( innerSpace != std::string::npos ) {
+			std::string altColor = colorPart.substr( 0, innerSpace );
+			String::trimInPlace( altColor );
+			if ( Color::isColorString( altColor ) ) {
+				std::string firstPos = colorPart.substr( innerSpace + 1 );
+				String::trimInPlace( firstPos );
+				Float p1 = parsePositionValue( firstPos );
+				Float p2 = parsePositionValue( posPart );
+				result.color = Color::fromString( altColor );
+				result.position = p1;
+				result.secondPosition = p2 >= 0.f ? p2 : -1.f;
+				result.valid = true;
+				return result;
 			}
 		}
 	}
 
-	String::trimInPlace( colorPart );
+	// Try to parse the position part (single position)
+	Float posVal = parsePositionValue( posPart );
+
 	if ( Color::isColorString( colorPart ) ) {
 		result.color = Color::fromString( colorPart );
 		result.position = posVal;
@@ -141,8 +180,9 @@ void DrawableImageParser::addParser( const std::string& name,
 }
 
 void DrawableImageParser::registerBaseParsers() {
-	mFuncs["linear-gradient"] = []( const FunctionString& functionType, const Sizef& /*size*/,
-									bool& ownIt, UINode* node ) -> Drawable* {
+	// Shared parsing logic for linear-gradient and repeating-linear-gradient
+	auto parseGradient = []( const FunctionString& functionType, bool& ownIt, UINode* node,
+							 bool repeating ) -> Drawable* {
 		const auto& params( functionType.getParameters() );
 		if ( params.size() < 2 )
 			return NULL;
@@ -175,7 +215,6 @@ void DrawableImageParser::registerBaseParsers() {
 				angle = 315.f;
 			}
 		} else if ( !Color::isColorString( firstParam ) && !functionType.parameterWasString( 0 ) ) {
-			// Try to parse angle value
 			std::string angleStr = firstParam;
 			String::toLowerInPlace( angleStr );
 
@@ -196,7 +235,7 @@ void DrawableImageParser::registerBaseParsers() {
 				} else if ( String::endsWith( s, "grad" ) ) {
 					std::string num = s.substr( 0, s.size() - 4 );
 					if ( String::fromString( val, num ) ) {
-						out = val * 0.9f; /* 1 grad = 0.9 deg */
+						out = val * 0.9f;
 						return true;
 					}
 				} else if ( String::endsWith( s, "turn" ) ) {
@@ -206,7 +245,7 @@ void DrawableImageParser::registerBaseParsers() {
 						return true;
 					}
 				} else if ( String::fromString( val, s ) ) {
-					out = val; /* bare number treated as degrees */
+					out = val;
 					return true;
 				}
 				return false;
@@ -228,6 +267,39 @@ void DrawableImageParser::registerBaseParsers() {
 				continue;
 
 			gradientStops.push_back( stop );
+			if ( stop.secondPosition >= 0.f ) {
+				ColorStopResult stop2;
+				stop2.valid = true;
+				stop2.color = stop.color;
+				stop2.position = stop.secondPosition;
+				stop2.secondPosition = -1.f;
+				gradientStops.push_back( stop2 );
+			}
+		}
+
+		// CSS §4.3: If a color-stop has a position that is less than
+		// the specified position of any color-stop before it in the
+		// list, set its position to be equal to the largest specified
+		// position of any color-stop before it.  This ensures hard
+		// transitions instead of accidental gradients.
+		{
+			Float maxPos = -1.f;
+			for ( auto& s : gradientStops ) {
+				if ( s.isHint )
+					continue;
+				if ( s.position >= 0.f ) {
+					if ( s.position < maxPos )
+						s.position = maxPos;
+					else
+						maxPos = s.position;
+				}
+				if ( s.secondPosition >= 0.f ) {
+					if ( s.secondPosition < maxPos )
+						s.secondPosition = maxPos;
+					else
+						maxPos = s.secondPosition;
+				}
+			}
 		}
 
 		// Need at least two color stops (hints don't count)
@@ -247,6 +319,21 @@ void DrawableImageParser::registerBaseParsers() {
 				   []( const ColorStopResult& a, const ColorStopResult& b ) {
 					   return a.position < b.position;
 				   } );
+
+		// Set position 0 for the first unpositioned color stop, and position 1
+		// for the last, so interior auto-distribution has proper boundaries.
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( !gradientStops[i].isHint && gradientStops[i].position < 0.f ) {
+				gradientStops[i].position = 0.f;
+				break;
+			}
+		}
+		for ( size_t i = gradientStops.size(); i > 0; i-- ) {
+			if ( !gradientStops[i - 1].isHint && gradientStops[i - 1].position < 0.f ) {
+				gradientStops[i - 1].position = 1.f;
+				break;
+			}
+		}
 
 		// Fill missing positions on color stops. Hints always have explicit
 		// positions so they are left untouched.
@@ -279,17 +366,21 @@ void DrawableImageParser::registerBaseParsers() {
 			i = nextKnown;
 		}
 
-		// Clamp first and last color stops. Skip hints at the boundaries.
-		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
-			if ( !gradientStops[i].isHint ) {
-				gradientStops[i].position = 0.f;
-				break;
+		// Non-repeating: force first/last color stops to exactly 0/1 so
+		// that the gradient fills the entire box (CSS §4.3).  Repeating
+		// mode keeps raw positions for tiling.
+		if ( !repeating ) {
+			for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+				if ( !gradientStops[i].isHint ) {
+					gradientStops[i].position = 0.f;
+					break;
+				}
 			}
-		}
-		for ( size_t i = gradientStops.size(); i > 0; i-- ) {
-			if ( !gradientStops[i - 1].isHint ) {
-				gradientStops[i - 1].position = 1.f;
-				break;
+			for ( size_t i = gradientStops.size(); i > 0; i-- ) {
+				if ( !gradientStops[i - 1].isHint ) {
+					gradientStops[i - 1].position = 1.f;
+					break;
+				}
 			}
 		}
 
@@ -356,11 +447,252 @@ void DrawableImageParser::registerBaseParsers() {
 		if ( stops.size() < 2 )
 			return NULL;
 
-		LinearGradientDrawable* drawable = LinearGradientDrawable::New();
+		LinearGradientDrawable* drawable =
+			repeating ? LinearGradientDrawable::NewRepeating() : LinearGradientDrawable::New();
 		drawable->setColorStops( std::move( stops ) );
 		drawable->setAngle( angle );
 		ownIt = true;
 		return drawable;
+	};
+
+	mFuncs["linear-gradient"] = [parseGradient]( const FunctionString& functionType,
+												 const Sizef& /*size*/, bool& ownIt,
+												 UINode* node ) -> Drawable* {
+		return parseGradient( functionType, ownIt, node, false );
+	};
+
+	mFuncs["repeating-linear-gradient"] = [parseGradient]( const FunctionString& functionType,
+														   const Sizef& /*size*/, bool& ownIt,
+														   UINode* node ) -> Drawable* {
+		return parseGradient( functionType, ownIt, node, true );
+	};
+
+	// Shared parsing logic for radial-gradient and repeating-radial-gradient
+	auto parseRadialGradient = []( const FunctionString& functionType, bool& ownIt, UINode* node,
+								   bool repeating ) -> Drawable* {
+		const auto& params( functionType.getParameters() );
+		if ( params.size() < 2 )
+			return NULL;
+
+		size_t paramIdx = 0;
+		RadialGradientDrawable::ShapeType shape = RadialGradientDrawable::CIRCLE;
+		RadialGradientDrawable::Extent extent = RadialGradientDrawable::FARTHEST_CORNER;
+		Vector2f center( 0.5f, 0.5f );
+
+		if ( paramIdx < params.size() ) {
+			std::string kw = String::toLower( String::trim( params[paramIdx] ) );
+			if ( kw == "circle" ) {
+				shape = RadialGradientDrawable::CIRCLE;
+				paramIdx++;
+			} else if ( kw == "ellipse" ) {
+				shape = RadialGradientDrawable::ELLIPSE;
+				paramIdx++;
+			}
+		}
+
+		std::vector<ColorStopResult> gradientStops;
+		for ( size_t i = paramIdx; i < params.size(); i++ ) {
+			std::string stopParam = params[i];
+			String::trimInPlace( stopParam );
+
+			ColorStopResult stop = parseColorStop( stopParam );
+			if ( !stop.valid )
+				continue;
+
+			gradientStops.push_back( stop );
+			if ( stop.secondPosition >= 0.f ) {
+				ColorStopResult stop2;
+				stop2.valid = true;
+				stop2.color = stop.color;
+				stop2.position = stop.secondPosition;
+				stop2.secondPosition = -1.f;
+				gradientStops.push_back( stop2 );
+			}
+		}
+
+		// CSS §4.3: If a color-stop has a position that is less than
+		// the specified position of any color-stop before it in the
+		// list, set its position to be equal to the largest specified
+		// position of any color-stop before it.
+		{
+			Float maxPos = -1.f;
+			for ( auto& s : gradientStops ) {
+				if ( s.isHint )
+					continue;
+				if ( s.position >= 0.f ) {
+					if ( s.position < maxPos )
+						s.position = maxPos;
+					else
+						maxPos = s.position;
+				}
+				if ( s.secondPosition >= 0.f ) {
+					if ( s.secondPosition < maxPos )
+						s.secondPosition = maxPos;
+					else
+						maxPos = s.secondPosition;
+				}
+			}
+		}
+
+		{
+			int colorStopCount = 0;
+			for ( const auto& s : gradientStops ) {
+				if ( !s.isHint )
+					colorStopCount++;
+			}
+			if ( colorStopCount < 2 )
+				return NULL;
+		}
+
+		std::sort( gradientStops.begin(), gradientStops.end(),
+				   []( const ColorStopResult& a, const ColorStopResult& b ) {
+					   return a.position < b.position;
+				   } );
+
+		// Set boundary defaults for unpositioned stops
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( !gradientStops[i].isHint && gradientStops[i].position < 0.f ) {
+				gradientStops[i].position = 0.f;
+				break;
+			}
+		}
+		for ( size_t i = gradientStops.size(); i > 0; i-- ) {
+			if ( !gradientStops[i - 1].isHint && gradientStops[i - 1].position < 0.f ) {
+				gradientStops[i - 1].position = 1.f;
+				break;
+			}
+		}
+
+		// Fill missing positions on color stops. Hints always have explicit
+		// positions so they are left untouched.
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( gradientStops[i].isHint || gradientStops[i].position >= 0.f )
+				continue;
+			size_t prevKnown = i;
+			size_t nextKnown = i;
+			while ( prevKnown > 0 && ( gradientStops[prevKnown - 1].position < 0.f ) )
+				prevKnown--;
+			while ( nextKnown < gradientStops.size() &&
+					( gradientStops[nextKnown].isHint || gradientStops[nextKnown].position < 0.f ) )
+				nextKnown++;
+
+			Float startPos = ( prevKnown > 0 && !gradientStops[prevKnown - 1].isHint )
+								 ? gradientStops[prevKnown - 1].position
+								 : 0.f;
+			Float endPos =
+				( nextKnown < gradientStops.size() ) ? gradientStops[nextKnown].position : 1.f;
+			size_t range = nextKnown - prevKnown + 1;
+
+			for ( size_t j = prevKnown; j < nextKnown; j++ ) {
+				if ( gradientStops[j].isHint )
+					continue;
+				gradientStops[j].position =
+					startPos +
+					( endPos - startPos ) * ( (Float)( j - prevKnown + 1 ) / (Float)range );
+			}
+
+			i = nextKnown;
+		}
+
+		// Non-repeating: force first/last color stops to exactly 0/1
+		if ( !repeating ) {
+			for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+				if ( !gradientStops[i].isHint ) {
+					gradientStops[i].position = 0.f;
+					break;
+				}
+			}
+			for ( size_t i = gradientStops.size(); i > 0; i-- ) {
+				if ( !gradientStops[i - 1].isHint ) {
+					gradientStops[i - 1].position = 1.f;
+					break;
+				}
+			}
+		}
+
+		// Expand hinted segments into finely sampled color stops
+		std::vector<RadialGradientDrawable::ColorStop> stops;
+		const int HINT_SAMPLES = 16;
+
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( gradientStops[i].isHint )
+				continue;
+
+			// Add the current color stop
+			stops.push_back( RadialGradientDrawable::ColorStop( gradientStops[i].position,
+																gradientStops[i].color ) );
+
+			// Find the next color stop and any hints between them
+			size_t nextColor = i + 1;
+			while ( nextColor < gradientStops.size() && gradientStops[nextColor].isHint )
+				nextColor++;
+			if ( nextColor >= gradientStops.size() )
+				break;
+
+			// Collect hints between current and next color stop
+			std::vector<Float> hints;
+			for ( size_t h = i + 1; h < nextColor; h++ ) {
+				if ( gradientStops[h].isHint )
+					hints.push_back( gradientStops[h].position );
+			}
+
+			if ( hints.empty() )
+				continue;
+
+			Float p0 = gradientStops[i].position;
+			Float p1 = gradientStops[nextColor].position;
+			Color c0 = gradientStops[i].color;
+			Color c1 = gradientStops[nextColor].color;
+
+			if ( std::abs( p1 - p0 ) < 0.0001f )
+				continue;
+
+			// Apply hints sequentially. Each hint adjusts the transition
+			// between the previously computed mid-points.
+			// For a single hint at position h between p0 and p1:
+			//   normalized hint hn = (h - p0) / (p1 - p0)
+			//   power = log(0.5) / log(hn)
+			//   color(p) = lerp(c0, c1, ((p-p0)/(p1-p0))^power)
+			// We sample HINT_SAMPLES points and add them as color stops.
+			Float hintNorm = ( hints[0] - p0 ) / ( p1 - p0 );
+			hintNorm = eemax( 0.001f, eemin( 0.999f, hintNorm ) );
+			Float power = std::log( 0.5f ) / std::log( hintNorm );
+
+			for ( int s = 1; s < HINT_SAMPLES; s++ ) {
+				Float x = (Float)s / (Float)HINT_SAMPLES;
+				Float t = std::pow( x, power );
+				Float pos = p0 + x * ( p1 - p0 );
+				Uint8 r = (Uint8)( (Float)c0.r + t * (Float)( c1.r - c0.r ) );
+				Uint8 g = (Uint8)( (Float)c0.g + t * (Float)( c1.g - c0.g ) );
+				Uint8 b = (Uint8)( (Float)c0.b + t * (Float)( c1.b - c0.b ) );
+				Uint8 a = (Uint8)( (Float)c0.a + t * (Float)( c1.a - c0.a ) );
+				stops.push_back( RadialGradientDrawable::ColorStop( pos, Color( r, g, b, a ) ) );
+			}
+		}
+
+		if ( stops.size() < 2 )
+			return NULL;
+
+		RadialGradientDrawable* drawable =
+			repeating ? RadialGradientDrawable::NewRepeating() : RadialGradientDrawable::New();
+		drawable->setColorStops( std::move( stops ) );
+		drawable->setShape( shape );
+		drawable->setExtent( extent );
+		drawable->setCenter( center );
+		ownIt = true;
+		return drawable;
+	};
+
+	mFuncs["radial-gradient"] = [parseRadialGradient]( const FunctionString& functionType,
+													   const Sizef& /*size*/, bool& ownIt,
+													   UINode* node ) -> Drawable* {
+		return parseRadialGradient( functionType, ownIt, node, false );
+	};
+
+	mFuncs["repeating-radial-gradient"] = [parseRadialGradient]( const FunctionString& functionType,
+																 const Sizef& /*size*/, bool& ownIt,
+																 UINode* node ) -> Drawable* {
+		return parseRadialGradient( functionType, ownIt, node, true );
 	};
 
 	mFuncs["circle"] = []( const FunctionString& functionType, const Sizef& size, bool& ownIt,
