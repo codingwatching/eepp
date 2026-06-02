@@ -157,6 +157,7 @@ class EE_API GridLayouter : public UILayouter {
 	Float mContainerBaseline{ 0.f };
 	int mMaxColumn{ 0 };
 	int mMaxRow{ 0 };
+	CSSGridAutoFlow mAutoFlow{ CSSGridAutoFlow::Row };
 	bool mAutoFlowDense{ false };
 	bool mColAutoRepeatIsFit{ false };
 	bool mRowAutoRepeatIsFit{ false };

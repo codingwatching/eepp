@@ -255,6 +255,30 @@ static bool isValidTrackBreadthType( const GridTrackBreadth& b ) {
 		   b.type == GridTrackBreadthType::Percentage || b.type == GridTrackBreadthType::Flex;
 }
 
+static GridTrackSize parseAutoTrackSize( const std::string& value ) {
+	GridTrackSize size;
+	std::string trimmed = String::trim( value );
+	String::toLowerInPlace( trimmed );
+	if ( trimmed.empty() || trimmed == "auto" )
+		return size;
+
+	GridTrackList list = GridTrackParser::parseTrackList( trimmed );
+	if ( list.valid && !list.none && list.tracks.size() == 1 )
+		return list.tracks[0].size;
+
+	GridTrackBreadth b = parseTrackBreadth( trimmed );
+	if ( b.valid ) {
+		size.min = b;
+		size.max = b;
+	}
+	return size;
+}
+
+static bool isFlexibleTrack( const GridTrack& track ) {
+	return track.definition.min.type == GridTrackBreadthType::Flex ||
+		   track.definition.max.type == GridTrackBreadthType::Flex;
+}
+
 // ── Public API ──
 
 GridTrackList GridTrackParser::parseTrackList( const std::string& value ) {
@@ -453,24 +477,11 @@ void GridLayouter::readContainerStyle() {
 	mRowGap = mContainer->lengthFromValue(
 		grid->getRowGap(), CSS::PropertyRelativeTarget::ContainingBlockHeight, 0.f );
 	mTemplateAreas = GridAreasParser::parseAreas( grid->getGridTemplateAreas() );
+	mAutoFlow = grid->getGridAutoFlow();
 	mAutoFlowDense = grid->getGridAutoFlowDense();
 
-	mAutoColumnSize = GridTrackSize{};
-	mAutoRowSize = GridTrackSize{};
-	std::string autoColsStr = grid->getGridAutoColumns();
-	std::string autoRowsStr = grid->getGridAutoRows();
-	String::toLowerInPlace( autoColsStr );
-	String::toLowerInPlace( autoRowsStr );
-	if ( autoColsStr != "auto" && !autoColsStr.empty() ) {
-		GridTrackBreadth b = parseTrackBreadth( autoColsStr );
-		mAutoColumnSize.min = b;
-		mAutoColumnSize.max = b;
-	}
-	if ( autoRowsStr != "auto" && !autoRowsStr.empty() ) {
-		GridTrackBreadth b = parseTrackBreadth( autoRowsStr );
-		mAutoRowSize.min = b;
-		mAutoRowSize.max = b;
-	}
+	mAutoColumnSize = parseAutoTrackSize( grid->getGridAutoColumns() );
+	mAutoRowSize = parseAutoTrackSize( grid->getGridAutoRows() );
 
 	// Parse and expand column tracks (including auto-repeat)
 	GridTrackList colList = GridTrackParser::parseTrackList( grid->getGridTemplateColumns() );
@@ -651,6 +662,12 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 		Float spannedSize = 0.f;
 		int spanStart = start - 1;
 		int spanEnd = std::min( end - 1, static_cast<int>( tracks.size() ) );
+		bool allSpannedTracksAreFlexible = true;
+		for ( int i = spanStart; i < spanEnd; ++i )
+			allSpannedTracksAreFlexible =
+				allSpannedTracksAreFlexible && isFlexibleTrack( tracks[i] );
+		if ( allSpannedTracksAreFlexible )
+			continue;
 		for ( int i = spanStart; i < spanEnd; ++i )
 			spannedSize += tracks[i].baseSize;
 		spannedSize += static_cast<Float>( span - 1 ) * ( isColumns ? mColumnGap : mRowGap );
@@ -746,6 +763,7 @@ void GridLayouter::preSizeItemsForRowSizing() {
 		if ( ce > cs + 1 )
 			cellW += static_cast<Float>( ce - cs - 1 ) * mColumnGap;
 
+		auto oldWidthPolicy = item.widget->getLayoutWidthPolicy();
 		item.widget->setLayoutWidthPolicy( SizePolicy::Fixed );
 		item.widget->setPixelsSize( cellW, item.widget->getPixelsSize().getHeight() );
 
@@ -759,6 +777,7 @@ void GridLayouter::preSizeItemsForRowSizing() {
 				childHtml->setLayoutHeightPolicy( oldHP );
 			}
 		}
+		item.widget->setLayoutWidthPolicy( oldWidthPolicy );
 	}
 }
 
@@ -876,9 +895,9 @@ void GridLayouter::applyLayout() {
 		Float cellH = rowLines[re] - rowLines[rs];
 		// Add internal gaps for multi-span items
 		if ( ce > cs + 1 )
-			cellW += static_cast<Float>( ce - cs - 1 ) * mColumnGap;
+			cellW += static_cast<Float>( ce - cs - 1 ) * colGapX;
 		if ( re > rs + 1 )
-			cellH += static_cast<Float>( re - rs - 1 ) * mRowGap;
+			cellH += static_cast<Float>( re - rs - 1 ) * rowGapY;
 
 		// Determine effective alignment
 		CSSJustifySelf js = item.justifySelf;
@@ -947,6 +966,11 @@ void GridLayouter::updateLayout() {
 
 	UIHTMLWidget* grid =
 		mContainer->isType( UI_TYPE_HTML_WIDGET ) ? mContainer->asType<UIHTMLWidget>() : nullptr;
+	if ( grid && grid->getLayoutWidthPolicy() == SizePolicy::MatchParent ) {
+		Float matchWidth = grid->getMatchParentWidth();
+		if ( matchWidth > 0.f && eeabs( matchWidth - grid->getPixelsSize().getWidth() ) > 0.01f )
+			grid->setInternalPixelsWidth( matchWidth );
+	}
 	readContainerStyle();
 	collectGridItems();
 	resolveDefinitePlacements();
@@ -959,13 +983,11 @@ void GridLayouter::updateLayout() {
 	bool wPercentUnresolved = false;
 	if ( grid && grid->getUIStyle() ) {
 		const StyleSheetProperty* hprop = grid->getUIStyle()->getProperty( PropertyId::Height );
-		hPercentUnresolved =
-			hprop && StyleSheetLength::isPercentage( hprop->value() ) &&
-			grid->getPixelsSize().getHeight() <= 0.f;
+		hPercentUnresolved = hprop && StyleSheetLength::isPercentage( hprop->value() ) &&
+							 grid->getPixelsSize().getHeight() <= 0.f;
 		const StyleSheetProperty* wprop = grid->getUIStyle()->getProperty( PropertyId::Width );
-		wPercentUnresolved =
-			wprop && StyleSheetLength::isPercentage( wprop->value() ) &&
-			grid->getPixelsSize().getWidth() <= 0.f;
+		wPercentUnresolved = wprop && StyleSheetLength::isPercentage( wprop->value() ) &&
+							 grid->getPixelsSize().getWidth() <= 0.f;
 	}
 	for ( int sizingPass = 0; sizingPass < 2 && needResize; ++sizingPass ) {
 		needResize = false;
@@ -980,9 +1002,8 @@ void GridLayouter::updateLayout() {
 				contentH += row.baseSize;
 			if ( mRows.size() > 1 )
 				contentH += static_cast<Float>( mRows.size() - 1 ) * mRowGap;
-			contentH +=
-				mContainer->getPixelsContentOffset().Top +
-				mContainer->getPixelsContentOffset().Bottom;
+			contentH += mContainer->getPixelsContentOffset().Top +
+						mContainer->getPixelsContentOffset().Bottom;
 			if ( contentH > 0.f ) {
 				mContainer->setInternalPixelsHeight( contentH );
 				needResize = true;
@@ -990,8 +1011,7 @@ void GridLayouter::updateLayout() {
 		}
 
 		if ( wPercentUnresolved ) {
-			const StyleSheetProperty* wprop =
-				grid->getUIStyle()->getProperty( PropertyId::Width );
+			const StyleSheetProperty* wprop = grid->getUIStyle()->getProperty( PropertyId::Width );
 			std::string v = wprop->value();
 			v.pop_back();
 			Float pct = 0.f;
@@ -1347,7 +1367,7 @@ void GridLayouter::autoPlaceItems() {
 
 	int cursorCol = 1;
 	int cursorRow = 1;
-	bool isRowFlow = true;
+	bool isRowFlow = mAutoFlow == CSSGridAutoFlow::Row;
 
 	auto occupyRange = [&]( int r, int c, int w, int h ) {
 		for ( int dr = 0; dr < h; ++dr )

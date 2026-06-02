@@ -696,6 +696,17 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 	if ( !checkPropertyDefinition( attribute ) )
 		return false;
 
+	auto applyGridLineShorthand = []( const std::string& value, auto setStart, auto setEnd ) {
+		size_t slash = value.find( '/' );
+		if ( slash == std::string::npos ) {
+			setStart( String::trim( value ) );
+			setEnd( "auto" );
+		} else {
+			setStart( String::trim( value.substr( 0, slash ) ) );
+			setEnd( String::trim( value.substr( slash + 1 ) ) );
+		}
+	};
+
 	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
 		case PropertyId::Display: {
 			setDisplay( CSSDisplayHelper::fromString( attribute.asString() ) );
@@ -843,6 +854,20 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::GridColumnEnd: {
 			setGridColumnEnd( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridRow: {
+			applyGridLineShorthand(
+				attribute.asString(),
+				[this]( const std::string& value ) { setGridRowStart( value ); },
+				[this]( const std::string& value ) { setGridRowEnd( value ); } );
+			return true;
+		}
+		case PropertyId::GridColumn: {
+			applyGridLineShorthand(
+				attribute.asString(),
+				[this]( const std::string& value ) { setGridColumnStart( value ); },
+				[this]( const std::string& value ) { setGridColumnEnd( value ); } );
 			return true;
 		}
 		case PropertyId::GridArea: {

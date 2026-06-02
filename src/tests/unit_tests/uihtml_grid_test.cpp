@@ -233,6 +233,44 @@ UTEST( GridAutoPlacement, rowFlowFillsColumnsThenRows ) {
 	Engine::destroySingleton();
 }
 
+UTEST( GridAutoPlacement, columnFlowFillsRowsThenColumns ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Grid Test", WindowStyle::Default,
+													  WindowBackend::Default, 32, {}, 1, false,
+													  true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+	init_grid_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+
+	UIHTMLWidget* grid = UIHTMLWidget::New();
+	grid->setParent( sceneNode->getRoot() );
+	grid->setDisplay( CSSDisplay::Grid );
+	grid->setGridTemplateRows( "50px 50px" );
+	grid->setGridAutoFlow( CSSGridAutoFlow::Column );
+	grid->setPixelsSize( 500, 200 );
+	grid->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	UIHTMLWidget* i1 = UIHTMLWidget::New();
+	i1->setParent( grid );
+	UIHTMLWidget* i2 = UIHTMLWidget::New();
+	i2->setParent( grid );
+	UIHTMLWidget* i3 = UIHTMLWidget::New();
+	i3->setParent( grid );
+
+	sceneNode->updateDirtyLayouts();
+	auto* layouter = static_cast<GridLayouter*>( grid->getLayouter() );
+	const auto& items = layouter->getItems();
+
+	ASSERT_EQ( items.size(), 3u );
+	EXPECT_EQ( items[0].resolvedRowStart, 1 );
+	EXPECT_EQ( items[0].resolvedColumnStart, 1 );
+	EXPECT_EQ( items[1].resolvedRowStart, 2 );
+	EXPECT_EQ( items[1].resolvedColumnStart, 1 );
+	EXPECT_EQ( items[2].resolvedRowStart, 1 );
+	EXPECT_EQ( items[2].resolvedColumnStart, 2 );
+
+	Engine::destroySingleton();
+}
+
 UTEST( GridAutoPlacement, definiteLeavesHoleForSparse ) {
 	Engine::instance()->createWindow( WindowSettings( 1024, 650, "Grid Test", WindowStyle::Default,
 													  WindowBackend::Default, 32, {}, 1, false,
@@ -1713,6 +1751,79 @@ UTEST( GridContainer, downloadGridLayout ) {
 		for ( size_t i = 1; i < items.size(); ++i )
 			EXPECT_NEAR( firstH, items[i].widget->getPixelsSize().getHeight(), 0.5f );
 	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( GridContainer, gridTestFixturePlacesSpanningItems ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "UIHTML Grid Fixture Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings() );
+	init_grid_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string htmlContent;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/grid_test.html", htmlContent ) );
+	sceneNode->loadLayoutFromString( EE::UI::Tools::HTMLFormatter::HTMLtoXML( htmlContent ) );
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* wrapperNode = sceneNode->getRoot()->findByClass( "wrapper" );
+	ASSERT_TRUE( nullptr != wrapperNode );
+	ASSERT_TRUE( wrapperNode->isWidget() );
+
+	auto* one = sceneNode->getRoot()->findByClass( "one" );
+	auto* two = sceneNode->getRoot()->findByClass( "two" );
+	auto* three = sceneNode->getRoot()->findByClass( "three" );
+	auto* four = sceneNode->getRoot()->findByClass( "four" );
+	auto* five = sceneNode->getRoot()->findByClass( "five" );
+	auto* six = sceneNode->getRoot()->findByClass( "six" );
+	ASSERT_TRUE( nullptr != one );
+	ASSERT_TRUE( nullptr != two );
+	ASSERT_TRUE( nullptr != three );
+	ASSERT_TRUE( nullptr != four );
+	ASSERT_TRUE( nullptr != five );
+	ASSERT_TRUE( nullptr != six );
+	ASSERT_TRUE( one->isWidget() );
+	ASSERT_TRUE( two->isWidget() );
+	ASSERT_TRUE( three->isWidget() );
+	ASSERT_TRUE( four->isWidget() );
+	ASSERT_TRUE( five->isWidget() );
+	ASSERT_TRUE( six->isWidget() );
+
+	auto* oneWidget = one->asType<UIWidget>();
+	auto* twoWidget = two->asType<UIWidget>();
+	auto* threeWidget = three->asType<UIWidget>();
+	auto* fourWidget = four->asType<UIWidget>();
+	auto* fiveWidget = five->asType<UIWidget>();
+	auto* sixWidget = six->asType<UIWidget>();
+
+	Float wrapperW = wrapperNode->asType<UIWidget>()->getPixelsSize().getWidth();
+	EXPECT_GT( wrapperW, 900.f );
+	EXPECT_LT( wrapperW, 950.f );
+
+	EXPECT_GT( oneWidget->getPixelsSize().getWidth(), 600.f );
+	EXPECT_GT( twoWidget->getPixelsSize().getWidth(), 600.f );
+	EXPECT_GT( threeWidget->getPixelsSize().getWidth(), 290.f );
+	EXPECT_GT( fourWidget->getPixelsSize().getWidth(), 290.f );
+	EXPECT_GT( fiveWidget->getPixelsSize().getWidth(), 290.f );
+	EXPECT_GT( sixWidget->getPixelsSize().getWidth(), 290.f );
+
+	EXPECT_GT( oneWidget->getPixelsSize().getHeight(), 95.f );
+	EXPECT_GT( twoWidget->getPixelsSize().getHeight(), 200.f );
+	EXPECT_GT( threeWidget->getPixelsSize().getHeight(), 300.f );
+	EXPECT_GT( fourWidget->getPixelsSize().getHeight(), 95.f );
+	EXPECT_GT( fiveWidget->getPixelsSize().getHeight(), 95.f );
+	EXPECT_GT( sixWidget->getPixelsSize().getHeight(), 95.f );
+
+	EXPECT_NEAR( oneWidget->getPixelsPosition().y, twoWidget->getPixelsPosition().y, 1.f );
+	EXPECT_GT( twoWidget->getPixelsPosition().x, oneWidget->getPixelsPosition().x + 300.f );
+	EXPECT_GT( threeWidget->getPixelsPosition().y, oneWidget->getPixelsPosition().y + 95.f );
+	EXPECT_GT( fourWidget->getPixelsPosition().y, twoWidget->getPixelsPosition().y + 200.f );
+	EXPECT_NEAR( fiveWidget->getPixelsPosition().y, sixWidget->getPixelsPosition().y, 1.f );
+	EXPECT_GT( sixWidget->getPixelsPosition().x, fiveWidget->getPixelsPosition().x + 300.f );
 
 	Engine::destroySingleton();
 }
