@@ -2,20 +2,20 @@
 #include <cmath>
 
 #include <eepp/graphics/globalbatchrenderer.hpp>
-#include <eepp/graphics/radialgradientdrawable.hpp>
 #include <eepp/math/math.hpp>
+#include <eepp/ui/radialgradientdrawable.hpp>
 
-namespace EE { namespace Graphics {
+namespace EE { namespace UI {
 
 RadialGradientDrawable* RadialGradientDrawable::New() {
 	return eeNew( RadialGradientDrawable, () );
 }
 
 RadialGradientDrawable* RadialGradientDrawable::NewRepeating() {
-	return eeNew( RadialGradientDrawable, ( REPEATINGRADIALGRADIENT ) );
+	return eeNew( RadialGradientDrawable, ( Graphics::Drawable::REPEATINGRADIALGRADIENT ) );
 }
 
-RadialGradientDrawable::RadialGradientDrawable( Drawable::Type drawableType ) :
+RadialGradientDrawable::RadialGradientDrawable( Graphics::Drawable::Type drawableType ) :
 	Drawable( drawableType ) {}
 
 Sizef RadialGradientDrawable::getSize() {
@@ -65,6 +65,17 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	Float cy = mCenter.y * h;
 	Float maxR = computeRadius( cx, cy, w, h, mExtent );
 
+	// Normalize all stops to [0,1] using the gradient ray pixel length
+	std::vector<ColorStop> stops;
+	stops.reserve( mColorStops.size() );
+	for ( const auto& s : mColorStops )
+		stops.push_back(
+			ColorStop( s.getNormalized( maxR ), s.color, CSS::StyleSheetLength::Percentage ) );
+
+	std::sort( stops.begin(), stops.end(),
+			   []( const ColorStop& a, const ColorStop& b ) { return a.value < b.value; } );
+
+
 	const int SEGMENTS = 48;
 	Float angleStep = 2.f * EE_PI / (Float)SEGMENTS;
 
@@ -85,8 +96,8 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	}
 
 	if ( isRepeating() ) {
-		Float firstPos = mColorStops.front().position;
-		Float lastPos = mColorStops.back().position;
+		Float firstPos = stops.front().value;
+		Float lastPos = stops.back().value;
 		Float patternLen = lastPos - firstPos;
 		if ( patternLen < 0.0001f ) {
 			sBR->draw();
@@ -102,9 +113,9 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 		for ( int r = rStart; r <= rEnd; r++ ) {
 			Float repeatOff = (Float)r * patternLen;
 
-			for ( size_t i = 0; i + 1 < mColorStops.size(); i++ ) {
-				Float p0 = mColorStops[i].position + repeatOff;
-				Float p1 = mColorStops[i + 1].position + repeatOff;
+			for ( size_t i = 0; i + 1 < stops.size(); i++ ) {
+				Float p0 = stops[i].value + repeatOff;
+				Float p1 = stops[i + 1].value + repeatOff;
 
 				if ( p1 <= 0.f || p0 >= 1.f )
 					continue;
@@ -120,16 +131,18 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Float bw = p1 - p0;
 				Float frac0 = ( clip0 - p0 ) / bw;
 				Float frac1 = ( clip1 - p0 ) / bw;
-				const Color& sc0 = mColorStops[i].color;
-				const Color& sc1 = mColorStops[i + 1].color;
-				Color cc0( (Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
-						   (Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
-						   (Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
-						   (Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
-				Color cc1( (Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
-						   (Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
-						   (Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
-						   (Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
+				const Color& sc0 = stops[i].color;
+				const Color& sc1 = stops[i + 1].color;
+				Color cc0(
+					(Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
+					(Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
+					(Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
+					(Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
+				Color cc1(
+					(Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
+					(Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
+					(Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
+					(Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
 
 				Color fc0 = ( mColor.a == 255 ) ? cc0 : Color( cc0 ).blendAlpha( mColor.a );
 				Color fc1 = ( mColor.a == 255 ) ? cc1 : Color( cc1 ).blendAlpha( mColor.a );
@@ -147,12 +160,12 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 			}
 		}
 	} else {
-		for ( size_t i = 0; i + 1 < mColorStops.size(); i++ ) {
-			Float r0 = mColorStops[i].position * maxR;
-			Float r1 = mColorStops[i + 1].position * maxR;
+		for ( size_t i = 0; i + 1 < stops.size(); i++ ) {
+			Float r0 = stops[i].value * maxR;
+			Float r1 = stops[i + 1].value * maxR;
 
-			const Color& c0 = mColorStops[i].color;
-			const Color& c1 = mColorStops[i + 1].color;
+			const Color& c0 = stops[i].color;
+			const Color& c1 = stops[i + 1].color;
 			Color fc0 = ( mColor.a == 255 ) ? c0 : Color( c0 ).blendAlpha( mColor.a );
 			Color fc1 = ( mColor.a == 255 ) ? c1 : Color( c1 ).blendAlpha( mColor.a );
 
@@ -162,8 +175,9 @@ void RadialGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Float cj = cosVals[j], sj = sinVals[j];
 				Float cj1 = cosVals[j + 1], sj1 = sinVals[j + 1];
 
-				sBR->batchQuadFree( cx + r0 * cj + posX, cy + r0 * sj + posY, cx + r1 * cj + posX,
-									cy + r1 * sj + posY, cx + r1 * cj1 + posX, cy + r1 * sj1 + posY,
+				sBR->batchQuadFree( cx + r0 * cj + posX, cy + r0 * sj + posY,
+									cx + r1 * cj + posX, cy + r1 * sj + posY,
+									cx + r1 * cj1 + posX, cy + r1 * sj1 + posY,
 									cx + r0 * cj1 + posX, cy + r0 * sj1 + posY );
 			}
 		}
@@ -179,15 +193,6 @@ RadialGradientDrawable::getColorStops() const {
 
 void RadialGradientDrawable::setColorStops( std::vector<ColorStop> stops ) {
 	mColorStops = std::move( stops );
-	if ( mColorStops.size() >= 2 ) {
-		std::sort(
-			mColorStops.begin(), mColorStops.end(),
-			[]( const ColorStop& a, const ColorStop& b ) { return a.position < b.position; } );
-		if ( !isRepeating() ) {
-			mColorStops.front().position = 0.f;
-			mColorStops.back().position = 1.f;
-		}
-	}
 }
 
 RadialGradientDrawable::ShapeType RadialGradientDrawable::getShape() const {
@@ -219,7 +224,7 @@ void RadialGradientDrawable::setSize( const Sizef& size ) {
 }
 
 bool RadialGradientDrawable::isRepeating() const {
-	return mDrawableType == REPEATINGRADIALGRADIENT;
+	return mDrawableType == Graphics::Drawable::REPEATINGRADIALGRADIENT;
 }
 
-}} // namespace EE::Graphics
+}} // namespace EE::UI

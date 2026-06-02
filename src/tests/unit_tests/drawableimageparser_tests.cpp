@@ -2,13 +2,13 @@
 
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
-#include <eepp/graphics/lineargradientdrawable.hpp>
-#include <eepp/graphics/radialgradientdrawable.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/sys.hpp>
 #include <eepp/ui/css/drawableimageparser.hpp>
 #include <eepp/ui/css/stylesheetspecification.hpp>
+#include <eepp/ui/lineargradientdrawable.hpp>
+#include <eepp/ui/radialgradientdrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/ui/uiwidget.hpp>
@@ -64,8 +64,8 @@ UTEST( DrawableImageParser, TwoStopsWithPosition ) {
 	auto* grad = static_cast<LinearGradientDrawable*>( drawable );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_EQ( stops[1].position, 1.f );
+	EXPECT_EQ( stops[0].value, 0.f );
+	EXPECT_EQ( stops[1].value, 100.f );
 	Color expect05 = Color::fromString( "#f5eedd" );
 	Color expectEbe = Color::fromString( "#ebe0c2" );
 	EXPECT_TRUE( stops[0].color == expect05 );
@@ -161,7 +161,7 @@ UTEST( DrawableImageParser, ThreeStops ) {
 	auto* grad = static_cast<LinearGradientDrawable*>( drawable );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)3 );
-	EXPECT_EQ( stops[0].position, 0.f );
+	EXPECT_EQ( stops[0].value, 0.f );
 	EXPECT_TRUE( stops[0].color == Color::fromString( "red" ) );
 	EXPECT_TRUE( stops[1].color == Color::fromString( "green" ) );
 	EXPECT_TRUE( stops[2].color == Color::fromString( "blue" ) );
@@ -191,16 +191,16 @@ UTEST( DrawableImageParser, ColorHint ) {
 	 * (stop 0 + 15 internal samples + stop 1 = 17, but setColorStops may
 	 * re-clamp, so we just check the boundaries and the hint position). */
 	ASSERT_GE( stops.size(), (size_t)17 );
-	EXPECT_EQ( stops[0].position, 0.f );
+	EXPECT_EQ( stops[0].value, 0.f );
 	EXPECT_TRUE( stops[0].color == Color::fromString( "red" ) );
-	EXPECT_EQ( stops[stops.size() - 1].position, 1.f );
+	EXPECT_EQ( stops[stops.size() - 1].value, 100.f );
 	EXPECT_TRUE( stops[stops.size() - 1].color == Color::fromString( "blue" ) );
 
 	/* At the hint position 25%, t = 0.25^0.5 = 0.5, so the color should
 	 * be ~50% red, 50% blue (rgb ~127, 0, 127). */
 	bool foundMidpoint = false;
 	for ( const auto& s : stops ) {
-		if ( std::abs( s.position - 0.25f ) < 0.02f ) {
+		if ( std::abs( s.value - 25.f ) < 2.f ) {
 			EXPECT_GT( s.color.r, (Uint8)100 );
 			EXPECT_GT( s.color.b, (Uint8)100 );
 			foundMidpoint = true;
@@ -231,9 +231,9 @@ UTEST( DrawableImageParser, StopsWithoutPositions ) {
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)3 );
 	/* Should be evenly distributed: 0%, 50%, 100% */
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_NEAR( stops[1].position, 0.5f, 0.01f );
-	EXPECT_EQ( stops[2].position, 1.f );
+	EXPECT_EQ( stops[0].value, 0.f );
+	EXPECT_NEAR( stops[1].value, 50.f, 0.01f );
+	EXPECT_EQ( stops[2].value, 100.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -281,8 +281,8 @@ UTEST( DrawableImageParser, RepeatingTwoStops ) {
 	EXPECT_TRUE( grad->isRepeating() );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_EQ( stops[1].position, 1.f );
+	EXPECT_EQ( stops[0].value, 0.f );
+	EXPECT_EQ( stops[1].value, 100.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -330,8 +330,8 @@ UTEST( DrawableImageParser, RepeatingWithPositions ) {
 	EXPECT_TRUE( grad->isRepeating() );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.1f );
-	EXPECT_EQ( stops[1].position, 0.4f );
+	EXPECT_EQ( stops[0].value, 10.f );
+	EXPECT_EQ( stops[1].value, 40.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -356,8 +356,8 @@ UTEST( DrawableImageParser, RadialTwoStops ) {
 	EXPECT_FALSE( grad->isRepeating() );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_EQ( stops[1].position, 1.f );
+	EXPECT_EQ( stops[0].value, 0.f );
+	EXPECT_EQ( stops[1].value, 1.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -402,8 +402,8 @@ UTEST( DrawableImageParser, RadialWithPositions ) {
 	auto* grad = static_cast<RadialGradientDrawable*>( drawable );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_EQ( stops[1].position, 1.f );
+	EXPECT_EQ( stops[0].value, 10.f );
+	EXPECT_EQ( stops[1].value, 80.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -428,8 +428,8 @@ UTEST( DrawableImageParser, RepeatingRadial ) {
 	EXPECT_TRUE( grad->isRepeating() );
 	const auto& stops = grad->getColorStops();
 	ASSERT_EQ( stops.size(), (size_t)2 );
-	EXPECT_EQ( stops[0].position, 0.1f );
-	EXPECT_EQ( stops[1].position, 0.4f );
+	EXPECT_EQ( stops[0].value, 10.f );
+	EXPECT_EQ( stops[1].value, 40.f );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
@@ -452,11 +452,18 @@ UTEST( DrawableImageParser, TwoLengthStopSyntax ) {
 	auto* grad = static_cast<LinearGradientDrawable*>( drawable );
 	EXPECT_TRUE( grad->isRepeating() );
 	const auto& stops = grad->getColorStops();
+	/* red 0 10px → two stops: raw pos 0 and raw pos 10. blue 10px 20px →
+	 * two stops: raw pos 10 and raw pos 20. All px positions are stored
+	 * as raw pixel values (unit != NORMALIZED=true) and normalized at draw time. */
 	ASSERT_EQ( stops.size(), (size_t)4 );
-	EXPECT_EQ( stops[0].position, 0.f );
-	EXPECT_EQ( stops[1].position, 0.1f );
-	EXPECT_EQ( stops[2].position, 0.1f );
-	EXPECT_EQ( stops[3].position, 0.2f );
+	EXPECT_EQ( stops[0].value, 0.f );
+	EXPECT_EQ( stops[0].unit, EE::UI::CSS::StyleSheetLength::Percentage );
+	EXPECT_EQ( stops[1].value, 10.f );
+	EXPECT_EQ( stops[1].unit, EE::UI::CSS::StyleSheetLength::Px );
+	EXPECT_EQ( stops[2].value, 10.f );
+	EXPECT_EQ( stops[2].unit, EE::UI::CSS::StyleSheetLength::Px );
+	EXPECT_EQ( stops[3].value, 20.f );
+	EXPECT_EQ( stops[3].unit, EE::UI::CSS::StyleSheetLength::Px );
 
 	eeSAFE_DELETE( drawable );
 	Engine::destroySingleton();
