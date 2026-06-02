@@ -259,7 +259,7 @@ void UIHTMLWidget::onChildCountChange( Node* child, const bool& removed ) {
 		updateZIndexSortFlag();
 }
 
-void UIHTMLWidget::drawChildren() {
+void UIHTMLWidget::buildDrawOrderVector( SmallVector<Node*, 127>& out ) const {
 	bool flexSort = false;
 	bool directionReverse = false;
 
@@ -270,17 +270,11 @@ void UIHTMLWidget::drawChildren() {
 		flexSort = mNeedsOrderSort || directionReverse;
 	}
 
-	if ( !flexSort && !mNeedsZIndexSort ) {
-		UILayout::drawChildren();
-		return;
-	}
-
-	SmallVector<Node*, 127> sortedChildren;
 	for ( Node* child = getFirstChild(); child; child = child->getNextNode() )
-		sortedChildren.push_back( child );
+		out.push_back( child );
 
 	if ( flexSort && mNeedsOrderSort ) {
-		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+		std::stable_sort( out.begin(), out.end(), []( Node* a, Node* b ) {
 			int aOrder = ( a->isWidget() && a->isType( UI_TYPE_HTML_WIDGET ) )
 							 ? a->asType<UIHTMLWidget>()->getOrder()
 							 : 0;
@@ -292,10 +286,10 @@ void UIHTMLWidget::drawChildren() {
 	}
 
 	if ( flexSort && directionReverse )
-		std::reverse( sortedChildren.begin(), sortedChildren.end() );
+		std::reverse( out.begin(), out.end() );
 
 	if ( mNeedsZIndexSort ) {
-		std::stable_sort( sortedChildren.begin(), sortedChildren.end(), []( Node* a, Node* b ) {
+		std::stable_sort( out.begin(), out.end(), []( Node* a, Node* b ) {
 			int aZ =
 				( a->isType( UI_TYPE_HTML_WIDGET ) ) ? a->asType<UIHTMLWidget>()->getZIndex() : 0;
 			int bZ =
@@ -303,11 +297,62 @@ void UIHTMLWidget::drawChildren() {
 			return aZ < bZ;
 		} );
 	}
+}
+
+void UIHTMLWidget::drawChildren() {
+	bool needsSort = mNeedsOrderSort || mNeedsZIndexSort;
+
+	if ( isFlex() ) {
+		CSSFlexDirection dir = getFlexDirection();
+		if ( dir == CSSFlexDirection::RowReverse || dir == CSSFlexDirection::ColumnReverse )
+			needsSort = true;
+	}
+
+	if ( !needsSort ) {
+		UILayout::drawChildren();
+		return;
+	}
+
+	SmallVector<Node*, 127> sortedChildren;
+	buildDrawOrderVector( sortedChildren );
 
 	for ( auto* child : sortedChildren ) {
 		if ( child->isVisible() )
 			child->nodeDraw();
 	}
+}
+
+Node* UIHTMLWidget::overFind( const Vector2f& point ) {
+	if ( !mNeedsOrderSort && !mNeedsZIndexSort )
+		return UILayout::overFind( point );
+
+	Node* pOver = nullptr;
+
+	if ( ( mNodeFlags & NODE_FLAG_OVER_FIND_ALLOWED ) && mEnabled && mVisible ) {
+		updateWorldPolygon();
+
+		if ( mWorldBounds.contains( point ) && mPoly.pointInside( point ) ) {
+			writeNodeFlag( NODE_FLAG_MOUSEOVER_ME_OR_CHILD, 1 );
+			mSceneNode->addMouseOverNode( this );
+
+			SmallVector<Node*, 127> sortedChildren;
+			buildDrawOrderVector( sortedChildren );
+
+			// Iterate last-to-first: highest z-index = topmost = hit first
+			for ( auto it = sortedChildren.rbegin(); it != sortedChildren.rend(); ++it ) {
+				Node* childOver = ( *it )->overFind( point );
+				if ( childOver ) {
+					pOver = childOver;
+					break;
+				}
+			}
+
+			if ( !pOver )
+				pOver = this;
+		}
+	}
+
+	return pOver;
 }
 
 void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {

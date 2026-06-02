@@ -19,8 +19,9 @@ class EE_API LinearGradientDrawable : public Graphics::Drawable {
 		GradientUnit unit{ CSS::StyleSheetLength::Percentage };
 
 		ColorStop() : color( Color::White ) {}
-		ColorStop( Float val, const Color& col, GradientUnit u = CSS::StyleSheetLength::Percentage ) :
-			value( val ), color( col ), unit( u ) {}
+		ColorStop( Float val, const Color& col,
+				   GradientUnit u = CSS::StyleSheetLength::Percentage ) :
+			color( col ), value( val ), unit( u ) {}
 
 		Float getNormalized( Float gradientLineLength ) const {
 			if ( unit == CSS::StyleSheetLength::Percentage )

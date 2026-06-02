@@ -266,9 +266,13 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual void drawChildren();
 
+	virtual Node* overFind( const Vector2f& point );
+
 	virtual void onChildCountChange( Node* child, const bool& removed );
 
 	void updateZIndexSortFlag();
+
+	void buildDrawOrderVector( SmallVector<Node*, 127>& out ) const;
 
 	Float getBaseline() const;
 
