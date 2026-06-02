@@ -237,6 +237,28 @@ void UIHTMLWidget::setNeedsOrderSort( bool val ) {
 	mNeedsOrderSort = val;
 }
 
+void UIHTMLWidget::updateZIndexSortFlag() {
+	bool needs = false;
+	for ( Node* child = getFirstChild(); child; child = child->getNextNode() ) {
+		if ( child->isType( UI_TYPE_HTML_WIDGET ) &&
+			 child->asType<UIHTMLWidget>()->getZIndex() != 0 ) {
+			needs = true;
+			break;
+		}
+	}
+	mNeedsZIndexSort = needs;
+}
+
+void UIHTMLWidget::onChildCountChange( Node* child, const bool& removed ) {
+	UILayout::onChildCountChange( child, removed );
+
+	if ( !removed )
+		updateZIndexSortFlag();
+	else if ( child->isType( UI_TYPE_HTML_WIDGET ) &&
+			  child->asType<UIHTMLWidget>()->getZIndex() != 0 )
+		updateZIndexSortFlag();
+}
+
 void UIHTMLWidget::drawChildren() {
 	bool flexSort = false;
 	bool directionReverse = false;
