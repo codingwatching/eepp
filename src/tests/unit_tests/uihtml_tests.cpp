@@ -3620,6 +3620,32 @@ UTEST( UIHTML, BlockSizeInfDoesNotHang ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, KittyHomeSmallDoesNotHang ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Kitty Home Small Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/kitty_home_small.html", html );
+	ASSERT_FALSE( html.empty() );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+	EXPECT_GT( bodyWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTML, FlexFormLayout ) {
 	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Flex Form Layout Test",
 													  WindowStyle::Default, WindowBackend::Default,

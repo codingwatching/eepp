@@ -133,6 +133,16 @@ bool getFontStyleFromAncestor( UIWidget* widget, FontStyleConfig& outConfig ) {
 	return false;
 }
 
+static void updateChildLayoutIfDirty( UIWidget* widget, const UILayouter* owner ) {
+	if ( !widget->isType( UI_TYPE_HTML_WIDGET ) )
+		return;
+
+	auto* childHtml = widget->asType<UIHTMLWidget>();
+	auto* layouter = childHtml->getLayouter();
+	if ( layouter && layouter != owner && !layouter->isPacking() && childHtml->isLayoutDirty() )
+		childHtml->updateLayout();
+}
+
 } // namespace
 
 void FlexLayouter::readContainerStyle( CSSFlexDirection& direction, CSSFlexWrap& wrap,
@@ -286,13 +296,7 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 			}
 		}
 
-		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-			auto* childHtml = item.widget->asType<UIHTMLWidget>();
-			auto* layouter = childHtml->getLayouter();
-			if ( layouter && !layouter->isPacking() && layouter != this ) {
-				childHtml->updateLayout();
-			}
-		}
+		updateChildLayoutIfDirty( item.widget, this );
 
 		if ( oldMainPolicy == SizePolicy::MatchParent ) {
 			if ( mainAxis.horizontal )
@@ -891,11 +895,7 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 			item.widget->setInternalPixelsWidth( item.targetMainSize );
 		else
 			item.widget->setInternalPixelsHeight( item.targetMainSize );
-		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-			auto* htmlWidget = item.widget->asType<UIHTMLWidget>();
-			if ( htmlWidget->getLayouter() && htmlWidget->getLayouter() != this )
-				htmlWidget->updateLayout();
-		}
+		updateChildLayoutIfDirty( item.widget, this );
 	}
 
 	// For text nodes (anonymous flex items), configure a cached Text object for
@@ -1180,14 +1180,7 @@ void FlexLayouter::applyLayout( const SmallVector<FlexLine, 8>& lines, const Axi
 			item.widget->setPixelsPosition( widgetX, widgetY );
 			item.widget->setPixelsSize( widgetW, widgetH );
 
-			if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-				auto* childHtml = item.widget->asType<UIHTMLWidget>();
-				if ( childHtml->getLayouter() && childHtml->getLayouter() != this ) {
-					auto* childLayouter = childHtml->getLayouter();
-					if ( !childLayouter->isPacking() )
-						childHtml->updateLayout();
-				}
-			}
+			updateChildLayoutIfDirty( item.widget, this );
 		}
 	}
 
