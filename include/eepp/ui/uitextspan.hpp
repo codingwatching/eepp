@@ -45,6 +45,8 @@ class EE_API UITextSpan : public UIRichText {
 
 	virtual bool isInlineBlock() const;
 
+	virtual void onDisplayChange();
+
 	virtual void draw();
 
 	virtual bool applyProperty( const StyleSheetProperty& attribute );
