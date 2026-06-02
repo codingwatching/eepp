@@ -23,6 +23,8 @@ class EE_API RichText : public Drawable {
 
 	enum class InlineClear { None, Left, Right, Both };
 
+	enum class WhiteSpaceWrapMode { Normal, Preserve, BreakSpaces };
+
 	struct FloatExclusion {
 		Rectf rect;
 		InlineFloat type{ InlineFloat::None };
@@ -95,7 +97,19 @@ class EE_API RichText : public Drawable {
 	 */
 	void addSpan( const String& text, const FontStyleConfig& style );
 
+	void addSpan( const String::View& text, const FontStyleConfig& style );
+
+	void addSpan( String&& text, const FontStyleConfig& style );
+
 	void addSpan( const String& text, const FontStyleConfig& style, const Rectf& margin,
+				  const Rectf& padding, Float lineHeight = 0,
+				  const BaselineAlignValue& baselineAlign = {}, InlineSource source = {} );
+
+	void addSpan( const String::View& text, const FontStyleConfig& style, const Rectf& margin,
+				  const Rectf& padding, Float lineHeight = 0,
+				  const BaselineAlignValue& baselineAlign = {}, InlineSource source = {} );
+
+	void addSpan( String&& text, const FontStyleConfig& style, const Rectf& margin,
 				  const Rectf& padding, Float lineHeight = 0,
 				  const BaselineAlignValue& baselineAlign = {}, InlineSource source = {} );
 
@@ -140,6 +154,14 @@ class EE_API RichText : public Drawable {
 
 	/** @return Whether soft wrapping is enabled. */
 	bool getLineWrap() const { return mLineWrap; }
+
+	void setWhiteSpaceWrapMode( WhiteSpaceWrapMode mode );
+
+	WhiteSpaceWrapMode getWhiteSpaceWrapMode() const { return mWhiteSpaceWrapMode; }
+
+	void setTabWidth( Uint32 tabWidth );
+
+	Uint32 getTabWidth() const { return mTabWidth; }
 
 	bool setExternalFloatExclusions( const std::vector<FloatExclusion>& exclusions );
 
@@ -402,12 +424,30 @@ class EE_API RichText : public Drawable {
 						const Rectf& padding, Float lineHeight,
 						const BaselineAlignValue& baselineAlign, InlineSource source = {} );
 
+	void addInlineText( const String::View& text, const FontStyleConfig& style, const Rectf& margin,
+						const Rectf& padding, Float lineHeight,
+						const BaselineAlignValue& baselineAlign, InlineSource source = {} );
+
+	void addInlineText( String&& text, const FontStyleConfig& style, const Rectf& margin,
+						const Rectf& padding, Float lineHeight,
+						const BaselineAlignValue& baselineAlign, InlineSource source = {} );
+
 	/** Add an atomic inline-level box to the current inline context. */
 	void addInlineAtomicBox( const Sizef& size, InlineFloat floatType, InlineClear clearType,
 							 Float baseline, bool isLineBreak,
 							 const BaselineAlignValue& baselineAlign, InlineSource source = {} );
 
   protected:
+	template <typename TextType>
+	void addSpanImpl( TextType&& text, const FontStyleConfig& style, const Rectf& margin,
+					  const Rectf& padding, Float lineHeight,
+					  const BaselineAlignValue& baselineAlign, InlineSource source );
+
+	template <typename TextType>
+	void addInlineTextImpl( TextType&& text, const FontStyleConfig& style, const Rectf& margin,
+							const Rectf& padding, Float lineHeight,
+							const BaselineAlignValue& baselineAlign, InlineSource source );
+
 	void rebuildInlineFragments();
 
 	std::vector<InlineItem> mInlineItems;
@@ -427,6 +467,8 @@ class EE_API RichText : public Drawable {
 	Float mLineHeight{ 0 };
 	Float mTextIndent{ 0 };
 	bool mLineWrap{ true };
+	WhiteSpaceWrapMode mWhiteSpaceWrapMode{ WhiteSpaceWrapMode::Normal };
+	Uint32 mTabWidth{ 8 };
 };
 
 }} // namespace EE::Graphics

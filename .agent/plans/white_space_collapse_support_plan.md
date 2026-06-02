@@ -13,7 +13,64 @@ Reference specs:
 - CSS Text Module Level 4: https://drafts.csswg.org/css-text-4/#white-space-collapsing
 - Stable TR snapshot: https://www.w3.org/TR/css-text-4/#white-space-collapsing
 
-## Current State
+## Implementation Status
+
+Recovered and implemented in the current workspace on 2026-06-01, without refreshing any golden
+images.
+
+Implemented:
+
+- Raw PCDATA is preserved when loading `UIRichText` and `UITextSpan`; CSS whitespace processing now
+  happens during RichText rebuild.
+- `WhiteSpaceCollapse::Discard` exists and `white-space-collapse` parsing/stringification covers
+  `collapse`, `preserve`, `preserve-breaks`, `preserve-spaces`, `break-spaces`, and `discard`.
+- `white-space` accepts the legacy values plus direct collapse keywords and `wrap`/`nowrap` tokens.
+- `UIRichText::rebuildRichText()` applies the effective collapse mode for text nodes, inline spans,
+  and rebuilt `UITextSpan` roots.
+- `RichText` has a whitespace wrap mode for preserved and `break-spaces` content; `break-spaces`
+  contributes preserved spaces/tabs to intrinsic width and wraps after preserved spaces/tabs.
+- CSS `tab-size` is registered as inherited with initial value `8`; `UIRichText` stores the value and
+  passes it to `RichText`/`Text` measurement and wrapping.
+- Base HTML CSS now includes `pre { white-space: pre; }`.
+- Generic HTML `<pre><code>` renders as normal RichText content.
+- The old read-only `UICodeEditor` initialization is retained only when a `<pre><code>` block is
+  inside `UI_TYPE_MARKDOWNVIEW`, or when `UIRichText::setUseCodeEditorForPreCodeBlocks( true )` is
+  explicitly enabled. The global switch defaults to disabled.
+- Regression fixtures were restored:
+  - `bin/unit_tests/assets/html/pre.code.html`
+  - `bin/unit_tests/assets/html/pre.code.2.html`
+  - `bin/unit_tests/assets/html/pre_code_block.html`
+- A final segment break immediately before an element end tag is discarded before CSS whitespace
+  collapse/transformation, matching browser behavior for preformatted HTML such as
+  `<pre><code>...\n</code></pre>`.
+
+Validated:
+
+- `make -C make/linux -j$(nproc)`
+- `UIHTML.PreCode*`
+- `UIHTML.WhiteSpaceCollapse*`
+- `UIRichText.WhiteSpaceCollapse*`
+- `RichText.BreakSpaces*`
+- `UITextNode_EdgeCases.EmptyTextNodesDontAffectLayout`
+- `UIHTML.WhiteSpaceNowrap*`
+- `UIHTML.AnchorsSizing`
+- `UIHTMLTable.complexLayout*` against the original existing golden images
+- Full Xvfb/ASAN unit suite:
+  `ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tests/eepp-unit_tests-debug`
+  ran 478 test cases: 477 passed, 1 skipped (`UIHTML.redditOldThreadWebViewSmoke`).
+- `git diff --check`
+- No golden images were refreshed for this feature.
+
+Pending implementation work:
+
+- None for the `white-space-collapse` support described by this plan.
+
+Known follow-up, not part of this recovery:
+
+- Browser-parity investigation for apparent high pixel-density `em`/font-size differences in code
+  blocks. At pixel density 1, the current `pre_code_block.html` spacing is covered by unit tests.
+
+## Baseline State Before This Plan
 
 - `UIRichText` already stores:
   - `WhiteSpaceCollapse::Collapse`
@@ -21,17 +78,17 @@ Reference specs:
   - `WhiteSpaceCollapse::PreserveBreaks`
   - `WhiteSpaceCollapse::PreserveSpaces`
   - `WhiteSpaceCollapse::BreakSpaces`
-- CSS parsing already recognizes `white-space` and `white-space-collapse`.
+- CSS parsing already recognized `white-space` and `white-space-collapse`.
 - `white-space: nowrap` is partially working because it maps to `mLineWrap = false`.
-- The actual text processing is incomplete:
+- The actual text processing was incomplete:
   - `UIRichText::loadFromXmlNode()` collapses all PCDATA through
     `UIRichText::collapseInternalWhitespace()` before style resolution can know the effective
     `white-space-collapse` value.
   - `UIRichText::rebuildRichText()` only distinguishes `Collapse` from all other values.
   - `preserve-breaks`, `preserve-spaces`, and `break-spaces` do not get their spec behavior.
   - `break-spaces` has no special line-breaking or intrinsic-size support.
-- `<pre><code>` is special-cased in `UIRichText::loadFromXmlNode()` into a read-only `UICodeEditor`.
-  That workaround blocks normal HTML styling/layout for code blocks and should become unnecessary.
+- `<pre><code>` was special-cased in `UIRichText::loadFromXmlNode()` into a read-only `UICodeEditor`.
+  That workaround is now limited to markdown/global opt-in only.
 
 ## Spec Behavior To Support
 
@@ -215,20 +272,22 @@ Steps:
 5. Keep `white-space-trim` out of scope unless it already exists elsewhere; explicitly document this
    limitation near `applyWhiteSpace()` or in `html-layout-architecture.md`.
 
-### Phase 6: Replace The `<pre><code>` Fallback
+### Phase 6: Replace The Generic `<pre><code>` Fallback
 
 **File:** `src/eepp/ui/uirichtext.cpp`
 
 Once the whitespace behavior is covered:
 
-1. Remove the `mTag == "pre" && child.name() == "code"` branch that creates `UICodeEditor`.
-2. Let `<code>` be created through `UIWidgetCreator::createFromName()` or the existing unknown-element
+1. Remove the generic `mTag == "pre" && child.name() == "code"` branch that creates `UICodeEditor`.
+2. Keep the same `UICodeEditor` path only for `UI_TYPE_MARKDOWNVIEW` ancestors and for the explicit
+   global opt-in switch.
+3. Let ordinary HTML `<code>` be created through `UIWidgetCreator::createFromName()` or the existing
    fallback to `UITextSpan`.
-3. Ensure base HTML CSS gives the right defaults:
+4. Ensure base HTML CSS gives the right defaults:
    - `pre { white-space: pre; }` or equivalent.
    - `code { font-family: monospace; }` if not already present.
    - `pre code` remains normal inline/flow content inside the `<pre>`.
-4. Preserve `data-language` as ordinary data/style metadata. Do not reintroduce syntax-highlighting
+5. Preserve `data-language` as ordinary data/style metadata. Do not reintroduce syntax-highlighting
    behavior through the generic HTML path in this feature.
 
 ### Phase 7: Tests
@@ -255,7 +314,7 @@ pixel-only assertions unless testing trailing-space width.
 Add focused tests in `src/tests/unit_tests/uihtml_tests.cpp`:
 
 - `WhiteSpaceCollapsePreCodePreservesIndentation`
-- `WhiteSpaceCollapsePreCodeUsesRichTextNotCodeEditor`
+- `PreCodeUsesCodeEditorOnlyForMarkdownAncestorOrGlobalOptIn`
 - `WhiteSpaceCollapsePreLinePreservesBreaksOnly`
 - `WhiteSpaceCollapseBreakSpacesAffectsIntrinsicWidth`
 
@@ -270,7 +329,8 @@ For the `<pre><code>` regression:
 
 Verify:
 
-- `code` is not a `UICodeEditor`.
+- generic HTML `code` is not a `UICodeEditor`.
+- markdown/global opt-in `code` is a `UICodeEditor`.
 - indentation before `return` survives.
 - line count is at least 3.
 - the `<pre>`/`<code>` content participates in normal RichText layout.
@@ -321,7 +381,7 @@ ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tes
 3. Implement all non-`break-spaces` collapse modes.
 4. Add RichText/LineWrap support for `break-spaces`.
 5. Add `discard` parser/state behavior.
-6. Remove the `<pre><code>` `UICodeEditor` fallback.
+6. Restrict the `<pre><code>` `UICodeEditor` fallback to markdown/global opt-in.
 7. Update `html-layout-architecture.md` with the final whitespace-processing notes.
 8. Run focused tests, then `UIHTML.*`, then the full suite.
 
@@ -329,7 +389,8 @@ ASAN_OPTIONS=detect_leaks=0 xvfb-run -a -s "-screen 0 1280x1024x24" bin/unit_tes
 
 - All `white-space-collapse` values have parser, property-string, layout, and test coverage.
 - Existing `white-space: nowrap` behavior remains passing.
-- `<pre><code>` renders through normal HTML/RichText nodes, not `UICodeEditor`.
+- Generic HTML `<pre><code>` renders through normal HTML/RichText nodes, not `UICodeEditor`.
+- Markdown `<pre><code>` can still render through read-only `UICodeEditor`.
 - Code indentation and blank lines are preserved in `<pre>` and `white-space: pre` content.
 - Default HTML whitespace still collapses around block and inline boundaries.
 - `break-spaces` wraps and measures trailing spaces according to CSS Text Level 4.

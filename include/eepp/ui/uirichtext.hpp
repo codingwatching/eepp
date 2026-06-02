@@ -17,10 +17,11 @@ class EE_API UIRichText : public UIHTMLWidget {
 		Preserve,
 		PreserveBreaks,
 		PreserveSpaces,
-		BreakSpaces
+		BreakSpaces,
+		Discard
 	};
 
-	static WhiteSpaceCollapse toWhiteSpaceCollapse( std::string val );
+	static WhiteSpaceCollapse toWhiteSpaceCollapse( std::string_view val );
 
 	static std::string fromWhiteSpaceCollapse( WhiteSpaceCollapse val );
 
@@ -30,6 +31,10 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	static void rebuildRichText( UILayout* container, RichText& richText,
 								 IntrinsicMode mode = IntrinsicMode::None );
+
+	static void setUseCodeEditorForPreCodeBlocks( bool enabled );
+
+	static bool getUseCodeEditorForPreCodeBlocks();
 
 	static UIRichText* New();
 
@@ -140,7 +145,7 @@ class EE_API UIRichText : public UIHTMLWidget {
 
 	void setLineWrap( bool lineWrap );
 
-	void applyWhiteSpace( std::string val );
+	void applyWhiteSpace( std::string_view val );
 
 	Float getLineHeightPx() const;
 
@@ -149,6 +154,10 @@ class EE_API UIRichText : public UIHTMLWidget {
 	Float getTextIndentPx() const;
 
 	UIRichText* setTextIndentEq( const std::string& eq );
+
+	Uint32 getTabSize() const;
+
+	UIRichText* setTabSize( Uint32 tabSize );
 
 	bool isTextSelectionEnabled() const;
 
@@ -185,6 +194,7 @@ class EE_API UIRichText : public UIHTMLWidget {
 	mutable bool mLineHeightPxDirty{ true };
 	mutable Float mTextIndentPxCache{ 0 };
 	mutable bool mTextIndentPxDirty{ true };
+	Uint32 mTabSize{ 8 };
 	WhiteSpaceCollapse mWhiteSpaceCollapse{ WhiteSpaceCollapse::Collapse };
 	bool mLineWrap{ true };
 	TextTransform::Value mTextTransform{ TextTransform::None };

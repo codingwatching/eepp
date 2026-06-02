@@ -75,9 +75,8 @@ void UITextSpan::draw() {
 	// flex container (blockification per CSS Flexbox §4). In that case the
 	// parent flex container does NOT render its text via rebuildRichText(),
 	// so the span must draw itself.
-	if ( !isInline() ||
-		 ( getParent() && getParent()->isType( UI_TYPE_HTML_WIDGET ) &&
-		   getParent()->asType<UIHTMLWidget>()->isFlex() ) ) {
+	if ( !isInline() || ( getParent() && getParent()->isType( UI_TYPE_HTML_WIDGET ) &&
+						  getParent()->asType<UIHTMLWidget>()->isFlex() ) ) {
 		UIRichText::draw();
 	}
 }
@@ -486,16 +485,15 @@ void UITextSpan::loadFromXmlNode( const pugi::xml_node& node ) {
 					widget->loadFromXmlNode( child );
 				}
 			} else if ( child.type() == pugi::node_pcdata ) {
-				String collapsed = UIRichText::collapseInternalWhitespace( child.value() );
 				UITextNode* textNode = UITextNode::New();
 				textNode->setParent( this );
-				textNode->setText( collapsed );
+				textNode->setText( child.value() );
 			}
 		}
 	} else {
 		for ( pugi::xml_node child = node.first_child(); child; child = child.next_sibling() ) {
 			if ( child.type() == pugi::node_pcdata ) {
-				mText += UIRichText::collapseInternalWhitespace( child.value() );
+				mText += child.value();
 			}
 		}
 	}
