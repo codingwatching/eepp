@@ -276,6 +276,7 @@ std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 
 		if ( String::iequals( widget.name(), "style" ) ) {
 			CSS::StyleSheetParser parser;
+			parser.setBaseURI( mURI );
 			std::string styleContent;
 			for ( pugi::xml_node child = widget.first_child(); child;
 				  child = child.next_sibling() ) {
@@ -459,6 +460,7 @@ void UISceneNode::combineStyleSheet( const CSS::StyleSheet& styleSheet, bool for
 void UISceneNode::combineStyleSheet( const std::string& inlineStyleSheet, bool forceReloadStyle,
 									 const Uint32& marker, URI baseURI ) {
 	CSS::StyleSheetParser parser;
+	parser.setBaseURI( baseURI );
 
 	if ( parser.loadFromString( inlineStyleSheet ) ) {
 		parser.getStyleSheet().setMarker( marker );
@@ -989,6 +991,7 @@ CSS::MediaFeatures UISceneNode::getMediaFeatures() const {
 	media.pixelDensity = PixelDensity::getPixelDensity();
 	media.prefersColorScheme =
 		mColorSchemePreference == ColorSchemePreference::Dark ? "dark" : "light";
+	media.prefersContrast = ContrastPreferences::toString( mContrastPreference );
 	return media;
 }
 
@@ -1412,6 +1415,26 @@ void UISceneNode::setColorSchemePreference(
 void UISceneNode::setColorSchemePreference( const ColorSchemePreference& colorSchemePreference ) {
 	if ( mColorSchemePreference != colorSchemePreference ) {
 		mColorSchemePreference = colorSchemePreference;
+		if ( !mStyleSheet.isMediaQueryListEmpty() ) {
+			if ( mStyleSheet.updateMediaLists( getMediaFeatures() ) ) {
+				mStyleSheet.invalidateCache();
+				mRoot->reloadStyle( true, true, true, true, true );
+			}
+		}
+	}
+}
+
+ContrastPreference UISceneNode::getContrastPreference() const {
+	return mContrastPreference;
+}
+
+void UISceneNode::setContrastPreference( const ContrastExtPreference& contrastPreference ) {
+	setContrastPreference( ContrastPreferences::fromExt( contrastPreference ) );
+}
+
+void UISceneNode::setContrastPreference( const ContrastPreference& contrastPreference ) {
+	if ( mContrastPreference != contrastPreference ) {
+		mContrastPreference = contrastPreference;
 		if ( !mStyleSheet.isMediaQueryListEmpty() ) {
 			if ( mStyleSheet.updateMediaLists( getMediaFeatures() ) ) {
 				mStyleSheet.invalidateCache();

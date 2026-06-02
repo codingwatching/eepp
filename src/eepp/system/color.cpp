@@ -112,9 +112,8 @@ static bool parseHslHue( Float& out, std::string_view tok ) {
 		tok.remove_suffix( 1 );
 	if ( tok.empty() )
 		return false;
-	if ( tok.size() == 4 &&
-		 ( std::strncmp( tok.data(), "none", 4 ) == 0 ||
-		   std::strncmp( tok.data(), "None", 4 ) == 0 ) ) {
+	if ( tok.size() == 4 && ( std::strncmp( tok.data(), "none", 4 ) == 0 ||
+							  std::strncmp( tok.data(), "None", 4 ) == 0 ) ) {
 		out = 0;
 		return true;
 	}
@@ -140,9 +139,8 @@ static bool parseHslPercentOrNumber( Float& out, std::string_view tok ) {
 		tok.remove_suffix( 1 );
 	if ( tok.empty() )
 		return false;
-	if ( tok.size() == 4 &&
-		 ( std::strncmp( tok.data(), "none", 4 ) == 0 ||
-		   std::strncmp( tok.data(), "None", 4 ) == 0 ) ) {
+	if ( tok.size() == 4 && ( std::strncmp( tok.data(), "none", 4 ) == 0 ||
+							  std::strncmp( tok.data(), "None", 4 ) == 0 ) ) {
 		out = 0;
 		return true;
 	}
@@ -757,7 +755,22 @@ Color Color::fromString( std::string str ) {
 		if ( functionString.getParameters().size() >= 3 &&
 			 ( functionString.getName() == "rgb" || functionString.getName() == "rgba" ) ) {
 			Color color( Color::Transparent );
-			const auto& params = functionString.getParameters();
+			auto params = functionString.getParameters();
+
+			// Handle "rgb(r, g, b / alpha)" hybrid syntax produced by var()
+			// substitution where comma-separated channels are mixed with the
+			// modern-slash alpha separator.
+			if ( params.size() == 3 ) {
+				std::string::size_type slashPos = params[2].find( '/' );
+				if ( slashPos != std::string::npos ) {
+					std::string alphaStr = String::trim( params[2].substr( slashPos + 1 ) );
+					std::string blueStr = String::trim( params[2].substr( 0, slashPos ) );
+					if ( !blueStr.empty() ) {
+						params[2] = blueStr;
+						params.push_back( alphaStr );
+					}
+				}
+			}
 
 			Float val = 0;
 			if ( !parseCssColorComponent( val, params[0].data(),

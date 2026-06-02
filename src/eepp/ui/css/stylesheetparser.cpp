@@ -23,6 +23,14 @@ namespace EE { namespace UI { namespace CSS {
 
 StyleSheetParser::StyleSheetParser() : mLoaded( false ) {}
 
+void StyleSheetParser::setBaseURI( const URI& uri ) {
+	mBaseURI = uri;
+}
+
+void StyleSheetParser::setBaseURI( const std::string& uri ) {
+	mBaseURI = URI( uri );
+}
+
 bool StyleSheetParser::loadFromStream( IOStream& stream ) {
 	Clock elapsed;
 	std::vector<std::string> importedList;
@@ -330,6 +338,14 @@ void StyleSheetParser::importParse( std::string& css, std::size_t& pos, std::str
 
 		if ( function.getName() == "url" && !function.getParameters().empty() ) {
 			path = function.getParameters().at( 0 );
+		}
+
+		// Resolve relative @import paths against the base URI (document URL)
+		if ( !mBaseURI.empty() && !String::startsWith( path, "http://" ) &&
+			 !String::startsWith( path, "https://" ) ) {
+			URI resolved = mBaseURI;
+			resolved.resolve( URI( path ) );
+			path = resolved.toString();
 		}
 
 		if ( std::find( importedList.begin(), importedList.end(), path ) == importedList.end() ) {

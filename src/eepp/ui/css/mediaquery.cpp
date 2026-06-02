@@ -10,13 +10,14 @@ namespace EE { namespace UI { namespace CSS {
 
 #define MediaOrientationStrings "portrait;landscape"
 
-#define MediaFeatureStrings                                                                    \
-	"none;width;min-width;max-width;height;min-height;max-height;device-width;min-device-"     \
-	"width;max-device-width;device-height;min-device-height;max-device-height;orientation;"    \
-	"aspect-ratio;min-aspect-ratio;max-aspect-ratio;device-aspect-ratio;min-device-aspect-"    \
-	"ratio;max-device-aspect-ratio;color;min-color;max-color;color-index;min-color-index;max-" \
-	"color-index;monochrome;min-monochrome;max-monochrome;resolution;min-resolution;max-"      \
-	"resolution;pixel-density;min-pixel-density;max-pixel-density;prefers-color-scheme"
+#define MediaFeatureStrings                                                                      \
+	"none;width;min-width;max-width;height;min-height;max-height;device-width;min-device-"       \
+	"width;max-device-width;device-height;min-device-height;max-device-height;orientation;"      \
+	"aspect-ratio;min-aspect-ratio;max-aspect-ratio;device-aspect-ratio;min-device-aspect-"      \
+	"ratio;max-device-aspect-ratio;color;min-color;max-color;color-index;min-color-index;max-"   \
+	"color-index;monochrome;min-monochrome;max-monochrome;resolution;min-resolution;max-"        \
+	"resolution;pixel-density;min-pixel-density;max-pixel-density;prefers-color-scheme;prefers-" \
+	"contrast"
 
 #define MediaTypeStrings "none;all;screen;print;braille;embossed;handheld;projection;speech;tty;tv"
 
@@ -414,6 +415,10 @@ bool MediaQueryExpression::check( const MediaFeatures& features ) const {
 			break;
 		case media_feature_prefers_color_scheme:
 			if ( features.prefersColorScheme == valStr )
+				return true;
+			break;
+		case media_feature_prefers_contrast:
+			if ( features.prefersContrast == valStr )
 				return true;
 			break;
 		default:

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <eepp/core/debug.hpp>
 #include <eepp/graphics/fontmanager.hpp>
 #include <eepp/graphics/primitives.hpp>
 #include <eepp/graphics/text.hpp>
@@ -425,7 +426,10 @@ bool UIRichText::applyProperty( const StyleSheetProperty& attribute ) {
 			Color color = attribute.asColor();
 			if ( color == Color::Transparent &&
 				 attribute.getValue().find( "var(" ) != std::string::npos ) {
-				// Do not set unresolved colors
+#ifdef EE_DEBUG
+				eePRINTL( "UIRichText: unresolved var() in Color value for <%s>: '%s'",
+						  getElementTag().c_str(), attribute.getValue().c_str() );
+#endif
 				break;
 			}
 			setFontColor( attribute.asColor() );
@@ -1006,6 +1010,7 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 				}
 			} else if ( String::iequals( child.name(), "style" ) ) {
 				CSS::StyleSheetParser parser;
+				parser.setBaseURI( getUISceneNode()->getURI() );
 				std::string styleContent;
 				for ( pugi::xml_node styleChild = child.first_child(); styleChild;
 					  styleChild = styleChild.next_sibling() ) {

@@ -534,3 +534,307 @@ UTEST( CSSVariables, VariableReferencesCircular ) {
 	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
 	EXPECT_TRUE( div != nullptr );
 }
+
+UTEST( CSSVariables, VarInRgbMixedSyntax ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - Var In Rgb Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	// Test rgb(var(--ch) / var(--alpha)) where the variable holds
+	// comma-separated channel values. After substitution this becomes
+	// rgb(255, 0, 0 / 0.5) — mixed comma + slash syntax.
+	std::string xml = R"html(
+<html>
+	<head>
+		<style>
+		#testdiv {
+			--ch: 255, 0, 0;
+			--alpha: 0.5;
+			color: rgb(var(--ch) / var(--alpha));
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )html";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+
+	Color result = div->getFontColor();
+	EXPECT_EQ( 255, result.r );
+	EXPECT_EQ( 0, result.g );
+	EXPECT_EQ( 0, result.b );
+	EXPECT_EQ( 128, result.a );
+}
+
+UTEST( CSSVariables, VarInRgbMixedSyntaxBackground ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - Var In Rgb Bg Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	std::string xml = R"html(
+<html>
+	<head>
+		<style>
+		#testdiv {
+			--ch: 0, 128, 255;
+			--alpha: 0.75;
+			background-color: rgb(var(--ch) / var(--alpha));
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )html";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+
+	Color result = div->getBackgroundColor();
+	EXPECT_EQ( 0, result.r );
+	EXPECT_EQ( 128, result.g );
+	EXPECT_EQ( 255, result.b );
+	EXPECT_EQ( 191, result.a );
+}
+
+UTEST( CSSVariables, VarInRgbModernSpaceSyntax ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - Var In Rgb Space Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	// Space-separated channel values: after substitution the result is
+	// rgb(255 128 0 / 0.8) which maps to the modern syntax path.
+	std::string xml = R"html(
+<html>
+	<head>
+		<style>
+		#testdiv {
+			--ch: 255 128 0;
+			--alpha: 0.8;
+			background-color: rgb(var(--ch) / var(--alpha));
+		}
+		</style>
+	</head>
+<body>
+	<div id="testdiv">Test text</div>
+</body>
+</html>
+    )html";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	UIRichText* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+
+	Color result = div->getBackgroundColor();
+	EXPECT_EQ( 255, result.r );
+	EXPECT_EQ( 128, result.g );
+	EXPECT_EQ( 0, result.b );
+	EXPECT_EQ( 204, result.a );
+}
+
+UTEST( CSSVariables, VarInRgbAnchorColor ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - Var In Rgb Anchor Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	// Test that anchor (<a>) elements resolve color with rgb(var()) syntax.
+	// This verifies that anchors (which start in Link state) go through the
+	// same var resolution pipeline as other elements.
+	std::string xml = R"html(
+<html>
+	<head>
+		<style>
+		:root {
+			--ch: 255, 0, 128;
+			--alpha: 0.6;
+		}
+		a {
+			color: rgb(var(--ch) / var(--alpha));
+		}
+		</style>
+	</head>
+<body>
+	<a id="testlink" href="/">Test link</a>
+</body>
+</html>
+    )html";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	auto* link = root->querySelector( "#testlink" );
+	EXPECT_TRUE( link != nullptr );
+
+	// Anchor should be a UITextSpan (or UIAnchorSpan which extends it)
+	EXPECT_TRUE( link->isType( UI_TYPE_TEXTSPAN ) );
+
+	Color result = link->asType<UITextSpan>()->getFontColor();
+	EXPECT_EQ( 255, result.r );
+	EXPECT_EQ( 0, result.g );
+	EXPECT_EQ( 128, result.b );
+	EXPECT_EQ( 153, result.a ); // 0.6 * 255 = 153
+}
+
+UTEST( CSSVariables, VarInRgbViaIntermediateVar ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - Var In Rgb Indirect Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	// Test variable that references another variable which contains
+	// rgb(var()) - requiring recursive var resolution.
+	std::string xml = R"html(
+<html>
+	<head>
+		<style>
+		:root {
+			--r: 0;
+			--g: 128;
+			--b: 255;
+			--a: 0.75;
+			--link-color: rgb(var(--r) var(--g) var(--b) / var(--a));
+		}
+		a {
+			color: var(--link-color);
+		}
+		</style>
+	</head>
+<body>
+	<a id="testlink" href="/">Indirect test link</a>
+</body>
+</html>
+    )html";
+
+	UIWidget* root = app.getUI()->loadLayoutFromString( xml );
+	EXPECT_TRUE( root != nullptr );
+
+	auto* link = root->querySelector( "#testlink" );
+	EXPECT_TRUE( link != nullptr );
+
+	Color result = link->asType<UITextSpan>()->getFontColor();
+	EXPECT_EQ( 0, result.r );
+	EXPECT_EQ( 128, result.g );
+	EXPECT_EQ( 255, result.b );
+	EXPECT_EQ( 191, result.a ); // 0.75 * 255 = 191
+}
+
+UTEST( CSSVariables, LightDarkBasic ) {
+	// Light scheme: picks first parameter of light-dark()
+	UIApplication lightApp(
+		WindowSettings( 800, 600, "eepp - LightDark Basic Light", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	lightApp.getUI()->setColorSchemePreference( ColorSchemePreference::Light );
+	UIWidget* lightRoot = lightApp.getUI()->loadLayoutFromString( R"html(
+<html><head><style>
+	#testdiv { color: light-dark(#FF0000, #00FF00); }
+</style></head><body>
+	<div id="testdiv">Test</div>
+</body></html>
+    )html" );
+
+	auto* lightDiv = lightRoot->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( lightDiv != nullptr );
+	Color lightResult = lightDiv->getFontColor();
+	EXPECT_EQ( 255, lightResult.r );
+	EXPECT_EQ( 0, lightResult.g );
+	EXPECT_EQ( 0, lightResult.b );
+
+	// Dark scheme: picks second parameter
+	UIApplication darkApp(
+		WindowSettings( 800, 600, "eepp - LightDark Basic Dark", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	darkApp.getUI()->setColorSchemePreference( ColorSchemePreference::Dark );
+	UIWidget* darkRoot = darkApp.getUI()->loadLayoutFromString( R"html(
+<html><head><style>
+	#testdiv { color: light-dark(#FF0000, #00FF00); }
+</style></head><body>
+	<div id="testdiv">Test</div>
+</body></html>
+    )html" );
+
+	auto* darkDiv = darkRoot->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( darkDiv != nullptr );
+	Color darkResult = darkDiv->getFontColor();
+	EXPECT_EQ( 0, darkResult.r );
+	EXPECT_EQ( 255, darkResult.g );
+	EXPECT_EQ( 0, darkResult.b );
+}
+
+UTEST( CSSVariables, LightDarkWithVars ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - LightDark Var Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	app.getUI()->setColorSchemePreference( ColorSchemePreference::Light );
+	UIWidget* root = app.getUI()->loadLayoutFromString( R"html(
+<html><head><style>
+	:root {
+		--light: #0000FF;
+		--dark: #FF8800;
+	}
+	#testdiv {
+		color: light-dark(var(--light), var(--dark));
+	}
+</style></head><body>
+	<div id="testdiv">Test</div>
+</body></html>
+    )html" );
+
+	auto* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+	Color result = div->getFontColor();
+	EXPECT_EQ( 0, result.r );
+	EXPECT_EQ( 0, result.g );
+	EXPECT_EQ( 255, result.b );
+}
+
+UTEST( CSSVariables, LightDarkWithVarRgb ) {
+	UIApplication app(
+		WindowSettings( 800, 600, "eepp - LightDark Rgb Test", WindowStyle::Default,
+						WindowBackend::Default, 32 ),
+		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
+
+	app.getUI()->setColorSchemePreference( ColorSchemePreference::Light );
+	UIWidget* root = app.getUI()->loadLayoutFromString( R"html(
+<html><head><style>
+	:root {
+		--l-ch: 255, 0, 0;
+		--d-ch: 0, 128, 0;
+	}
+	#testdiv {
+		color: light-dark(rgb(var(--l-ch) / 1), rgb(var(--d-ch) / 1));
+	}
+</style></head><body>
+	<div id="testdiv">Test</div>
+</body></html>
+    )html" );
+
+	auto* div = root->querySelector( "#testdiv" )->asType<UIRichText>();
+	EXPECT_TRUE( div != nullptr );
+	Color result = div->getFontColor();
+	EXPECT_EQ( 255, result.r );
+	EXPECT_EQ( 0, result.g );
+	EXPECT_EQ( 0, result.b );
+}
