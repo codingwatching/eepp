@@ -1,6 +1,7 @@
 #ifndef EE_UI_UIHTMLWIDGET_HPP
 #define EE_UI_UIHTMLWIDGET_HPP
 
+#include <eepp/core/small_vector.hpp>
 #include <eepp/ui/csslayouttypes.hpp>
 #include <eepp/ui/uilayout.hpp>
 
@@ -160,6 +161,10 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	virtual void drawChildren();
 
+	virtual void onChildCountChange( Node* child, const bool& removed );
+
+	void updateZIndexSortFlag();
+
 	Float getBaseline() const;
 
 	virtual void onParentChange();
@@ -218,6 +223,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	int mZIndex{ 0 };
 	bool mOverflowCreatesBlockFormattingContext{ false };
 	bool mNeedsOrderSort{ false };
+	bool mNeedsZIndexSort{ false };
 	UILayouter* mLayouter{ nullptr };
 	UIHTMLWidgetFlexState* mFlexState{ nullptr };
 	UnorderedMap<std::string, StyleSheetProperty> mDataProperties;
