@@ -710,7 +710,8 @@ Sizef UINodeDrawable::LayerDrawable::calcDrawableSize( const std::string& drawab
 		return Sizef::Zero;
 
 	if ( drawableSizeEq == "auto" ) {
-		if ( mDrawable->getDrawableType() == Drawable::RECTANGLE ) {
+		if ( mDrawable->getDrawableType() == Drawable::RECTANGLE ||
+			 mDrawable->getDrawableType() == LINEARGRADIENT ) {
 			size = mSize;
 		} else {
 			size = mDrawable->getPixelsSize();
@@ -747,7 +748,8 @@ Sizef UINodeDrawable::LayerDrawable::calcDrawableSize( const std::string& drawab
 
 		if ( sizePart.size() == 2 ) {
 			if ( sizePart[0] == "auto" && sizePart[1] == "auto" ) {
-				if ( mDrawable->getDrawableType() == Drawable::RECTANGLE ) {
+				if ( mDrawable->getDrawableType() == Drawable::RECTANGLE ||
+					 mDrawable->getDrawableType() == Drawable::LINEARGRADIENT ) {
 					size = mSize;
 				} else {
 					size = mDrawable->getSize();
