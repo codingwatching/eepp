@@ -1,20 +1,21 @@
 #include <algorithm>
 #include <cmath>
-#include <eepp/graphics/globalbatchrenderer.hpp>
-#include <eepp/graphics/lineargradientdrawable.hpp>
-#include <eepp/math/math.hpp>
 
-namespace EE { namespace Graphics {
+#include <eepp/graphics/globalbatchrenderer.hpp>
+#include <eepp/math/math.hpp>
+#include <eepp/ui/lineargradientdrawable.hpp>
+
+namespace EE { namespace UI {
 
 LinearGradientDrawable* LinearGradientDrawable::New() {
 	return eeNew( LinearGradientDrawable, () );
 }
 
 LinearGradientDrawable* LinearGradientDrawable::NewRepeating() {
-	return eeNew( LinearGradientDrawable, ( REPEATINGLINEARGRADIENT ) );
+	return eeNew( LinearGradientDrawable, ( Graphics::Drawable::REPEATINGLINEARGRADIENT ) );
 }
 
-LinearGradientDrawable::LinearGradientDrawable( Drawable::Type drawableType ) :
+LinearGradientDrawable::LinearGradientDrawable( Graphics::Drawable::Type drawableType ) :
 	Drawable( drawableType ) {}
 
 Sizef LinearGradientDrawable::getSize() {
@@ -40,16 +41,13 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	Float w = size.getWidth();
 	Float h = size.getHeight();
 
-	// CSS angle: 0° = up, 90° = right, 180° = down (default)
 	Float aRad = mAngle * EE_PI / 180.f;
 	Float dx = std::sin( aRad );
 	Float dy = -std::cos( aRad );
 
-	// Gradient line passes through box center
 	Float cx = w * 0.5f;
 	Float cy = h * 0.5f;
 
-	// Find gradient line intersections with box boundaries
 	Float tVals[4];
 	int validCount = 0;
 
@@ -91,7 +89,17 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 
 	Float txLen = tMax - tMin;
 
-	// Perpendicular direction (rotated 90° clockwise in screen coords)
+	// Normalize all stops to [0,1] using the gradient-line pixel length
+	std::vector<ColorStop> stops;
+	stops.reserve( mColorStops.size() );
+	for ( const auto& s : mColorStops )
+		stops.push_back(
+			ColorStop( s.getNormalized( txLen ), s.color, CSS::StyleSheetLength::Percentage ) );
+
+	std::sort( stops.begin(), stops.end(),
+			   []( const ColorStop& a, const ColorStop& b ) { return a.value < b.value; } );
+
+
 	Float px = -dy;
 	Float py = dx;
 
@@ -101,19 +109,14 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 	sBR->quadsBegin();
 
 	if ( isRepeating() ) {
-		Float firstPos = mColorStops.front().position;
-		Float lastPos = mColorStops.back().position;
+		Float firstPos = stops.front().value;
+		Float lastPos = stops.back().value;
 		Float patternLen = lastPos - firstPos;
 		if ( patternLen < 0.0001f ) {
 			sBR->draw();
 			return;
 		}
 
-		// Visible position range mapped to [0, 1] along the gradient-line
-		// segment visible in the box.
-		// Pattern start in position space: firstPos
-		// Repeat interval: patternLen
-		// Visible range: [0, 1]
 		int rStart = (int)std::floor( ( -firstPos ) / patternLen );
 		int rEnd = (int)std::ceil( ( 1.f - lastPos ) / patternLen );
 		const int MAX_REPEATS = 128;
@@ -123,9 +126,9 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 		for ( int r = rStart; r <= rEnd; r++ ) {
 			Float repeatOff = (Float)r * patternLen;
 
-			for ( size_t i = 0; i + 1 < mColorStops.size(); i++ ) {
-				Float p0 = mColorStops[i].position + repeatOff;
-				Float p1 = mColorStops[i + 1].position + repeatOff;
+			for ( size_t i = 0; i + 1 < stops.size(); i++ ) {
+				Float p0 = stops[i].value + repeatOff;
+				Float p1 = stops[i + 1].value + repeatOff;
 
 				if ( p1 <= 0.f || p0 >= 1.f )
 					continue;
@@ -135,20 +138,21 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				if ( clip1 - clip0 < 0.0001f )
 					continue;
 
-				// Colors at clipped band boundaries (interpolate within the stop pair)
 				Float bw = p1 - p0;
 				Float frac0 = ( clip0 - p0 ) / bw;
 				Float frac1 = ( clip1 - p0 ) / bw;
-				const Color& sc0 = mColorStops[i].color;
-				const Color& sc1 = mColorStops[i + 1].color;
-				Color cc0( (Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
-						   (Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
-						   (Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
-						   (Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
-				Color cc1( (Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
-						   (Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
-						   (Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
-						   (Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
+				const Color& sc0 = stops[i].color;
+				const Color& sc1 = stops[i + 1].color;
+				Color cc0(
+					(Uint8)( (Float)sc0.r + frac0 * (Float)( sc1.r - sc0.r ) ),
+					(Uint8)( (Float)sc0.g + frac0 * (Float)( sc1.g - sc0.g ) ),
+					(Uint8)( (Float)sc0.b + frac0 * (Float)( sc1.b - sc0.b ) ),
+					(Uint8)( (Float)sc0.a + frac0 * (Float)( sc1.a - sc0.a ) ) );
+				Color cc1(
+					(Uint8)( (Float)sc0.r + frac1 * (Float)( sc1.r - sc0.r ) ),
+					(Uint8)( (Float)sc0.g + frac1 * (Float)( sc1.g - sc0.g ) ),
+					(Uint8)( (Float)sc0.b + frac1 * (Float)( sc1.b - sc0.b ) ),
+					(Uint8)( (Float)sc0.a + frac1 * (Float)( sc1.a - sc0.a ) ) );
 
 				Float tc0 = tMin + clip0 * txLen;
 				Float tc1 = tMin + clip1 * txLen;
@@ -157,7 +161,6 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Float gx1 = cx + tc1 * dx;
 				Float gy1 = cy + tc1 * dy;
 
-				// Perpendicular intersection for point 0
 				Float ptVals0[4];
 				int ptCount0 = 0;
 				auto addPT0 = [&]( Float pt, Float qx, Float qy ) {
@@ -190,7 +193,6 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 				Vector2f a0( gx0 + ptMin0 * px + position.x, gy0 + ptMin0 * py + position.y );
 				Vector2f b0( gx0 + ptMax0 * px + position.x, gy0 + ptMax0 * py + position.y );
 
-				// Perpendicular intersection for point 1
 				Float ptVals1[4];
 				int ptCount1 = 0;
 				auto addPT1 = [&]( Float pt, Float qx, Float qy ) {
@@ -230,24 +232,19 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 			}
 		}
 	} else {
-		// Pre-compute position on gradient line: center + t * dir
-		// Pre-compute perpendicular intersections for all stops
 		struct PerpSeg {
 			Vector2f a;
 			Vector2f b;
-			Float gradPos;
 		};
 		std::vector<PerpSeg> segments;
-		segments.reserve( mColorStops.size() );
+		segments.reserve( stops.size() );
 
-		for ( size_t i = 0; i < mColorStops.size(); i++ ) {
+		for ( size_t i = 0; i < stops.size(); i++ ) {
 			PerpSeg seg;
-			Float t = tMin + mColorStops[i].position * txLen;
-			seg.gradPos = t;
+			Float t = tMin + stops[i].value * txLen;
 			Float gx = cx + t * dx;
 			Float gy = cy + t * dy;
 
-			// Find perpendicular line intersections with the box
 			Float ptVals[4];
 			int ptCount = 0;
 
@@ -289,10 +286,9 @@ void LinearGradientDrawable::draw( const Vector2f& position, const Sizef& size )
 			segments.push_back( seg );
 		}
 
-		// Render quads between consecutive stops
-		for ( size_t i = 0; i < mColorStops.size() - 1; i++ ) {
-			const Color& c0 = mColorStops[i].color;
-			const Color& c1 = mColorStops[i + 1].color;
+		for ( size_t i = 0; i < stops.size() - 1; i++ ) {
+			const Color& c0 = stops[i].color;
+			const Color& c1 = stops[i + 1].color;
 
 			Color fc0 = ( mColor.a == 255 ) ? c0 : Color( c0 ).blendAlpha( mColor.a );
 			Color fc1 = ( mColor.a == 255 ) ? c1 : Color( c1 ).blendAlpha( mColor.a );
@@ -316,19 +312,6 @@ LinearGradientDrawable::getColorStops() const {
 
 void LinearGradientDrawable::setColorStops( std::vector<ColorStop> stops ) {
 	mColorStops = std::move( stops );
-	if ( mColorStops.size() >= 2 ) {
-		std::sort(
-			mColorStops.begin(), mColorStops.end(),
-			[]( const ColorStop& a, const ColorStop& b ) { return a.position < b.position; } );
-		if ( !isRepeating() ) {
-			mColorStops.front().position = 0.f;
-			mColorStops.back().position = 1.f;
-		}
-	}
-}
-
-bool LinearGradientDrawable::isRepeating() const {
-	return mDrawableType == REPEATINGLINEARGRADIENT;
 }
 
 Float LinearGradientDrawable::getAngle() const {
@@ -343,4 +326,8 @@ void LinearGradientDrawable::setSize( const Sizef& size ) {
 	mSize = size;
 }
 
-}} // namespace EE::Graphics
+bool LinearGradientDrawable::isRepeating() const {
+	return mDrawableType == Graphics::Drawable::REPEATINGLINEARGRADIENT;
+}
+
+}} // namespace EE::UI

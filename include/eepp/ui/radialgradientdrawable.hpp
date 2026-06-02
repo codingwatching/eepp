@@ -1,20 +1,35 @@
-#ifndef EE_GRAPHICS_RADIALGRADIENTDRAWABLE_HPP
-#define EE_GRAPHICS_RADIALGRADIENTDRAWABLE_HPP
+#ifndef EE_UI_RADIALGRADIENTDRAWABLE_HPP
+#define EE_UI_RADIALGRADIENTDRAWABLE_HPP
 
 #include <eepp/graphics/drawable.hpp>
 #include <eepp/system/color.hpp>
+#include <eepp/ui/css/stylesheetlength.hpp>
+#include <eepp/ui/lineargradientdrawable.hpp>
 #include <vector>
 
-namespace EE { namespace Graphics {
+namespace EE { namespace UI {
 
-class EE_API RadialGradientDrawable : public Drawable {
+class EE_API RadialGradientDrawable : public Graphics::Drawable {
   public:
+	using Length = CSS::StyleSheetLength;
+	using GradientUnit = CSS::StyleSheetLength::Unit;
+
 	struct ColorStop {
-		Float position{ 0 };
 		Color color;
+		Float value{ 0 };
+		GradientUnit unit{ CSS::StyleSheetLength::Percentage };
 
 		ColorStop() : color( Color::White ) {}
-		ColorStop( Float pos, const Color& col ) : position( pos ), color( col ) {}
+		ColorStop( Float val, const Color& col, GradientUnit u = CSS::StyleSheetLength::Percentage ) :
+			value( val ), color( col ), unit( u ) {}
+
+		Float getNormalized( Float gradientRayLength ) const {
+			if ( unit == CSS::StyleSheetLength::Percentage )
+				return eemax( 0.f, value ) / 100.f;
+			if ( gradientRayLength > 0.0001f )
+				return eemax( 0.f, value ) / gradientRayLength;
+			return 0.f;
+		}
 	};
 
 	enum ShapeType { CIRCLE, ELLIPSE };
@@ -23,7 +38,8 @@ class EE_API RadialGradientDrawable : public Drawable {
 	static RadialGradientDrawable* New();
 	static RadialGradientDrawable* NewRepeating();
 
-	RadialGradientDrawable( Drawable::Type drawableType = RADIALGRADIENT );
+	RadialGradientDrawable(
+		Graphics::Drawable::Type drawableType = Graphics::Drawable::RADIALGRADIENT );
 
 	virtual Sizef getSize();
 
@@ -65,6 +81,6 @@ class EE_API RadialGradientDrawable : public Drawable {
 	Sizef mSize;
 };
 
-}} // namespace EE::Graphics
+}} // namespace EE::UI
 
 #endif
