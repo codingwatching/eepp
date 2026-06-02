@@ -3,6 +3,7 @@
 #include <eepp/graphics/drawable.hpp>
 #include <eepp/graphics/drawablesearcher.hpp>
 #include <eepp/graphics/fontmanager.hpp>
+#include <eepp/graphics/lineargradientdrawable.hpp>
 #include <eepp/graphics/rectangledrawable.hpp>
 #include <eepp/graphics/triangledrawable.hpp>
 #include <eepp/scene/scenemanager.hpp>
@@ -16,6 +17,86 @@
 using namespace EE::Scene;
 
 namespace EE { namespace UI { namespace CSS {
+
+struct ColorStopResult {
+	bool valid{ false };
+	bool isHint{ false };
+	Color color;
+	Float position{ -1.f }; /* -1 = not specified */
+};
+
+static ColorStopResult parseColorStop( const std::string& stopStr ) {
+	ColorStopResult result;
+
+	std::string str = String::trim( stopStr );
+	if ( str.empty() )
+		return result;
+
+	// Try to parse the whole string as a bare percentage hint first
+	if ( str.back() == '%' && str.find( ' ' ) == std::string::npos &&
+		 !Color::isColorString( str ) ) {
+		std::string num = str.substr( 0, str.size() - 1 );
+		Float val;
+		if ( String::fromString( val, num ) ) {
+			result.position = eemax( 0.f, eemin( 100.f, val ) ) / 100.f;
+			result.isHint = true;
+			result.valid = true;
+			return result;
+		}
+	}
+
+	// Find the last whitespace that separates color from position
+	size_t lastSpace = std::string::npos;
+	for ( size_t i = str.size(); i > 0; i-- ) {
+		if ( str[i - 1] == ' ' ) {
+			lastSpace = i - 1;
+			break;
+		}
+	}
+
+	std::string colorPart;
+	std::string posPart;
+
+	if ( lastSpace != std::string::npos ) {
+		colorPart = str.substr( 0, lastSpace );
+		posPart = str.substr( lastSpace + 1 );
+	} else {
+		if ( Color::isColorString( str ) ) {
+			result.color = Color::fromString( str );
+			result.valid = true;
+			return result;
+		}
+		return result;
+	}
+
+	// Try to parse the position part
+	String::trimInPlace( posPart );
+	Float posVal = -1.f;
+	if ( !posPart.empty() ) {
+		if ( posPart.back() == '%' ) {
+			std::string num = posPart.substr( 0, posPart.size() - 1 );
+			if ( String::fromString( posVal, num ) ) {
+				posVal = eemax( 0.f, eemin( 100.f, posVal ) ) / 100.f;
+			}
+		} else {
+			if ( String::fromString( posVal, posPart ) ) {
+				posVal = eemax( 0.f, eemin( 100.f, posVal ) ) / 100.f;
+			}
+		}
+	}
+
+	String::trimInPlace( colorPart );
+	if ( Color::isColorString( colorPart ) ) {
+		result.color = Color::fromString( colorPart );
+		result.position = posVal;
+		result.valid = true;
+	} else if ( posVal < 0.f && Color::isColorString( str ) ) {
+		result.color = Color::fromString( str );
+		result.valid = true;
+	}
+
+	return result;
+}
 
 DrawableImageParser::DrawableImageParser() {
 	registerBaseParsers();
@@ -62,46 +143,222 @@ void DrawableImageParser::addParser( const std::string& name,
 void DrawableImageParser::registerBaseParsers() {
 	mFuncs["linear-gradient"] = []( const FunctionString& functionType, const Sizef& /*size*/,
 									bool& ownIt, UINode* node ) -> Drawable* {
-		if ( functionType.getParameters().size() < 2 ) {
-			return NULL;
-		}
-
-		RectangleDrawable* drawable = RectangleDrawable::New();
-		RectColors rectColors;
 		const auto& params( functionType.getParameters() );
-
-		if ( Color::isColorString( params.at( 0 ) ) && params.size() >= 2 ) {
-			rectColors.TopLeft = rectColors.TopRight = Color::fromString( params.at( 0 ) );
-			rectColors.BottomLeft = rectColors.BottomRight = Color::fromString( params.at( 1 ) );
-		} else if ( params.size() >= 3 ) {
-			std::string direction = params.at( 0 );
-			String::toLowerInPlace( direction );
-
-			if ( direction == "to bottom" ) {
-				rectColors.TopLeft = rectColors.TopRight = Color::fromString( params.at( 1 ) );
-				rectColors.BottomLeft = rectColors.BottomRight =
-					Color::fromString( params.at( 2 ) );
-			} else if ( direction == "to left" ) {
-				rectColors.TopLeft = rectColors.BottomLeft = Color::fromString( params.at( 2 ) );
-				rectColors.TopRight = rectColors.BottomRight = Color::fromString( params.at( 1 ) );
-			} else if ( direction == "to right" ) {
-				rectColors.TopLeft = rectColors.BottomLeft = Color::fromString( params.at( 1 ) );
-				rectColors.TopRight = rectColors.BottomRight = Color::fromString( params.at( 2 ) );
-			} else if ( direction == "to top" ) {
-				rectColors.TopLeft = rectColors.TopRight = Color::fromString( params.at( 2 ) );
-				rectColors.BottomLeft = rectColors.BottomRight =
-					Color::fromString( params.at( 1 ) );
-			} else {
-				rectColors.TopLeft = rectColors.TopRight = Color::fromString( params.at( 1 ) );
-				rectColors.BottomLeft = rectColors.BottomRight =
-					Color::fromString( params.at( 2 ) );
-			}
-		} else {
-			node->setBackgroundColor( Color::fromString( params.at( 0 ) ) );
+		if ( params.size() < 2 )
 			return NULL;
+
+		size_t paramIdx = 0;
+		Float angle = 180.f; /* default: to bottom */
+
+		// Parse direction / angle from first parameter
+		std::string firstParam = params[0];
+		String::toLowerInPlace( firstParam );
+		String::trimInPlace( firstParam );
+
+		if ( String::startsWith( firstParam, "to " ) ) {
+			paramIdx = 1;
+			if ( firstParam == "to top" ) {
+				angle = 0.f;
+			} else if ( firstParam == "to right" ) {
+				angle = 90.f;
+			} else if ( firstParam == "to bottom" ) {
+				angle = 180.f;
+			} else if ( firstParam == "to left" ) {
+				angle = 270.f;
+			} else if ( firstParam == "to top right" || firstParam == "to right top" ) {
+				angle = 45.f;
+			} else if ( firstParam == "to bottom right" || firstParam == "to right bottom" ) {
+				angle = 135.f;
+			} else if ( firstParam == "to bottom left" || firstParam == "to left bottom" ) {
+				angle = 225.f;
+			} else if ( firstParam == "to top left" || firstParam == "to left top" ) {
+				angle = 315.f;
+			}
+		} else if ( !Color::isColorString( firstParam ) && !functionType.parameterWasString( 0 ) ) {
+			// Try to parse angle value
+			std::string angleStr = firstParam;
+			String::toLowerInPlace( angleStr );
+
+			auto parseAngle = []( const std::string& s, Float& out ) -> bool {
+				Float val;
+				if ( String::endsWith( s, "deg" ) ) {
+					std::string num = s.substr( 0, s.size() - 3 );
+					if ( String::fromString( val, num ) ) {
+						out = val;
+						return true;
+					}
+				} else if ( String::endsWith( s, "rad" ) ) {
+					std::string num = s.substr( 0, s.size() - 3 );
+					if ( String::fromString( val, num ) ) {
+						out = val * 180.f / EE_PI;
+						return true;
+					}
+				} else if ( String::endsWith( s, "grad" ) ) {
+					std::string num = s.substr( 0, s.size() - 4 );
+					if ( String::fromString( val, num ) ) {
+						out = val * 0.9f; /* 1 grad = 0.9 deg */
+						return true;
+					}
+				} else if ( String::endsWith( s, "turn" ) ) {
+					std::string num = s.substr( 0, s.size() - 4 );
+					if ( String::fromString( val, num ) ) {
+						out = val * 360.f;
+						return true;
+					}
+				} else if ( String::fromString( val, s ) ) {
+					out = val; /* bare number treated as degrees */
+					return true;
+				}
+				return false;
+			};
+
+			if ( parseAngle( angleStr, angle ) ) {
+				paramIdx = 1;
+			}
 		}
 
-		drawable->setRectColors( rectColors );
+		// Parse color stops and hints
+		std::vector<ColorStopResult> gradientStops;
+		for ( size_t i = paramIdx; i < params.size(); i++ ) {
+			std::string stopParam = params[i];
+			String::trimInPlace( stopParam );
+
+			ColorStopResult stop = parseColorStop( stopParam );
+			if ( !stop.valid )
+				continue;
+
+			gradientStops.push_back( stop );
+		}
+
+		// Need at least two color stops (hints don't count)
+		{
+			int colorStopCount = 0;
+			for ( const auto& s : gradientStops ) {
+				if ( !s.isHint )
+					colorStopCount++;
+			}
+			if ( colorStopCount < 2 )
+				return NULL;
+		}
+
+		// Sort by position. Hints with the same position as a color stop are
+		// irrelevant (the hint has no effect); drop them.
+		std::sort( gradientStops.begin(), gradientStops.end(),
+				   []( const ColorStopResult& a, const ColorStopResult& b ) {
+					   return a.position < b.position;
+				   } );
+
+		// Fill missing positions on color stops. Hints always have explicit
+		// positions so they are left untouched.
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( gradientStops[i].isHint || gradientStops[i].position >= 0.f )
+				continue;
+			size_t prevKnown = i;
+			size_t nextKnown = i;
+			while ( prevKnown > 0 && ( gradientStops[prevKnown - 1].position < 0.f ) )
+				prevKnown--;
+			while ( nextKnown < gradientStops.size() &&
+					( gradientStops[nextKnown].isHint || gradientStops[nextKnown].position < 0.f ) )
+				nextKnown++;
+
+			Float startPos = ( prevKnown > 0 && !gradientStops[prevKnown - 1].isHint )
+								 ? gradientStops[prevKnown - 1].position
+								 : 0.f;
+			Float endPos =
+				( nextKnown < gradientStops.size() ) ? gradientStops[nextKnown].position : 1.f;
+			size_t range = nextKnown - prevKnown + 1;
+
+			for ( size_t j = prevKnown; j < nextKnown; j++ ) {
+				if ( gradientStops[j].isHint )
+					continue;
+				gradientStops[j].position =
+					startPos +
+					( endPos - startPos ) * ( (Float)( j - prevKnown + 1 ) / (Float)range );
+			}
+
+			i = nextKnown;
+		}
+
+		// Clamp first and last color stops. Skip hints at the boundaries.
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( !gradientStops[i].isHint ) {
+				gradientStops[i].position = 0.f;
+				break;
+			}
+		}
+		for ( size_t i = gradientStops.size(); i > 0; i-- ) {
+			if ( !gradientStops[i - 1].isHint ) {
+				gradientStops[i - 1].position = 1.f;
+				break;
+			}
+		}
+
+		// Expand hinted segments into finely sampled color stops
+		std::vector<LinearGradientDrawable::ColorStop> stops;
+		const int HINT_SAMPLES = 16;
+
+		for ( size_t i = 0; i < gradientStops.size(); i++ ) {
+			if ( gradientStops[i].isHint )
+				continue;
+
+			// Add the current color stop
+			stops.push_back( LinearGradientDrawable::ColorStop( gradientStops[i].position,
+																gradientStops[i].color ) );
+
+			// Find the next color stop and any hints between them
+			size_t nextColor = i + 1;
+			while ( nextColor < gradientStops.size() && gradientStops[nextColor].isHint )
+				nextColor++;
+			if ( nextColor >= gradientStops.size() )
+				break;
+
+			// Collect hints between current and next color stop
+			std::vector<Float> hints;
+			for ( size_t h = i + 1; h < nextColor; h++ ) {
+				if ( gradientStops[h].isHint )
+					hints.push_back( gradientStops[h].position );
+			}
+
+			if ( hints.empty() )
+				continue;
+
+			Float p0 = gradientStops[i].position;
+			Float p1 = gradientStops[nextColor].position;
+			Color c0 = gradientStops[i].color;
+			Color c1 = gradientStops[nextColor].color;
+
+			if ( std::abs( p1 - p0 ) < 0.0001f )
+				continue;
+
+			// Apply hints sequentially. Each hint adjusts the transition
+			// between the previously computed mid-points.
+			// For a single hint at position h between p0 and p1:
+			//   normalized hint hn = (h - p0) / (p1 - p0)
+			//   power = log(0.5) / log(hn)
+			//   color(p) = lerp(c0, c1, ((p-p0)/(p1-p0))^power)
+			// We sample HINT_SAMPLES points and add them as color stops.
+			Float hintNorm = ( hints[0] - p0 ) / ( p1 - p0 );
+			hintNorm = eemax( 0.001f, eemin( 0.999f, hintNorm ) );
+			Float power = std::log( 0.5f ) / std::log( hintNorm );
+
+			for ( int s = 1; s < HINT_SAMPLES; s++ ) {
+				Float x = (Float)s / (Float)HINT_SAMPLES;
+				Float t = std::pow( x, power );
+				Float pos = p0 + x * ( p1 - p0 );
+				Uint8 r = (Uint8)( (Float)c0.r + t * (Float)( c1.r - c0.r ) );
+				Uint8 g = (Uint8)( (Float)c0.g + t * (Float)( c1.g - c0.g ) );
+				Uint8 b = (Uint8)( (Float)c0.b + t * (Float)( c1.b - c0.b ) );
+				Uint8 a = (Uint8)( (Float)c0.a + t * (Float)( c1.a - c0.a ) );
+				stops.push_back( LinearGradientDrawable::ColorStop( pos, Color( r, g, b, a ) ) );
+			}
+		}
+
+		if ( stops.size() < 2 )
+			return NULL;
+
+		LinearGradientDrawable* drawable = LinearGradientDrawable::New();
+		drawable->setColorStops( std::move( stops ) );
+		drawable->setAngle( angle );
 		ownIt = true;
 		return drawable;
 	};
