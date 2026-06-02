@@ -1592,11 +1592,23 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 	Float maxWidth = 0;
 	bool isInlineBlockTextSpan =
 		container->isType( UI_TYPE_TEXTSPAN ) && container->asType<UITextSpan>()->isInlineBlock();
+	Node* parentNode = container->getParent();
+	bool parentIsFlexOrGrid = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+							  ( parentNode->asType<UIHTMLWidget>()->isFlex() ||
+								parentNode->asType<UIHTMLWidget>()->isGrid() );
 	if ( isInlineBlockTextSpan && mode == IntrinsicMode::None &&
 		 container->getPixelsSize().getWidth() > 0 ) {
 		maxWidth = container->getPixelsSize().getWidth() -
 				   container->getPixelsContentOffset().Left -
 				   container->getPixelsContentOffset().Right;
+	} else if ( parentIsFlexOrGrid &&
+				container->getLayoutWidthPolicy() == SizePolicy::WrapContent &&
+				mode == IntrinsicMode::None ) {
+		maxWidth = container->getPixelsSize().getWidth() > 0
+					   ? container->getPixelsSize().getWidth() -
+							 container->getPixelsContentOffset().Left -
+							 container->getPixelsContentOffset().Right
+					   : 0;
 	} else if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 		maxWidth = container->getMatchParentWidth() - container->getPixelsContentOffset().Left -
 				   container->getPixelsContentOffset().Right;
@@ -1641,10 +1653,9 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 
 	if ( container->isType( UI_TYPE_TEXTSPAN ) ) {
 		UITextSpan* selfSpan = container->asType<UITextSpan>();
-		Node* parentNode = container->getParent();
-		bool parentIsFlex = parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+		bool parentIsFlex = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
 							parentNode->asType<UIHTMLWidget>()->isFlex();
-		bool parentIsGrid = parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+		bool parentIsGrid = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
 							parentNode->asType<UIHTMLWidget>()->isGrid();
 		if ( !selfSpan->getText().empty() &&
 			 ( !selfSpan->isInline() || parentIsFlex || parentIsGrid ) &&
