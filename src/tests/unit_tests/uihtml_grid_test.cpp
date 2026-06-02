@@ -1716,3 +1716,41 @@ UTEST( GridContainer, downloadGridLayout ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( GridContainer, newsblurReducedGrid ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "UIHTML Grid NewsBlur Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings() );
+	init_grid_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+	std::string htmlContent;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/grid_newsblur_reduced.html", htmlContent ) );
+	sceneNode->loadLayoutFromString( EE::UI::Tools::HTMLFormatter::HTMLtoXML( htmlContent ) );
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* gridEl = sceneNode->getRoot()->findByClass( "NB-inner" );
+	ASSERT_TRUE( nullptr != gridEl );
+	ASSERT_TRUE( gridEl->isWidget() );
+
+	Float gridW = gridEl->getPixelsSize().getWidth();
+	Float gridH = gridEl->getPixelsSize().getHeight();
+	EXPECT_GT( gridW, 100.f );
+	EXPECT_GT( gridH, 100.f );
+
+	// Verify NB-feature-group items aren't overexpanded
+	auto* fg = sceneNode->getRoot()->findByClass( "NB-feature-group" );
+	ASSERT_TRUE( nullptr != fg );
+	Float fgH = fg->getPixelsSize().getHeight();
+	EXPECT_GT( fgH, 100.f );
+	EXPECT_LT( fgH, 2000.f );
+
+	auto* fgiText = sceneNode->getRoot()->findByClass( "NB-fgi-text" );
+	ASSERT_TRUE( nullptr != fgiText );
+	Float textW = fgiText->getPixelsSize().getWidth();
+	EXPECT_GT( textW, 150.f );
+
+	Engine::destroySingleton();
+}

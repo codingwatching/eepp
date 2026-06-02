@@ -377,7 +377,7 @@
         "working_dir": "${project_root}/bin"
       },
       {
-        "args": "-c system --hn-dark",
+        "args": "-d1 /home/downloads/files/svn/eepp/bin/unit_tests/assets/html/grid_newsblur_reduced.html",
         "command": "${project_root}/bin/eepp-ui-html-debug",
         "name": "eepp-ui-html-debug",
         "working_dir": "${project_root}/bin"

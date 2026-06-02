@@ -910,9 +910,16 @@ Do not checkpoint a failing phase as complete.
 | 41 | I5: Negative `contentBoxSize` now clamped to 0 | (implicitly tested) |
 | 42 | L5: `mPacking` converted to RAII guard (exception-safe) | (implicitly tested) |
 | 43 | I4: Span decoupled from `resolvedEnd` — explicit `columnSpan`/`rowSpan` fields | (implicitly tested) |
+| 44 | PL7: Auto-placement cursor not advancing past placed items (`cursorCol = c+sw`) | `GridContainer.percentHeightWithAutoParentFallsBackToContent` |
+| 45 | PL8: Auto-placement column/row limit growing during iteration (captured `colLimit`/`rowLimit`) | `GridContainer.percentHeightWithAutoParentFallsBackToContent` |
+| 46 | L6: `height:100%` / `width:100%` on grid with auto parent → fall back to content-based size | `GridContainer.percentHeightWithAutoParentFallsBackToContent` |
+| 47 | TS8: `1fr` tracks get `baseSize=0` when container has indefinite width → size from item intrinsic widths | `GridContainer.frTracksWithPercentWidthAndHeight` |
+| 48 | L7: `width:100%`/`height:100%` resolved against small intermediate ancestor → scan all ancestors + scene node for max size | `GridContainer.frTracksWithPercentWidthAndHeight` |
+| 49 | L8: Percentage fallback ran AFTER track sizing → rows sized with 0 height. Re-run sizing loop after fallback adjusts container size. | `GridContainer.frTracksWithPercentWidthAndHeight` |
+| 50 | L9: `height:100%` resolved against viewport instead of auto → use content-based height (CSS spec: % height on auto parent = auto) | `GridContainer.newsblurReducedGrid` |
 
 ### Stats
 
-- **Total bugs found**: 43
-- **Fixed**: 43
+- **Total bugs found**: 50
+- **Fixed**: 50
 - **By severity**: 0 remaining

@@ -1,9 +1,14 @@
 #include <algorithm>
 #include <cctype>
 #include <eepp/core/string.hpp>
+#include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
+#include <eepp/ui/css/stylesheetproperty.hpp>
+#include <eepp/ui/css/stylesheetspecification.hpp>
 #include <eepp/ui/gridlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
+#include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uitextnode.hpp>
 #include <set>
 
@@ -747,8 +752,12 @@ void GridLayouter::preSizeItemsForRowSizing() {
 		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
 			auto* childHtml = item.widget->asType<UIHTMLWidget>();
 			auto* layouter = childHtml->getLayouter();
-			if ( layouter && !layouter->isPacking() )
+			if ( layouter && !layouter->isPacking() ) {
+				auto oldHP = childHtml->getLayoutHeightPolicy();
+				childHtml->setLayoutHeightPolicy( SizePolicy::WrapContent );
 				childHtml->updateLayout();
+				childHtml->setLayoutHeightPolicy( oldHP );
+			}
 		}
 	}
 }
@@ -944,11 +953,70 @@ void GridLayouter::updateLayout() {
 	autoPlaceItems();
 	buildImplicitTracks();
 	collapseEmptyAutoFitTracks();
-	sizeTracksForAxis( true );
-	// Pre-size items to their column widths so row sizing sees correct heights
-	preSizeItemsForRowSizing();
-	sizeTracksForAxis( false );
-	applyLayout();
+
+	int needResize = true;
+	bool hPercentUnresolved = false;
+	bool wPercentUnresolved = false;
+	if ( grid && grid->getUIStyle() ) {
+		const StyleSheetProperty* hprop = grid->getUIStyle()->getProperty( PropertyId::Height );
+		hPercentUnresolved =
+			hprop && StyleSheetLength::isPercentage( hprop->value() ) &&
+			grid->getPixelsSize().getHeight() <= 0.f;
+		const StyleSheetProperty* wprop = grid->getUIStyle()->getProperty( PropertyId::Width );
+		wPercentUnresolved =
+			wprop && StyleSheetLength::isPercentage( wprop->value() ) &&
+			grid->getPixelsSize().getWidth() <= 0.f;
+	}
+	for ( int sizingPass = 0; sizingPass < 2 && needResize; ++sizingPass ) {
+		needResize = false;
+		sizeTracksForAxis( true );
+		preSizeItemsForRowSizing();
+		sizeTracksForAxis( false );
+		applyLayout();
+
+		if ( hPercentUnresolved ) {
+			Float contentH = 0.f;
+			for ( const auto& row : mRows )
+				contentH += row.baseSize;
+			if ( mRows.size() > 1 )
+				contentH += static_cast<Float>( mRows.size() - 1 ) * mRowGap;
+			contentH +=
+				mContainer->getPixelsContentOffset().Top +
+				mContainer->getPixelsContentOffset().Bottom;
+			if ( contentH > 0.f ) {
+				mContainer->setInternalPixelsHeight( contentH );
+				needResize = true;
+			}
+		}
+
+		if ( wPercentUnresolved ) {
+			const StyleSheetProperty* wprop =
+				grid->getUIStyle()->getProperty( PropertyId::Width );
+			std::string v = wprop->value();
+			v.pop_back();
+			Float pct = 0.f;
+			String::fromString( pct, v );
+			Float best = 0.f;
+			for ( Node* anc = grid->getParent(); anc; anc = anc->getParent() ) {
+				if ( anc->isWidget() ) {
+					Float sz = anc->asType<UIWidget>()->getPixelsSize().getWidth();
+					if ( sz > best )
+						best = sz;
+				}
+			}
+			UISceneNode* root = grid->getUISceneNode();
+			if ( root ) {
+				Float sz = root->getPixelsSize().getWidth();
+				if ( sz > best )
+					best = sz;
+			}
+			Float resolved = best * pct / 100.f;
+			if ( resolved > 0.f ) {
+				mContainer->setInternalPixelsWidth( resolved );
+				needResize = true;
+			}
+		}
+	}
 
 	// Phase 15: set paint-order sort flag
 	if ( grid ) {
@@ -1097,9 +1165,6 @@ GridLineResult GridLineParser::parse( const std::string& value ) {
 
 static void resolveAxisPlacement( const GridLineResult& start, const GridLineResult& end,
 								  int explicitCount, int& outStart, int& outEnd ) {
-	outStart = 0;
-	outEnd = 0;
-
 	if ( start.isAuto && end.isAuto )
 		return;
 
@@ -1177,8 +1242,10 @@ static void resolveAxisPlacement( const GridLineResult& start, const GridLineRes
 }
 
 void GridLayouter::resolveDefinitePlacements() {
-	int explicitCols = static_cast<int>( mColumns.size() );
-	int explicitRows = static_cast<int>( mRows.size() );
+	int explicitCols =
+		std::max( static_cast<int>( mExplicitColCount ), static_cast<int>( mColumns.size() ) );
+	int explicitRows =
+		std::max( static_cast<int>( mExplicitRowCount ), static_cast<int>( mRows.size() ) );
 
 	mMaxColumn = explicitCols;
 	mMaxRow = explicitRows;
@@ -1266,6 +1333,9 @@ void GridLayouter::resolveDefinitePlacements() {
 }
 
 void GridLayouter::autoPlaceItems() {
+	int maxColumns = mMaxColumn;
+	int maxRows = mMaxRow;
+
 	std::set<std::pair<int, int>> occupied;
 	for ( const auto& item : mItems ) {
 		if ( item.resolvedColumnStart > 0 && item.resolvedRowStart > 0 ) {
@@ -1332,7 +1402,7 @@ void GridLayouter::autoPlaceItems() {
 				if ( mAutoFlowDense ) {
 					// Dense: search from the beginning for first empty cell
 					for ( int r = 1;; ++r ) {
-						for ( int c = 1; c <= std::max( mMaxColumn, 1 ); ++c ) {
+						for ( int c = 1; c <= std::max( maxColumns, 1 ); ++c ) {
 							if ( fits( r, c, sw, sh ) ) {
 								item.resolvedRowStart = r;
 								item.resolvedRowEnd = r + sh;
@@ -1351,7 +1421,7 @@ void GridLayouter::autoPlaceItems() {
 				} else {
 					for ( int r = cursorRow;; ++r ) {
 						int startC = ( r == cursorRow ) ? cursorCol : 1;
-						for ( int c = startC; c <= std::max( mMaxColumn, 1 ); ++c ) {
+						for ( int c = startC; c <= std::max( maxColumns, 1 ); ++c ) {
 							if ( fits( r, c, sw, sh ) ) {
 								item.resolvedRowStart = r;
 								item.resolvedRowEnd = r + sh;
@@ -1373,7 +1443,7 @@ void GridLayouter::autoPlaceItems() {
 				bool placed = false;
 				if ( mAutoFlowDense ) {
 					for ( int c = 1;; ++c ) {
-						for ( int r = 1; r <= std::max( mMaxRow, 1 ); ++r ) {
+						for ( int r = 1; r <= std::max( maxRows, 1 ); ++r ) {
 							if ( fits( r, c, sw, sh ) ) {
 								item.resolvedRowStart = r;
 								item.resolvedRowEnd = r + sh;
@@ -1392,7 +1462,7 @@ void GridLayouter::autoPlaceItems() {
 				} else {
 					for ( int c = cursorCol;; ++c ) {
 						int startR = ( c == cursorCol ) ? cursorRow : 1;
-						int rowLimit = std::max( mMaxRow, 1 );
+						int rowLimit = std::max( maxRows, 1 );
 						for ( int r = startR; r <= rowLimit; ++r ) {
 							if ( fits( r, c, sw, sh ) ) {
 								item.resolvedRowStart = r;
@@ -1413,6 +1483,9 @@ void GridLayouter::autoPlaceItems() {
 			}
 		}
 
+		// Only update member fields — the local snapshot must NOT grow
+		// during auto-placement, otherwise later items overflow into
+		// implicit columns instead of wrapping to the next row.
 		if ( item.resolvedColumnEnd > mMaxColumn )
 			mMaxColumn = item.resolvedColumnEnd;
 		if ( item.resolvedRowEnd > mMaxRow )

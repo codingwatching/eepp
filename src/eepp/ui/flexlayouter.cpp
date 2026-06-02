@@ -268,6 +268,22 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.widget->setLayoutWidthPolicy( SizePolicy::WrapContent );
 			else
 				item.widget->setLayoutHeightPolicy( SizePolicy::WrapContent );
+
+			// Set the item's internal size to the container's main size,
+			// so the block layouter's `else` branch (non-WrapContent)
+			// wraps text at the full container width.  The flex-shrink
+			// step will then proportionally reduce the item to its final
+			// size, giving the expected "fill remaining space" behaviour.
+			Float containerMainDim =
+				mainAxis.horizontal
+					? containerWidth - containerPadding.Left - containerPadding.Right
+					: containerHeight - containerPadding.Top - containerPadding.Bottom;
+			if ( containerMainDim > 0.f ) {
+				if ( mainAxis.horizontal )
+					item.widget->setInternalPixelsWidth( containerMainDim );
+				else
+					item.widget->setInternalPixelsHeight( containerMainDim );
+			}
 		}
 
 		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
