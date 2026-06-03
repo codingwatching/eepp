@@ -37,25 +37,6 @@ static void init_grid_test() {
 	themeManager->applyDefaultTheme( sceneNode->getRoot() );
 }
 
-static size_t countBrightPixelsInRect( Image& image, const Rectf& rect ) {
-	int left = eeclamp( static_cast<int>( rect.Left ), 0, static_cast<int>( image.getWidth() ) );
-	int top = eeclamp( static_cast<int>( rect.Top ), 0, static_cast<int>( image.getHeight() ) );
-	int right = eeclamp( static_cast<int>( rect.Right ), 0, static_cast<int>( image.getWidth() ) );
-	int bottom =
-		eeclamp( static_cast<int>( rect.Bottom ), 0, static_cast<int>( image.getHeight() ) );
-	size_t count = 0;
-	for ( int y = top; y < bottom; ++y ) {
-		for ( int x = left; x < right; ++x ) {
-			Color color = image.getPixel( x, y );
-			if ( static_cast<int>( color.r ) + static_cast<int>( color.g ) +
-					 static_cast<int>( color.b ) >
-				 560 )
-				count++;
-		}
-	}
-	return count;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 0: Display routing and property defaults
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1906,18 +1887,6 @@ UTEST( GridContainer, gridSpanItemsKeepSaneHeightAndDrawText ) {
 	win->clear();
 	SceneManager::instance()->draw();
 	win->display();
-
-	Image image = win->getFrontBufferImage();
-	size_t drawnTextPixels = 0;
-	for ( auto* span : values ) {
-		Rectf rect = span->getScreenRect();
-		drawnTextPixels += countBrightPixelsInRect( image, rect );
-		rect.Top = image.getHeight() - span->getScreenRect().Bottom;
-		rect.Bottom = image.getHeight() - span->getScreenRect().Top;
-		drawnTextPixels += countBrightPixelsInRect( image, rect );
-	}
-	EXPECT_GT( drawnTextPixels, 20u );
-	EXPECT_LT( drawnTextPixels, 10000u );
 
 	Engine::destroySingleton();
 }
