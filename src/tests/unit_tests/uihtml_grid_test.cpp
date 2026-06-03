@@ -2,6 +2,7 @@
 
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
+#include <eepp/graphics/image.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/ui/css/stylesheetparser.hpp>
@@ -34,6 +35,25 @@ static void init_grid_test() {
 	UIThemeManager* themeManager = sceneNode->getUIThemeManager();
 	themeManager->setDefaultFont( font );
 	themeManager->applyDefaultTheme( sceneNode->getRoot() );
+}
+
+static size_t countBrightPixelsInRect( Image& image, const Rectf& rect ) {
+	int left = eeclamp( static_cast<int>( rect.Left ), 0, static_cast<int>( image.getWidth() ) );
+	int top = eeclamp( static_cast<int>( rect.Top ), 0, static_cast<int>( image.getHeight() ) );
+	int right = eeclamp( static_cast<int>( rect.Right ), 0, static_cast<int>( image.getWidth() ) );
+	int bottom =
+		eeclamp( static_cast<int>( rect.Bottom ), 0, static_cast<int>( image.getHeight() ) );
+	size_t count = 0;
+	for ( int y = top; y < bottom; ++y ) {
+		for ( int x = left; x < right; ++x ) {
+			Color color = image.getPixel( x, y );
+			if ( static_cast<int>( color.r ) + static_cast<int>( color.g ) +
+					 static_cast<int>( color.b ) >
+				 560 )
+				count++;
+		}
+	}
+	return count;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1824,6 +1844,80 @@ UTEST( GridContainer, gridTestFixturePlacesSpanningItems ) {
 	EXPECT_GT( fourWidget->getPixelsPosition().y, twoWidget->getPixelsPosition().y + 200.f );
 	EXPECT_NEAR( fiveWidget->getPixelsPosition().y, sixWidget->getPixelsPosition().y, 1.f );
 	EXPECT_GT( sixWidget->getPixelsPosition().x, fiveWidget->getPixelsPosition().x + 300.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( GridContainer, gridSpanItemsKeepSaneHeightAndDrawText ) {
+	auto* win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 650, "UIHTML Grid Span Text Test", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings() );
+	init_grid_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string htmlContent;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/grid_size_miscalculation.html", htmlContent ) );
+	sceneNode->loadLayoutFromString( EE::UI::Tools::HTMLFormatter::HTMLtoXML( htmlContent ) );
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto* headerBox = sceneNode->getRoot()->findByClass( "header-box" );
+	ASSERT_TRUE( nullptr != headerBox );
+	ASSERT_TRUE( headerBox->isWidget() );
+
+	auto rows = headerBox->findAllByClass( "hb-row" );
+	auto keys = headerBox->findAllByClass( "hb-k" );
+	auto values = headerBox->findAllByClass( "hb-v" );
+	ASSERT_EQ( rows.size(), 3u );
+	ASSERT_EQ( keys.size(), 3u );
+	ASSERT_EQ( values.size(), 3u );
+
+	for ( auto* row : rows ) {
+		ASSERT_TRUE( row->isWidget() );
+		ASSERT_TRUE( row->isType( UI_TYPE_RICHTEXT ) );
+		EXPECT_GT( row->getPixelsSize().getHeight(), 10.f );
+		EXPECT_LT( row->getPixelsSize().getHeight(), 60.f );
+	}
+
+	for ( auto* span : keys ) {
+		ASSERT_TRUE( span->isType( UI_TYPE_TEXTSPAN ) );
+		auto* richText = span->asType<UITextSpan>()->getRichTextPtr();
+		ASSERT_TRUE( richText != nullptr );
+		EXPECT_EQ( richText->getLines().size(), 1u );
+		EXPECT_GT( span->getPixelsSize().getHeight(), 10.f );
+		EXPECT_LT( span->getPixelsSize().getHeight(), 60.f );
+	}
+
+	for ( auto* span : values ) {
+		ASSERT_TRUE( span->isType( UI_TYPE_TEXTSPAN ) );
+		auto* richText = span->asType<UITextSpan>()->getRichTextPtr();
+		ASSERT_TRUE( richText != nullptr );
+		EXPECT_GE( richText->getLines().size(), 1u );
+		EXPECT_GT( span->getPixelsSize().getHeight(), 10.f );
+		EXPECT_LT( span->getPixelsSize().getHeight(), 60.f );
+	}
+
+	EXPECT_GT( headerBox->asType<UIWidget>()->getPixelsSize().getHeight(), 60.f );
+	EXPECT_LT( headerBox->asType<UIWidget>()->getPixelsSize().getHeight(), 160.f );
+
+	win->setClearColor( Color( "#0c1520" ) );
+	win->clear();
+	SceneManager::instance()->draw();
+	win->display();
+
+	Image image = win->getFrontBufferImage();
+	size_t drawnTextPixels = 0;
+	for ( auto* span : values ) {
+		Rectf rect = span->getScreenRect();
+		drawnTextPixels += countBrightPixelsInRect( image, rect );
+		rect.Top = image.getHeight() - span->getScreenRect().Bottom;
+		rect.Bottom = image.getHeight() - span->getScreenRect().Top;
+		drawnTextPixels += countBrightPixelsInRect( image, rect );
+	}
+	EXPECT_GT( drawnTextPixels, 20u );
+	EXPECT_LT( drawnTextPixels, 10000u );
 
 	Engine::destroySingleton();
 }

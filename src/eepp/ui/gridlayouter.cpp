@@ -594,12 +594,21 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 	bool hasDefiniteSize = mContainer->getLayoutWidthPolicy() != SizePolicy::WrapContent;
 	if ( !isColumns )
 		hasDefiniteSize = mContainer->getLayoutHeightPolicy() != SizePolicy::WrapContent;
+	CSS::PropertyRelativeTarget relativeTarget =
+		isColumns ? CSS::PropertyRelativeTarget::ContainingBlockWidth
+				  : CSS::PropertyRelativeTarget::ContainingBlockHeight;
+	auto resolveLength = [&]( const GridTrackBreadth& breadth ) {
+		// GridTrackParser keeps the raw CSS token so sizing can resolve units with the container
+		// context. Do not use breadth.value directly for Length tracks: tokens such as "6.5rem"
+		// parse to numeric 6.5 but must become CSS pixels before track sizing and item wrapping.
+		return mContainer->lengthFromValue( breadth.raw, relativeTarget, breadth.value );
+	};
 
 	// Initialize base sizes
 	for ( auto& track : tracks ) {
 		switch ( track.definition.min.type ) {
 			case GridTrackBreadthType::Length:
-				track.baseSize = track.definition.min.value;
+				track.baseSize = resolveLength( track.definition.min );
 				break;
 			case GridTrackBreadthType::Percentage:
 				if ( hasDefiniteSize )
@@ -612,11 +621,11 @@ void GridLayouter::sizeTracksForAxis( bool isColumns ) {
 				break;
 		}
 		if ( track.definition.max.type == GridTrackBreadthType::Length )
-			track.growthLimit = track.definition.max.value;
+			track.growthLimit = resolveLength( track.definition.max );
 		else if ( track.definition.max.type == GridTrackBreadthType::Percentage && hasDefiniteSize )
 			track.growthLimit = track.definition.max.value * contentBoxSize / 100.f;
 		else if ( track.definition.max.type == GridTrackBreadthType::FitContent )
-			track.growthLimit = track.definition.max.value;
+			track.growthLimit = resolveLength( track.definition.max );
 		else
 			track.growthLimit = std::numeric_limits<Float>::infinity();
 	}

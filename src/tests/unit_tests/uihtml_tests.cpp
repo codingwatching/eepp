@@ -3682,6 +3682,13 @@ UTEST( UIHTML, FlexFormLayout ) {
 	Float inputRight = inputWidget->getPixelsPosition().x + inputWidget->getPixelsSize().getWidth();
 	EXPECT_GT( buttonWidget->getPixelsPosition().x, inputRight - 1.f );
 
+	auto* buttonRichText = buttonWidget->isType( UI_TYPE_RICHTEXT )
+							   ? buttonWidget->asType<UIRichText>()->getRichTextPtr()
+							   : nullptr;
+	ASSERT_TRUE( buttonRichText != nullptr );
+	buttonRichText->updateLayout();
+	EXPECT_EQ( buttonRichText->getLines().size(), 1u );
+
 	Engine::destroySingleton();
 }
 
@@ -3783,6 +3790,19 @@ UTEST( UIHTML, FlexMediaQueriesLayout ) {
 		EXPECT_GT( essayNavLinkWidget->getPixelsSize().getHeight(),
 				   labelWidget->getPixelsSize().getHeight() +
 					   titleWidget->getPixelsSize().getHeight() - 1.f );
+
+		auto* labelRichText = essayLabel->isType( UI_TYPE_TEXTSPAN )
+								  ? essayLabel->asType<UITextSpan>()->getRichTextPtr()
+								  : nullptr;
+		auto* titleRichText = essayTitle->isType( UI_TYPE_TEXTSPAN )
+								  ? essayTitle->asType<UITextSpan>()->getRichTextPtr()
+								  : nullptr;
+		ASSERT_TRUE( labelRichText != nullptr );
+		ASSERT_TRUE( titleRichText != nullptr );
+		labelRichText->updateLayout();
+		titleRichText->updateLayout();
+		EXPECT_EQ( labelRichText->getLines().size(), 1u );
+		EXPECT_EQ( titleRichText->getLines().size(), 1u );
 	}
 
 	Engine::destroySingleton();

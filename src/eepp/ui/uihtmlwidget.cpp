@@ -982,6 +982,29 @@ void UIHTMLWidget::updateOutOfFlowPosition() {
 	bool useLeft = mLeftEq != "auto";
 	bool useRight = mRightEq != "auto";
 
+	// Per CSS §10.1: for absolutely positioned elements, percentage top/bottom
+	// resolves against the containing block's height. If the containing block
+	// does not have a definite height, the percentage computes to auto to
+	// prevent circular dependencies.
+	auto cbHasDefiniteHeight = [&]() {
+		if ( !cb->isLayout() )
+			return true;
+		auto* cbLayout = cb->asType<UILayout>();
+		if ( cbLayout->getLayoutHeightPolicy() != SizePolicy::Fixed )
+			return false;
+		if ( cb->getUIStyle() ) {
+			const auto* hprop = cb->getUIStyle()->getProperty( PropertyId::Height );
+			if ( hprop && StyleSheetLength::isPercentage( hprop->value() ) )
+				return false;
+		}
+		return true;
+	};
+
+	if ( useTop && StyleSheetLength::isPercentage( mTopEq ) && !cbHasDefiniteHeight() )
+		useTop = false;
+	if ( useBottom && StyleSheetLength::isPercentage( mBottomEq ) && !cbHasDefiniteHeight() )
+		useBottom = false;
+
 	if ( useLeft )
 		left = lengthFromValue( mLeftEq, CSS::PropertyRelativeTarget::ContainingBlockWidth, 0 );
 	if ( useRight )

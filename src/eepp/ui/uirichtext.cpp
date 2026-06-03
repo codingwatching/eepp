@@ -248,7 +248,9 @@ bool UIHTMLBody::applyProperty( const StyleSheetProperty& attribute ) {
 void UIHTMLBody::updateLayout() {
 	UIRichText::updateLayout();
 
-	if ( mChild && mChild->isWidget() ) {
+	if ( mChild && mChild->isWidget() && !mSettingBodyHeight ) {
+		mSettingBodyHeight = true;
+
 		Float maxH = 0;
 		Node* child = mChild;
 		Float minHeight = std::max(
@@ -279,6 +281,8 @@ void UIHTMLBody::updateLayout() {
 			if ( dpH != minHeight )
 				setMinHeight( dpH );
 		}
+
+		mSettingBodyHeight = false;
 	}
 }
 
@@ -370,6 +374,18 @@ const RichText& UIRichText::getRichText() {
 void UIRichText::draw() {
 	if ( mVisible && 0.f != mAlpha ) {
 		UIWidget::draw();
+
+		// Block-level flex and grid containers do not own text painting for their item children.
+		// Their children are blockified and laid out/drawn as independent nodes. A container
+		// can still have a stale mRichText from a previous display state or an intermediate
+		// layout pass, so bail out here too; otherwise grid/flex items are painted twice: once by
+		// this parent stream and once by the child UITextSpan::draw().
+		//
+		// Do not use isFlex()/isGrid() here: those also include inline-flex/inline-grid. Inline
+		// flex/grid containers are atomic inline-level boxes in their parent formatting context
+		// and must not be treated like block-level containers for this paint-ownership shortcut.
+		if ( getDisplay() == CSSDisplay::Flex || getDisplay() == CSSDisplay::Grid )
+			return;
 
 		if ( mRichText.getSize().getWidth() > 0.f ) {
 			Rectf contentOffset = getPixelsContentOffset();
@@ -1604,11 +1620,7 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 	} else if ( parentIsFlexOrGrid &&
 				container->getLayoutWidthPolicy() == SizePolicy::WrapContent &&
 				mode == IntrinsicMode::None ) {
-		maxWidth = container->getPixelsSize().getWidth() > 0
-					   ? container->getPixelsSize().getWidth() -
-							 container->getPixelsContentOffset().Left -
-							 container->getPixelsContentOffset().Right
-					   : 0;
+		maxWidth = 0;
 	} else if ( container->getLayoutWidthPolicy() == SizePolicy::WrapContent ) {
 		maxWidth = container->getMatchParentWidth() - container->getPixelsContentOffset().Left -
 				   container->getPixelsContentOffset().Right;
@@ -2031,6 +2043,22 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 			}
 		}
 	};
+
+	if ( container->isType( UI_TYPE_HTML_WIDGET ) ) {
+		auto* htmlContainer = container->asType<UIHTMLWidget>();
+		// RichText is the inline-formatting stream for normal block containers. Block-level
+		// flex/grid containers are different: every in-flow child becomes a flex/grid item and
+		// must not be folded into the parent's text stream. Keeping the parent stream empty
+		// prevents duplicate paint and keeps item geometry sourced from the layouter, not from
+		// inline fragments.
+		//
+		// Inline-flex/inline-grid are intentionally excluded here for the same reason as in
+		// UIRichText::draw(): isFlex()/isGrid() includes inline display variants, but these
+		// ownership exits are only valid for block-level flex/grid containers.
+		CSSDisplay display = htmlContainer->getDisplay();
+		if ( display == CSSDisplay::Flex || display == CSSDisplay::Grid )
+			return;
+	}
 
 	Node* child = container->getFirstChild();
 	while ( NULL != child ) {
