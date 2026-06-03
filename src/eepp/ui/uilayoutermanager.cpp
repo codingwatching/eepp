@@ -1,6 +1,7 @@
 #include <eepp/core/memorymanager.hpp>
 #include <eepp/ui/blocklayouter.hpp>
 #include <eepp/ui/flexlayouter.hpp>
+#include <eepp/ui/gridlayouter.hpp>
 #include <eepp/ui/inlinelayouter.hpp>
 #include <eepp/ui/nonelayouter.hpp>
 #include <eepp/ui/tablelayouter.hpp>
@@ -16,12 +17,22 @@ static bool parentIsFlexContainer( UIWidget* widget ) {
 		   parent->asType<UIHTMLWidget>()->isFlex();
 }
 
+static bool parentIsGridContainer( UIWidget* widget ) {
+	Node* parent = widget->getParent();
+	return parent && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+		   parent->asType<UIHTMLWidget>()->isGrid();
+}
+
 UILayouter* UILayouterManager::create( CSSDisplay display, UIWidget* container ) {
-	// Blockification per CSS Flexbox §4: children of flex containers are block-level
-	if ( parentIsFlexContainer( container ) ) {
-		// But a child that is itself a flex container still needs FlexLayouter
+	// Blockification per CSS Flexbox §4 and CSS Grid §6: children of flex / grid containers
+	// are block-level
+	if ( parentIsFlexContainer( container ) || parentIsGridContainer( container ) ) {
+		// But a child that is itself a flex container still needs FlexLayouter,
+		// and a child that is itself a grid container still needs GridLayouter.
 		if ( display == CSSDisplay::Flex || display == CSSDisplay::InlineFlex )
 			return eeNew( FlexLayouter, ( container ) );
+		if ( display == CSSDisplay::Grid || display == CSSDisplay::InlineGrid )
+			return eeNew( GridLayouter, ( container ) );
 		return eeNew( BlockLayouter, ( container ) );
 	}
 
@@ -34,6 +45,9 @@ UILayouter* UILayouterManager::create( CSSDisplay display, UIWidget* container )
 		case CSSDisplay::Flex:
 		case CSSDisplay::InlineFlex:
 			return eeNew( FlexLayouter, ( container ) );
+		case CSSDisplay::Grid:
+		case CSSDisplay::InlineGrid:
+			return eeNew( GridLayouter, ( container ) );
 		case CSSDisplay::Inline:
 			if ( container->isType( UI_TYPE_TEXTSPAN ) )
 				return eeNew( InlineLayouter, ( container ) );

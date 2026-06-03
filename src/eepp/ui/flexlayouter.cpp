@@ -133,6 +133,16 @@ bool getFontStyleFromAncestor( UIWidget* widget, FontStyleConfig& outConfig ) {
 	return false;
 }
 
+static void updateChildLayoutIfDirty( UIWidget* widget, const UILayouter* owner ) {
+	if ( !widget->isType( UI_TYPE_HTML_WIDGET ) )
+		return;
+
+	auto* childHtml = widget->asType<UIHTMLWidget>();
+	auto* layouter = childHtml->getLayouter();
+	if ( layouter && layouter != owner && !layouter->isPacking() && childHtml->isLayoutDirty() )
+		childHtml->updateLayout();
+}
+
 } // namespace
 
 void FlexLayouter::readContainerStyle( CSSFlexDirection& direction, CSSFlexWrap& wrap,
@@ -268,15 +278,25 @@ void FlexLayouter::measureFlexItems( const Axis& mainAxis, const Axis& crossAxis
 				item.widget->setLayoutWidthPolicy( SizePolicy::WrapContent );
 			else
 				item.widget->setLayoutHeightPolicy( SizePolicy::WrapContent );
-		}
 
-		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-			auto* childHtml = item.widget->asType<UIHTMLWidget>();
-			auto* layouter = childHtml->getLayouter();
-			if ( layouter && !layouter->isPacking() && layouter != this ) {
-				childHtml->updateLayout();
+			// Set the item's internal size to the container's main size,
+			// so the block layouter's `else` branch (non-WrapContent)
+			// wraps text at the full container width.  The flex-shrink
+			// step will then proportionally reduce the item to its final
+			// size, giving the expected "fill remaining space" behaviour.
+			Float containerMainDim =
+				mainAxis.horizontal
+					? containerWidth - containerPadding.Left - containerPadding.Right
+					: containerHeight - containerPadding.Top - containerPadding.Bottom;
+			if ( containerMainDim > 0.f ) {
+				if ( mainAxis.horizontal )
+					item.widget->setInternalPixelsWidth( containerMainDim );
+				else
+					item.widget->setInternalPixelsHeight( containerMainDim );
 			}
 		}
+
+		updateChildLayoutIfDirty( item.widget, this );
 
 		if ( oldMainPolicy == SizePolicy::MatchParent ) {
 			if ( mainAxis.horizontal )
@@ -875,11 +895,7 @@ void FlexLayouter::resolveCrossSizes( FlexLine& line, const Axis& crossAxis,
 			item.widget->setInternalPixelsWidth( item.targetMainSize );
 		else
 			item.widget->setInternalPixelsHeight( item.targetMainSize );
-		if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-			auto* htmlWidget = item.widget->asType<UIHTMLWidget>();
-			if ( htmlWidget->getLayouter() && htmlWidget->getLayouter() != this )
-				htmlWidget->updateLayout();
-		}
+		updateChildLayoutIfDirty( item.widget, this );
 	}
 
 	// For text nodes (anonymous flex items), configure a cached Text object for
@@ -1164,14 +1180,7 @@ void FlexLayouter::applyLayout( const SmallVector<FlexLine, 8>& lines, const Axi
 			item.widget->setPixelsPosition( widgetX, widgetY );
 			item.widget->setPixelsSize( widgetW, widgetH );
 
-			if ( item.widget->isType( UI_TYPE_HTML_WIDGET ) ) {
-				auto* childHtml = item.widget->asType<UIHTMLWidget>();
-				if ( childHtml->getLayouter() && childHtml->getLayouter() != this ) {
-					auto* childLayouter = childHtml->getLayouter();
-					if ( !childLayouter->isPacking() )
-						childHtml->updateLayout();
-				}
-			}
+			updateChildLayoutIfDirty( item.widget, this );
 		}
 	}
 

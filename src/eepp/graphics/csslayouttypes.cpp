@@ -15,6 +15,10 @@ std::string CSSDisplayHelper::toString( CSSDisplay display ) {
 			return "flex";
 		case CSSDisplay::InlineFlex:
 			return "inline-flex";
+		case CSSDisplay::Grid:
+			return "grid";
+		case CSSDisplay::InlineGrid:
+			return "inline-grid";
 		case CSSDisplay::None:
 			return "none";
 		case CSSDisplay::Table:
@@ -61,6 +65,10 @@ CSSDisplay CSSDisplayHelper::fromString( std::string_view val ) {
 		display = CSSDisplay::Flex;
 	else if ( val == "inline-flex" )
 		display = CSSDisplay::InlineFlex;
+	else if ( val == "grid" )
+		display = CSSDisplay::Grid;
+	else if ( val == "inline-grid" )
+		display = CSSDisplay::InlineGrid;
 	return display;
 }
 
@@ -442,6 +450,98 @@ CSSAlignSelf CSSAlignSelfHelper::fromString( std::string_view val ) {
 	if ( val == "stretch" )
 		return CSSAlignSelf::Stretch;
 	return CSSAlignSelf::Auto;
+}
+
+std::string CSSGridAutoFlowHelper::toString( CSSGridAutoFlow val ) {
+	switch ( val ) {
+		case CSSGridAutoFlow::Column:
+			return "column";
+		case CSSGridAutoFlow::Row:
+		default:
+			return "row";
+	}
+}
+
+CSSGridAutoFlow CSSGridAutoFlowHelper::fromString( std::string_view val ) {
+	if ( val == "column" )
+		return CSSGridAutoFlow::Column;
+	return CSSGridAutoFlow::Row;
+}
+
+std::string CSSJustifyItemsHelper::toString( CSSJustifyItems val ) {
+	switch ( val ) {
+		case CSSJustifyItems::Stretch:
+			return "stretch";
+		case CSSJustifyItems::Start:
+			return "start";
+		case CSSJustifyItems::End:
+			return "end";
+		case CSSJustifyItems::Center:
+			return "center";
+		case CSSJustifyItems::FlexStart:
+			return "flex-start";
+		case CSSJustifyItems::FlexEnd:
+			return "flex-end";
+		case CSSJustifyItems::Normal:
+		default:
+			return "normal";
+	}
+}
+
+CSSJustifyItems CSSJustifyItemsHelper::fromString( std::string_view val ) {
+	if ( val == "stretch" )
+		return CSSJustifyItems::Stretch;
+	if ( val == "start" )
+		return CSSJustifyItems::Start;
+	if ( val == "end" )
+		return CSSJustifyItems::End;
+	if ( val == "center" )
+		return CSSJustifyItems::Center;
+	if ( val == "flex-start" )
+		return CSSJustifyItems::FlexStart;
+	if ( val == "flex-end" )
+		return CSSJustifyItems::FlexEnd;
+	return CSSJustifyItems::Normal;
+}
+
+std::string CSSJustifySelfHelper::toString( CSSJustifySelf val ) {
+	switch ( val ) {
+		case CSSJustifySelf::Stretch:
+			return "stretch";
+		case CSSJustifySelf::Start:
+			return "start";
+		case CSSJustifySelf::End:
+			return "end";
+		case CSSJustifySelf::Center:
+			return "center";
+		case CSSJustifySelf::FlexStart:
+			return "flex-start";
+		case CSSJustifySelf::FlexEnd:
+			return "flex-end";
+		case CSSJustifySelf::Normal:
+			return "normal";
+		case CSSJustifySelf::Auto:
+		default:
+			return "auto";
+	}
+}
+
+CSSJustifySelf CSSJustifySelfHelper::fromString( std::string_view val ) {
+	if ( val == "stretch" )
+		return CSSJustifySelf::Stretch;
+	if ( val == "start" )
+		return CSSJustifySelf::Start;
+	if ( val == "end" )
+		return CSSJustifySelf::End;
+	if ( val == "center" )
+		return CSSJustifySelf::Center;
+	if ( val == "flex-start" )
+		return CSSJustifySelf::FlexStart;
+	if ( val == "flex-end" )
+		return CSSJustifySelf::FlexEnd;
+	if ( val == "normal" )
+		return CSSJustifySelf::Normal;
+	return CSSJustifySelf::Auto;
 }
 
 std::string CSSVisibilityHelper::toString( CSSVisibility val ) {

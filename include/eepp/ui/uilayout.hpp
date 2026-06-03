@@ -5,6 +5,8 @@
 
 namespace EE { namespace UI {
 
+class GridLayouter;
+
 class EE_API UILayout : public UIWidget {
   public:
 	virtual Uint32 getType() const;
@@ -28,6 +30,7 @@ class EE_API UILayout : public UIWidget {
 	void setLayoutDirty();
 
   protected:
+	friend class GridLayouter;
 	friend class UISceneNode;
 	friend class UILayouter;
 

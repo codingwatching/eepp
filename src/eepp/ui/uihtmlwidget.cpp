@@ -2,6 +2,7 @@
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
 #include <eepp/ui/flexlayouter.hpp>
+#include <eepp/ui/gridlayouter.hpp>
 #include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uilayouter.hpp>
 #include <eepp/ui/uilayoutermanager.hpp>
@@ -78,6 +79,7 @@ UIHTMLWidget::~UIHTMLWidget() {
 		mScrollTarget->removeEventListener( mScrollCb );
 	eeSAFE_DELETE( mLayouter );
 	eeSAFE_DELETE( mFlexState );
+	eeSAFE_DELETE( mGridState );
 }
 
 UILayouter* UIHTMLWidget::getLayouter() {
@@ -114,11 +116,11 @@ void UIHTMLWidget::setDisplay( CSSDisplay display ) {
 		mNodeFlags |= NODE_FLAG_OVER_FIND_ALLOWED;
 
 		if ( mDisplay == CSSDisplay::InlineBlock || mDisplay == CSSDisplay::Inline ||
-			 mDisplay == CSSDisplay::InlineFlex ) {
+			 mDisplay == CSSDisplay::InlineFlex || mDisplay == CSSDisplay::InlineGrid ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::MatchParent )
 				setLayoutWidthPolicy( SizePolicy::WrapContent );
 		} else if ( mDisplay == CSSDisplay::Block || mDisplay == CSSDisplay::ListItem ||
-					mDisplay == CSSDisplay::Flex ) {
+					mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::Grid ) {
 			if ( getLayoutWidthPolicy() == SizePolicy::WrapContent &&
 				 mPosition != CSSPosition::Absolute && mPosition != CSSPosition::Fixed )
 				setLayoutWidthPolicy( SizePolicy::MatchParent );
@@ -138,10 +140,20 @@ bool UIHTMLWidget::isFlex() const {
 	return mDisplay == CSSDisplay::Flex || mDisplay == CSSDisplay::InlineFlex;
 }
 
+bool UIHTMLWidget::isGrid() const {
+	return mDisplay == CSSDisplay::Grid || mDisplay == CSSDisplay::InlineGrid;
+}
+
 Float UIHTMLWidget::getBaseline() const {
-	if ( isFlex() && mLayouter ) {
-		auto* flex = reinterpret_cast<FlexLayouter*>( mLayouter );
-		return flex->getBaseline();
+	if ( mLayouter ) {
+		if ( isFlex() ) {
+			auto* flex = reinterpret_cast<FlexLayouter*>( mLayouter );
+			return flex->getBaseline();
+		}
+		if ( isGrid() ) {
+			auto* grid = reinterpret_cast<GridLayouter*>( mLayouter );
+			return grid->getBaseline();
+		}
 	}
 	if ( mBaselineAlign.type == CSSBaselineAlignment::Length )
 		return mBaselineAlign.value;
@@ -439,6 +451,118 @@ void UIHTMLWidget::setColumnGap( const std::string& val ) {
 	}
 }
 
+void UIHTMLWidget::setGridTemplateRows( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateRows != val ) {
+		gs->templateRows = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridTemplateColumns( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateColumns != val ) {
+		gs->templateColumns = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridTemplateAreas( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->templateAreas != val ) {
+		gs->templateAreas = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoRows( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoRows != val ) {
+		gs->autoRows = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoColumns( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoColumns != val ) {
+		gs->autoColumns = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoFlow( CSSGridAutoFlow val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoFlow != val ) {
+		gs->autoFlow = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridAutoFlowDense( bool val ) {
+	auto* gs = ensureGridState();
+	if ( gs->autoFlowDense != val ) {
+		gs->autoFlowDense = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridRowStart( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->rowStart != val ) {
+		gs->rowStart = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridRowEnd( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->rowEnd != val ) {
+		gs->rowEnd = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridColumnStart( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->columnStart != val ) {
+		gs->columnStart = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridColumnEnd( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->columnEnd != val ) {
+		gs->columnEnd = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setGridArea( const std::string& val ) {
+	auto* gs = ensureGridState();
+	if ( gs->area != val ) {
+		gs->area = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setJustifyItems( CSSJustifyItems val ) {
+	auto* gs = ensureGridState();
+	if ( gs->justifyItems != val ) {
+		gs->justifyItems = val;
+		notifyLayoutAttrChange();
+	}
+}
+
+void UIHTMLWidget::setJustifySelf( CSSJustifySelf val ) {
+	auto* gs = ensureGridState();
+	if ( gs->justifySelf != val ) {
+		gs->justifySelf = val;
+		notifyLayoutAttrChange();
+	}
+}
+
 std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 	auto props = UILayout::getPropertiesImplemented();
 	auto local = { PropertyId::Display,
@@ -465,7 +589,24 @@ std::vector<PropertyId> UIHTMLWidget::getPropertiesImplemented() const {
 				   PropertyId::Order,
 				   PropertyId::ColumnGap,
 				   PropertyId::RowGap,
-				   PropertyId::Gap };
+				   PropertyId::Gap,
+				   PropertyId::GridTemplateRows,
+				   PropertyId::GridTemplateColumns,
+				   PropertyId::GridTemplateAreas,
+				   PropertyId::GridTemplate,
+				   PropertyId::GridAutoRows,
+				   PropertyId::GridAutoColumns,
+				   PropertyId::GridAutoFlow,
+				   PropertyId::Grid,
+				   PropertyId::GridRowStart,
+				   PropertyId::GridRowEnd,
+				   PropertyId::GridColumnStart,
+				   PropertyId::GridColumnEnd,
+				   PropertyId::GridRow,
+				   PropertyId::GridColumn,
+				   PropertyId::GridArea,
+				   PropertyId::JustifyItems,
+				   PropertyId::JustifySelf };
 	props.insert( props.end(), local.begin(), local.end() );
 	return props;
 }
@@ -520,6 +661,32 @@ std::string UIHTMLWidget::getPropertyString( const PropertyDefinition* propertyD
 			return getRowGap();
 		case PropertyId::ColumnGap:
 			return getColumnGap();
+		case PropertyId::GridTemplateRows:
+			return getGridTemplateRows();
+		case PropertyId::GridTemplateColumns:
+			return getGridTemplateColumns();
+		case PropertyId::GridTemplateAreas:
+			return getGridTemplateAreas();
+		case PropertyId::GridAutoRows:
+			return getGridAutoRows();
+		case PropertyId::GridAutoColumns:
+			return getGridAutoColumns();
+		case PropertyId::GridAutoFlow:
+			return CSSGridAutoFlowHelper::toString( getGridAutoFlow() );
+		case PropertyId::GridRowStart:
+			return getGridRowStart();
+		case PropertyId::GridRowEnd:
+			return getGridRowEnd();
+		case PropertyId::GridColumnStart:
+			return getGridColumnStart();
+		case PropertyId::GridColumnEnd:
+			return getGridColumnEnd();
+		case PropertyId::GridArea:
+			return getGridArea();
+		case PropertyId::JustifyItems:
+			return CSSJustifyItemsHelper::toString( getJustifyItems() );
+		case PropertyId::JustifySelf:
+			return CSSJustifySelfHelper::toString( getJustifySelf() );
 		default:
 			return UILayout::getPropertyString( propertyDef );
 	}
@@ -528,6 +695,17 @@ std::string UIHTMLWidget::getPropertyString( const PropertyDefinition* propertyD
 bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 	if ( !checkPropertyDefinition( attribute ) )
 		return false;
+
+	auto applyGridLineShorthand = []( const std::string& value, auto setStart, auto setEnd ) {
+		size_t slash = value.find( '/' );
+		if ( slash == std::string::npos ) {
+			setStart( String::trim( value ) );
+			setEnd( "auto" );
+		} else {
+			setStart( String::trim( value.substr( 0, slash ) ) );
+			setEnd( String::trim( value.substr( slash + 1 ) ) );
+		}
+	};
 
 	switch ( attribute.getPropertyDefinition()->getPropertyId() ) {
 		case PropertyId::Display: {
@@ -632,6 +810,78 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 			setColumnGap( attribute.asString() );
 			return true;
 		}
+		case PropertyId::GridTemplateRows: {
+			setGridTemplateRows( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridTemplateColumns: {
+			setGridTemplateColumns( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridTemplateAreas: {
+			setGridTemplateAreas( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoRows: {
+			setGridAutoRows( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoColumns: {
+			setGridAutoColumns( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridAutoFlow: {
+			std::string val = attribute.asString();
+			String::toLowerInPlace( val );
+			setGridAutoFlowDense( val.find( "dense" ) != std::string::npos );
+			if ( val.find( "column" ) != std::string::npos )
+				setGridAutoFlow( CSSGridAutoFlow::Column );
+			else
+				setGridAutoFlow( CSSGridAutoFlow::Row );
+			return true;
+		}
+		case PropertyId::GridRowStart: {
+			setGridRowStart( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridRowEnd: {
+			setGridRowEnd( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridColumnStart: {
+			setGridColumnStart( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridColumnEnd: {
+			setGridColumnEnd( attribute.asString() );
+			return true;
+		}
+		case PropertyId::GridRow: {
+			applyGridLineShorthand(
+				attribute.asString(),
+				[this]( const std::string& value ) { setGridRowStart( value ); },
+				[this]( const std::string& value ) { setGridRowEnd( value ); } );
+			return true;
+		}
+		case PropertyId::GridColumn: {
+			applyGridLineShorthand(
+				attribute.asString(),
+				[this]( const std::string& value ) { setGridColumnStart( value ); },
+				[this]( const std::string& value ) { setGridColumnEnd( value ); } );
+			return true;
+		}
+		case PropertyId::GridArea: {
+			setGridArea( attribute.asString() );
+			return true;
+		}
+		case PropertyId::JustifyItems: {
+			setJustifyItems( CSSJustifyItemsHelper::fromString( attribute.asString() ) );
+			return true;
+		}
+		case PropertyId::JustifySelf: {
+			setJustifySelf( CSSJustifySelfHelper::fromString( attribute.asString() ) );
+			return true;
+		}
 		default:
 			break;
 	}
@@ -731,6 +981,29 @@ void UIHTMLWidget::updateOutOfFlowPosition() {
 	bool useBottom = mBottomEq != "auto";
 	bool useLeft = mLeftEq != "auto";
 	bool useRight = mRightEq != "auto";
+
+	// Per CSS §10.1: for absolutely positioned elements, percentage top/bottom
+	// resolves against the containing block's height. If the containing block
+	// does not have a definite height, the percentage computes to auto to
+	// prevent circular dependencies.
+	auto cbHasDefiniteHeight = [&]() {
+		if ( !cb->isLayout() )
+			return true;
+		auto* cbLayout = cb->asType<UILayout>();
+		if ( cbLayout->getLayoutHeightPolicy() != SizePolicy::Fixed )
+			return false;
+		if ( cb->getUIStyle() ) {
+			const auto* hprop = cb->getUIStyle()->getProperty( PropertyId::Height );
+			if ( hprop && StyleSheetLength::isPercentage( hprop->value() ) )
+				return false;
+		}
+		return true;
+	};
+
+	if ( useTop && StyleSheetLength::isPercentage( mTopEq ) && !cbHasDefiniteHeight() )
+		useTop = false;
+	if ( useBottom && StyleSheetLength::isPercentage( mBottomEq ) && !cbHasDefiniteHeight() )
+		useBottom = false;
 
 	if ( useLeft )
 		left = lengthFromValue( mLeftEq, CSS::PropertyRelativeTarget::ContainingBlockWidth, 0 );

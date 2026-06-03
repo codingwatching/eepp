@@ -512,6 +512,22 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerProperty( "row-gap", "0px" ).setType( PropertyType::NumberLength );
 	registerProperty( "column-gap", "0px" ).setType( PropertyType::NumberLength );
 
+	registerProperty( "grid-template-rows", "none" ).setType( PropertyType::String );
+	registerProperty( "grid-template-columns", "none" ).setType( PropertyType::String );
+	registerProperty( "grid-template-areas", "none" ).setType( PropertyType::String );
+	registerProperty( "grid-auto-rows", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-auto-columns", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-auto-flow", "row" ).setType( PropertyType::String );
+	registerProperty( "grid-row-start", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-row-end", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-column-start", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-column-end", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-row", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-column", "auto" ).setType( PropertyType::String );
+	registerProperty( "grid-area", "auto" ).setType( PropertyType::String );
+	registerProperty( "justify-items", "normal" ).setType( PropertyType::String );
+	registerProperty( "justify-self", "auto" ).setType( PropertyType::String );
+
 	// Shorthands
 	registerShorthand( "margin", { "margin-top", "margin-right", "margin-bottom", "margin-left" },
 					   "box" );
@@ -585,6 +601,16 @@ void StyleSheetSpecification::registerDefaultProperties() {
 	registerShorthand( "flex-flow", { "flex-direction", "flex-wrap" }, "single-value-vector" );
 	registerShorthand( "flex", { "flex-grow", "flex-shrink", "flex-basis" }, "flex" );
 	registerShorthand( "gap", { "row-gap", "column-gap" }, "vector2" );
+	registerShorthand( "grid-template",
+					   { "grid-template-rows", "grid-template-columns", "grid-template-areas" },
+					   "grid-template" );
+	registerShorthand( "grid",
+					   { "grid-template-rows", "grid-template-columns", "grid-template-areas",
+						 "grid-auto-rows", "grid-auto-columns", "grid-auto-flow" },
+					   "grid" );
+	registerShorthand( "place-items", { "align-items", "justify-items" }, "vector2" );
+	registerShorthand( "place-self", { "align-self", "justify-self" }, "vector2" );
+	registerShorthand( "place-content", { "align-content", "justify-content" }, "vector2" );
 }
 
 void StyleSheetSpecification::registerNodeSelector( const std::string& name,
@@ -1654,6 +1680,33 @@ void StyleSheetSpecification::registerDefaultShorthandParsers() {
 		}
 
 		return properties;
+	};
+
+	mShorthandParsers["grid-template"] =
+		[]( const ShorthandDefinition* shorthand,
+			std::string value ) -> std::vector<StyleSheetProperty> {
+		value = String::trim( value );
+		const auto& props = shorthand->getProperties();
+		if ( value == "none" )
+			return { StyleSheetProperty( props[0], "none" ), StyleSheetProperty( props[1], "none" ),
+					 StyleSheetProperty( props[2], "none" ) };
+
+		// Split on '/' for rows vs columns
+		size_t slashPos = value.find( '/' );
+		std::string rowsAndAreas = String::trim( value.substr( 0, slashPos ) );
+		std::string cols = ( slashPos != std::string::npos )
+							   ? String::trim( value.substr( slashPos + 1 ) )
+							   : "none";
+		return { StyleSheetProperty( props[0], rowsAndAreas ), StyleSheetProperty( props[1], cols ),
+				 StyleSheetProperty( props[2], value ) };
+	};
+
+	mShorthandParsers["grid"] = []( const ShorthandDefinition* shorthand,
+									std::string value ) -> std::vector<StyleSheetProperty> {
+		value = String::trim( value );
+		if ( value == "none" )
+			return { StyleSheetProperty( "grid-template-rows", "none" ) };
+		return { StyleSheetProperty( "grid-template-rows", value ) };
 	};
 }
 

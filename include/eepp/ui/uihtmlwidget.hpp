@@ -28,6 +28,23 @@ struct UIHTMLWidgetFlexState {
 	std::string columnGap{ "0" };
 };
 
+struct UIHTMLWidgetGridState {
+	std::string templateRows{ "none" };
+	std::string templateColumns{ "none" };
+	std::string templateAreas{ "none" };
+	std::string autoRows{ "auto" };
+	std::string autoColumns{ "auto" };
+	CSSGridAutoFlow autoFlow{ CSSGridAutoFlow::Row };
+	bool autoFlowDense{ false };
+	std::string rowStart{ "auto" };
+	std::string rowEnd{ "auto" };
+	std::string columnStart{ "auto" };
+	std::string columnEnd{ "auto" };
+	std::string area{ "auto" };
+	CSSJustifyItems justifyItems{ CSSJustifyItems::Normal };
+	CSSJustifySelf justifySelf{ CSSJustifySelf::Auto };
+};
+
 class EE_API UIHTMLWidget : public UILayout {
   public:
 	static UIHTMLWidget* New();
@@ -51,6 +68,8 @@ class EE_API UIHTMLWidget : public UILayout {
 	void setDisplay( CSSDisplay display );
 
 	bool isFlex() const;
+
+	bool isGrid() const;
 
 	CSSPosition getCSSPosition() const { return mPosition; }
 
@@ -88,6 +107,14 @@ class EE_API UIHTMLWidget : public UILayout {
 		if ( !mFlexState )
 			mFlexState = eeNew( UIHTMLWidgetFlexState, () );
 		return mFlexState;
+	}
+
+	UIHTMLWidgetGridState* getGridState() const { return mGridState; }
+
+	UIHTMLWidgetGridState* ensureGridState() {
+		if ( !mGridState )
+			mGridState = eeNew( UIHTMLWidgetGridState, () );
+		return mGridState;
 	}
 
 	CSSFlexDirection getFlexDirection() const {
@@ -135,6 +162,84 @@ class EE_API UIHTMLWidget : public UILayout {
 
 	int getOrder() const { return mFlexState ? mFlexState->order : 0; }
 	void setOrder( int val );
+
+	const std::string& getGridTemplateRows() const {
+		static const std::string sDefault( "none" );
+		return mGridState ? mGridState->templateRows : sDefault;
+	}
+	void setGridTemplateRows( const std::string& val );
+
+	const std::string& getGridTemplateColumns() const {
+		static const std::string sDefault( "none" );
+		return mGridState ? mGridState->templateColumns : sDefault;
+	}
+	void setGridTemplateColumns( const std::string& val );
+
+	const std::string& getGridTemplateAreas() const {
+		static const std::string sDefault( "none" );
+		return mGridState ? mGridState->templateAreas : sDefault;
+	}
+	void setGridTemplateAreas( const std::string& val );
+
+	const std::string& getGridAutoRows() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->autoRows : sDefault;
+	}
+	void setGridAutoRows( const std::string& val );
+
+	const std::string& getGridAutoColumns() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->autoColumns : sDefault;
+	}
+	void setGridAutoColumns( const std::string& val );
+
+	CSSGridAutoFlow getGridAutoFlow() const {
+		return mGridState ? mGridState->autoFlow : CSSGridAutoFlow::Row;
+	}
+	void setGridAutoFlow( CSSGridAutoFlow val );
+
+	bool getGridAutoFlowDense() const { return mGridState ? mGridState->autoFlowDense : false; }
+	void setGridAutoFlowDense( bool val );
+
+	const std::string& getGridRowStart() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->rowStart : sDefault;
+	}
+	void setGridRowStart( const std::string& val );
+
+	const std::string& getGridRowEnd() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->rowEnd : sDefault;
+	}
+	void setGridRowEnd( const std::string& val );
+
+	const std::string& getGridColumnStart() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->columnStart : sDefault;
+	}
+	void setGridColumnStart( const std::string& val );
+
+	const std::string& getGridColumnEnd() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->columnEnd : sDefault;
+	}
+	void setGridColumnEnd( const std::string& val );
+
+	const std::string& getGridArea() const {
+		static const std::string sDefault( "auto" );
+		return mGridState ? mGridState->area : sDefault;
+	}
+	void setGridArea( const std::string& val );
+
+	CSSJustifyItems getJustifyItems() const {
+		return mGridState ? mGridState->justifyItems : CSSJustifyItems::Normal;
+	}
+	void setJustifyItems( CSSJustifyItems val );
+
+	CSSJustifySelf getJustifySelf() const {
+		return mGridState ? mGridState->justifySelf : CSSJustifySelf::Auto;
+	}
+	void setJustifySelf( CSSJustifySelf val );
 
 	const std::string& getRowGap() const {
 		static const std::string sDefault( "0" );
@@ -230,6 +335,7 @@ class EE_API UIHTMLWidget : public UILayout {
 	bool mNeedsZIndexSort{ false };
 	UILayouter* mLayouter{ nullptr };
 	UIHTMLWidgetFlexState* mFlexState{ nullptr };
+	UIHTMLWidgetGridState* mGridState{ nullptr };
 	UnorderedMap<std::string, StyleSheetProperty> mDataProperties;
 
 	Uint32 mScrollCb{ 0 };

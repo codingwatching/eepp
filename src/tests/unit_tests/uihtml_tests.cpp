@@ -215,6 +215,7 @@ UTEST( UIHTML, redditOldThreadWebViewSmoke ) {
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	if ( !FileSystem::fileExists( "assets/html/reddit_old_thread_files/reddit.ETA_etA2z5U.css" ) ) {
+
 		Engine::destroySingleton();
 		UTEST_SKIP( "old Reddit fixture CSS asset is not readable" );
 	}
@@ -3619,6 +3620,32 @@ UTEST( UIHTML, BlockSizeInfDoesNotHang ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, KittyHomeSmallDoesNotHang ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 768, "Kitty Home Small Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/kitty_home_small.html", html );
+	ASSERT_FALSE( html.empty() );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto body = sceneNode->getRoot()->findByTag( "body" );
+	ASSERT_TRUE( body != nullptr );
+	auto bodyWidget = body->asType<UIWidget>();
+	EXPECT_GT( bodyWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( bodyWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTML, FlexFormLayout ) {
 	Engine::instance()->createWindow( WindowSettings( 1024, 653, "Flex Form Layout Test",
 													  WindowStyle::Default, WindowBackend::Default,
@@ -3654,6 +3681,13 @@ UTEST( UIHTML, FlexFormLayout ) {
 	// In a row flex container the button should sit to the right of the input.
 	Float inputRight = inputWidget->getPixelsPosition().x + inputWidget->getPixelsSize().getWidth();
 	EXPECT_GT( buttonWidget->getPixelsPosition().x, inputRight - 1.f );
+
+	auto* buttonRichText = buttonWidget->isType( UI_TYPE_RICHTEXT )
+							   ? buttonWidget->asType<UIRichText>()->getRichTextPtr()
+							   : nullptr;
+	ASSERT_TRUE( buttonRichText != nullptr );
+	buttonRichText->updateLayout();
+	EXPECT_EQ( buttonRichText->getLines().size(), 1u );
 
 	Engine::destroySingleton();
 }
@@ -3756,6 +3790,19 @@ UTEST( UIHTML, FlexMediaQueriesLayout ) {
 		EXPECT_GT( essayNavLinkWidget->getPixelsSize().getHeight(),
 				   labelWidget->getPixelsSize().getHeight() +
 					   titleWidget->getPixelsSize().getHeight() - 1.f );
+
+		auto* labelRichText = essayLabel->isType( UI_TYPE_TEXTSPAN )
+								  ? essayLabel->asType<UITextSpan>()->getRichTextPtr()
+								  : nullptr;
+		auto* titleRichText = essayTitle->isType( UI_TYPE_TEXTSPAN )
+								  ? essayTitle->asType<UITextSpan>()->getRichTextPtr()
+								  : nullptr;
+		ASSERT_TRUE( labelRichText != nullptr );
+		ASSERT_TRUE( titleRichText != nullptr );
+		labelRichText->updateLayout();
+		titleRichText->updateLayout();
+		EXPECT_EQ( labelRichText->getLines().size(), 1u );
+		EXPECT_EQ( titleRichText->getLines().size(), 1u );
 	}
 
 	Engine::destroySingleton();
@@ -3795,6 +3842,43 @@ UTEST( UIHTML, FlexAnchorInFlexNavVisible ) {
 		EXPECT_GT( cw->getPixelsSize().getWidth(), 5.f );
 		EXPECT_GT( cw->getPixelsSize().getHeight(), 5.f );
 	}
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, FlexTextSpanWrapContentUsesItemWidth ) {
+	Engine::instance()->createWindow( WindowSettings( 1280, 720, "Flex Text Span Width Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/newsblur_home_prices_small.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	sceneNode->update( Seconds( 1 ) );
+	sceneNode->updateDirtyLayouts();
+
+	auto priceAmount = sceneNode->getRoot()->findByClass( "NB-pricing-tier-price-amount" );
+	ASSERT_TRUE( priceAmount != nullptr );
+	ASSERT_TRUE( priceAmount->isType( UI_TYPE_TEXTSPAN ) );
+
+	auto* amountSpan = priceAmount->asType<UITextSpan>();
+	auto* amountRichText = amountSpan->getRichTextPtr();
+	ASSERT_TRUE( amountRichText != nullptr );
+	amountRichText->updateLayout();
+
+	const auto& lines = amountRichText->getLines();
+	ASSERT_EQ( lines.size(), 1u );
+	ASSERT_EQ( lines.front().spans.size(), 1u );
+	ASSERT_EQ( lines.front().spans.front().type, RichText::RenderSpan::Type::Text );
+	ASSERT_TRUE( lines.front().spans.front().text != nullptr );
+	EXPECT_STRINGEQ( lines.front().spans.front().text->getString(), "$36" );
+	EXPECT_NEAR( lines.front().spans.front().position.x, 0.f, 1.f );
+	EXPECT_NEAR( amountSpan->getPixelsSize().getWidth(), lines.front().spans.front().size.x, 2.f );
 
 	Engine::destroySingleton();
 }

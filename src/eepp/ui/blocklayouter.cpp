@@ -77,8 +77,16 @@ void BlockLayouter::updateLayout() {
 	Node* parentNode = widget->getParent();
 	bool parentIsFlex = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
 						parentNode->asType<UIHTMLWidget>()->isFlex();
+	bool parentIsGrid = parentNode && parentNode->isType( UI_TYPE_HTML_WIDGET ) &&
+						parentNode->asType<UIHTMLWidget>()->isGrid();
 
-	if ( widget->isInline() && !parentIsFlex )
+	// Inline elements normally do not run their own block layout; the nearest parent RichText
+	// stream formats and paints them. Flex/grid containers are the exception: CSS blockification
+	// turns each child into an independent item, so an inline UITextSpan inside any flex/grid
+	// parent, including inline-flex/inline-grid, still needs this layouter to build its own
+	// RichText, measure its height, and position text. This is broader than the render ownership
+	// guard in UIRichText/UITextSpan, which only applies to block-level flex/grid containers.
+	if ( widget->isInline() && !parentIsFlex && !parentIsGrid )
 		return;
 
 	mResizedCount = 0;

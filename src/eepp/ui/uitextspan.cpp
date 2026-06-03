@@ -90,12 +90,24 @@ void UITextSpan::onDisplayChange() {
 }
 
 void UITextSpan::draw() {
-	// When a UITextSpan is a flex item it is laid out independently by the
-	// flex container (blockification per CSS Flexbox §4). In that case the
-	// parent flex container does NOT render its text via rebuildRichText(),
-	// so the span must draw itself.
-	if ( !isInline() || ( getParent() && getParent()->isType( UI_TYPE_HTML_WIDGET ) &&
-						  getParent()->asType<UIHTMLWidget>()->isFlex() ) ) {
+	bool parentIsBlockFlexOrGrid = false;
+	if ( getParent() && getParent()->isType( UI_TYPE_HTML_WIDGET ) ) {
+		CSSDisplay parentDisplay = getParent()->asType<UIHTMLWidget>()->getDisplay();
+		parentIsBlockFlexOrGrid =
+			parentDisplay == CSSDisplay::Flex || parentDisplay == CSSDisplay::Grid;
+	}
+
+	// When a UITextSpan is an item in a block-level flex/grid container, it is laid out
+	// independently by the container (blockification per CSS Flexbox §4 / CSS Grid §6). In that
+	// case the parent container must not render its text via rebuildRichText(), so the span must
+	// draw itself. This must stay in sync with UIRichText::draw() and
+	// UIRichText::rebuildRichText(): block-level parent flex/grid containers skip their own text
+	// stream, and item spans are the single paint owner for their text.
+	//
+	// Do not use UIHTMLWidget::isFlex()/isGrid() for the parent test. Those include inline-flex
+	// and inline-grid, which are atomic inline-level boxes and do not use this self-paint ownership
+	// rule.
+	if ( !isInline() || parentIsBlockFlexOrGrid ) {
 		UIRichText::draw();
 	}
 }
