@@ -207,6 +207,13 @@ void AutoCompletePlugin::load( PluginManager* pluginManager ) {
 			config["suggestion_documentation"] = mSuggestionDocumentation;
 			updateConfigFile = true;
 		}
+
+		if ( config.contains( "signature_help_documentation" ) )
+			mSignatureHelpDocumentation = config.value( "signature_help_documentation", true );
+		else {
+			config["suggestion_documentation"] = mSignatureHelpDocumentation;
+			updateConfigFile = true;
+		}
 	}
 
 	if ( mKeyBindings.empty() ) {
@@ -1090,7 +1097,7 @@ void AutoCompletePlugin::update( UICodeEditor* ) {
 }
 
 void AutoCompletePlugin::drawSignatureHelp( UICodeEditor* editor, const Vector2f& startScroll,
-											const Float& /*lineHeight*/, bool drawUp ) {
+											const Float& lineHeight, bool drawUp ) {
 	TextDocument& doc = editor->getDocument();
 	Primitives primitives;
 	const SyntaxColorScheme& scheme = editor->getColorScheme();
@@ -1181,6 +1188,32 @@ void AutoCompletePlugin::drawSignatureHelp( UICodeEditor* editor, const Vector2f
 
 	mSignatureHelpText.draw( boxRect.getPosition().x + mBoxPadding.Left,
 							 boxRect.getPosition().y + mBoxPadding.Top );
+
+	if ( mSignatureHelpDocumentation && !curSig.documentation.value.empty() ) {
+		mSuggestionDoc.setFillColor( normalStyle.color );
+		mSuggestionDoc.setStyle( normalStyle.style );
+		mSuggestionDoc.setFont( editor->getFont() );
+		mSuggestionDoc.setFontSize( editor->getFontSize() );
+		mSuggestionDoc.setLineWrapMode( LineWrapMode::Word );
+		mSuggestionDoc.setLineWrapKeepIndentation( true );
+
+		Rectf docRect = findBestDocumentationPlacement( editor, curSig.documentation, "", boxRect,
+														boxRect, drawUp, lineHeight );
+
+		if ( docRect.getSize().getWidth() > 0 && docRect.getSize().getHeight() > 0 ) {
+			primitives.setColor(
+				Color( selectedStyle.background ).blendAlpha( editor->getAlpha() ) );
+
+			editor->clipSmartEnable( docRect.Left, docRect.Top, docRect.getWidth(),
+									 docRect.getHeight() );
+
+			primitives.drawRoundedRectangle( docRect, 0.f, Vector2f::One, 6 );
+
+			mSuggestionDoc.draw( docRect.Left + mBoxPadding.Left, docRect.Top + mBoxPadding.Top );
+
+			editor->clipSmartDisable();
+		}
+	}
 }
 
 void AutoCompletePlugin::postDraw( UICodeEditor* editor, const Vector2f& startScroll,
@@ -1306,11 +1339,11 @@ void AutoCompletePlugin::postDraw( UICodeEditor* editor, const Vector2f& startSc
 			mSuggestionDoc.setLineWrapMode( LineWrapMode::Word );
 			mSuggestionDoc.setLineWrapKeepIndentation( true );
 
-			Rectf docRect =
-				findBestDocumentationPlacement( editor, suggestion, boxRect,
-												{ { cursorPos.x, cursorPos.y + mRowHeight * count },
-												  { mBoxRect.getWidth(), mRowHeight } },
-												drawUp, lineHeight );
+			Rectf docRect = findBestDocumentationPlacement(
+				editor, suggestion.documentation, suggestion.detail, boxRect,
+				{ { cursorPos.x, cursorPos.y + mRowHeight * count },
+				  { mBoxRect.getWidth(), mRowHeight } },
+				drawUp, lineHeight );
 
 			if ( docRect.getSize().getWidth() > 0 && docRect.getSize().getHeight() > 0 ) {
 				primitives.setColor(
@@ -1349,11 +1382,9 @@ void AutoCompletePlugin::postDraw( UICodeEditor* editor, const Vector2f& startSc
 									 (int)eefloor( bar.getWidth() * 0.5f ) );
 }
 
-Rectf AutoCompletePlugin::findBestDocumentationPlacement( UICodeEditor* editor,
-														  const Suggestion& suggestion,
-														  const Rectf& anchorBox,
-														  const Rectf& rowRect, bool drawUp,
-														  Float lineHeight ) {
+Rectf AutoCompletePlugin::findBestDocumentationPlacement(
+	UICodeEditor* editor, const LSPMarkupContent& suggestion, const std::string& detail,
+	const Rectf& anchorBox, const Rectf& rowRect, bool drawUp, Float lineHeight ) {
 	PopupPlacementConfig config;
 	config.areaRect = editor->getScreenRect();
 	config.targetRect = anchorBox;
@@ -1374,10 +1405,10 @@ Rectf AutoCompletePlugin::findBestDocumentationPlacement( UICodeEditor* editor,
 		Float textWrapWidth =
 			std::max( 0.f, availableMaxWidth - mBoxPadding.Left - mBoxPadding.Right );
 		mSuggestionDoc.setMaxWrapWidth( textWrapWidth );
-		bool changed = mSuggestionDoc.setString( suggestion.documentation.value );
+		bool changed = mSuggestionDoc.setString( suggestion.value );
 		if ( changed ) {
-			bool forceHTML = String::startsWith( suggestion.detail, "Emmet" );
-			if ( suggestion.documentation.kind == LSPMarkupKind::MarkDown || forceHTML ) {
+			bool forceHTML = String::startsWith( detail, "Emmet" );
+			if ( suggestion.kind == LSPMarkupKind::MarkDown || forceHTML ) {
 				const auto& syntaxDef =
 					forceHTML ? SyntaxDefinitionManager::instance()->getByLSPName( "html" )
 							  : SyntaxDefinitionManager::instance()->getByLSPName( "markdown" );

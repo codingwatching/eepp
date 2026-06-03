@@ -178,6 +178,7 @@ class AutoCompletePlugin : public Plugin {
 	std::string mMaxSignatureHelperWidth{ "90%" };
 	bool mSignatureHelpMultiLine{ true };
 	bool mSuggestionDocumentation{ true };
+	bool mSignatureHelpDocumentation{ true };
 
 	Float mRowHeight{ 0 };
 	Rectf mBoxRect;
@@ -225,9 +226,9 @@ class AutoCompletePlugin : public Plugin {
 	void tryStartSnippetNav( const Suggestion& suggestion, UICodeEditor* editor,
 							 const TextRanges& prevSels );
 
-	Rectf findBestDocumentationPlacement( UICodeEditor* editor, const Suggestion& suggestion,
-										  const Rectf& anchorBox, const Rectf& rowRect, bool drawUp,
-										  Float lineHeight );
+	Rectf findBestDocumentationPlacement( UICodeEditor* editor, const LSPMarkupContent& suggestion,
+										  const std::string& detail, const Rectf& anchorBox,
+										  const Rectf& rowRect, bool drawUp, Float lineHeight );
 
 	void updateShortcuts();
 };
