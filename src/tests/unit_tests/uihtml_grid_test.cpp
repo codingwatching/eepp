@@ -1928,3 +1928,71 @@ UTEST( GridContainer, newsblurReducedGrid ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( GridContainer, gradientFixtureAutoFitItemsStayInsideOnResize ) {
+	Engine::instance()->createWindow( WindowSettings( 1024, 650, "UIHTML Grid Gradient Test",
+													  WindowStyle::Default, WindowBackend::Default,
+													  32, {}, 1, false, true ),
+									  ContextSettings() );
+	PixelDensity::setPixelDensity( 2.f );
+	init_grid_test();
+	UISceneNode* sceneNode = SceneManager::instance()->getUISceneNode();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string htmlContent;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/css_gradient_tests.html", htmlContent ) );
+	sceneNode->loadLayoutFromString( EE::UI::Tools::HTMLFormatter::HTMLtoXML( htmlContent ) );
+
+	auto assertItemsInsideGrid = [&]() {
+		auto grids = sceneNode->getRoot()->findAllByClass( "grid" );
+		ASSERT_GT( grids.size(), 1u );
+		for ( auto* grid : grids ) {
+			ASSERT_TRUE( grid->getParent()->isWidget() );
+			auto* parent = grid->getParent()->asType<UIWidget>();
+			Float parentContentRight =
+				parent->getPixelsSize().getWidth() - parent->getPixelsContentOffset().Right;
+			EXPECT_LE( grid->getPixelsPosition().x + grid->getPixelsSize().getWidth(),
+					   parentContentRight + 0.5f );
+
+			auto cases = grid->findAllByClass( "case" );
+			ASSERT_GT( cases.size(), 1u );
+			Float contentWidth = grid->getPixelsSize().getWidth() -
+								 grid->getPixelsContentOffset().Left -
+								 grid->getPixelsContentOffset().Right;
+			auto* gridLayouter =
+				static_cast<GridLayouter*>( grid->asType<UIHTMLWidget>()->getLayouter() );
+			ASSERT_TRUE( nullptr != gridLayouter );
+			const auto& columns = gridLayouter->getColumns();
+			Float gap =
+				grid->lengthFromValue( "16px", CSS::PropertyRelativeTarget::ContainingBlockWidth );
+			Float minTrack =
+				grid->lengthFromValue( "240px", CSS::PropertyRelativeTarget::ContainingBlockWidth );
+			size_t expectedColumns = std::min(
+				cases.size(), static_cast<size_t>( ( contentWidth + gap ) / ( minTrack + gap ) ) );
+			ASSERT_EQ( expectedColumns, columns.size() );
+			Float tracksWidth = static_cast<Float>( columns.size() - 1 ) * gap;
+			for ( const auto& column : columns )
+				tracksWidth += column.baseSize;
+			EXPECT_LE( tracksWidth, contentWidth + 0.5f );
+
+			Float contentRight =
+				grid->getPixelsSize().getWidth() - grid->getPixelsContentOffset().Right;
+			for ( auto* item : cases ) {
+				Float itemRight = item->getPixelsPosition().x + item->getPixelsSize().getWidth();
+				EXPECT_LE( itemRight, contentRight + 0.5f );
+				EXPECT_LE( item->getScreenRect().Right, grid->getScreenRect().Right + 0.5f );
+			}
+		}
+	};
+
+	for ( const auto& size :
+		  { Sizef( 1200.f, 900.f ), Sizef( 1800.f, 900.f ), Sizef( 1000.f, 900.f ) } ) {
+		sceneNode->setPixelsSize( size );
+		sceneNode->update( Seconds( 1 ) );
+		sceneNode->updateDirtyLayouts();
+		assertItemsInsideGrid();
+	}
+
+	Engine::destroySingleton();
+	PixelDensity::setPixelDensity( 1.f );
+}

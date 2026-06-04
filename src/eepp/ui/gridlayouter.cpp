@@ -466,6 +466,19 @@ void GridTrackParser::expandAutoRepeat( GridTrackList& list, Float availableSize
 
 // ── GridLayouter ──
 
+static void resolveAutoRepeatLengths( GridTrackList& list, UIWidget* container,
+									  CSS::PropertyRelativeTarget relativeTarget ) {
+	for ( auto& track : list.autoRepeatTemplate ) {
+		if ( track.size.min.type == GridTrackBreadthType::Length )
+			track.size.min.value = container->lengthFromValue( track.size.min.raw, relativeTarget,
+															   track.size.min.value );
+		if ( track.size.max.type == GridTrackBreadthType::Length ||
+			 track.size.max.type == GridTrackBreadthType::FitContent )
+			track.size.max.value = container->lengthFromValue( track.size.max.raw, relativeTarget,
+															   track.size.max.value );
+	}
+}
+
 void GridLayouter::readContainerStyle() {
 	UIHTMLWidget* grid =
 		mContainer->isType( UI_TYPE_HTML_WIDGET ) ? mContainer->asType<UIHTMLWidget>() : nullptr;
@@ -492,8 +505,11 @@ void GridLayouter::readContainerStyle() {
 		Float contentW = mContainer->getPixelsSize().getWidth() -
 						 mContainer->getPixelsContentOffset().Left -
 						 mContainer->getPixelsContentOffset().Right;
-		if ( contentW > 0.f )
+		if ( contentW > 0.f ) {
+			resolveAutoRepeatLengths( colList, mContainer,
+									  CSS::PropertyRelativeTarget::ContainingBlockWidth );
 			GridTrackParser::expandAutoRepeat( colList, contentW, mColumnGap );
+		}
 	}
 	mColumns.clear();
 	mColLineNames.clear();
@@ -518,8 +534,11 @@ void GridLayouter::readContainerStyle() {
 		Float contentH = mContainer->getPixelsSize().getHeight() -
 						 mContainer->getPixelsContentOffset().Top -
 						 mContainer->getPixelsContentOffset().Bottom;
-		if ( contentH > 0.f )
+		if ( contentH > 0.f ) {
+			resolveAutoRepeatLengths( rowList, mContainer,
+									  CSS::PropertyRelativeTarget::ContainingBlockHeight );
 			GridTrackParser::expandAutoRepeat( rowList, contentH, mRowGap );
+		}
 	}
 	mRows.clear();
 	mRowLineNames.clear();
@@ -1542,6 +1561,8 @@ void GridLayouter::computeIntrinsicWidths() {
 	// Expand auto-repeat tracks (use a large available size as heuristic)
 	if ( colList.hasAutoRepeat && !colList.autoRepeatTemplate.empty() ) {
 		Float intrinsicExpandSize = 10000.f; // large enough to get a meaningful count
+		resolveAutoRepeatLengths( colList, mContainer,
+								  CSS::PropertyRelativeTarget::ContainingBlockWidth );
 		GridTrackParser::expandAutoRepeat( colList, intrinsicExpandSize, gap );
 	}
 
