@@ -85,6 +85,8 @@ class EE_API UIStyle : public UIState {
 
 	void applyInheritedProperties();
 
+	const std::shared_ptr<CSS::ElementDefinition> getDefinition() const { return mDefinition; }
+
   protected:
 	UIWidget* mWidget;
 	std::shared_ptr<CSS::StyleSheetStyle> mElementStyle;

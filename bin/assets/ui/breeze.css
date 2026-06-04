@@ -49,6 +49,9 @@
 	--theme-error: #ff4040;
 	--theme-warning: #ffff40;
 	--theme-success: #40ff40;
+}
+
+TabWidget {
 	droppable-hovering-color: #FFFFFF20;
 }
 
@@ -1248,6 +1251,9 @@ DiffView > SelectButton:focus {
 	--theme-error: #cc0000;
 	--theme-warning: #cccc00;
 	--theme-success: #00cc00;
+}
+
+TabWidget {
 	droppable-hovering-color: #00000020;
 }
 
