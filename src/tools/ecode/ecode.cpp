@@ -1818,6 +1818,33 @@ void App::onTabCreated( UITab* tab, UIWidget* ) {
 			}
 		} );
 	} );
+
+	applyNewTabPosition( tab );
+}
+
+void App::applyNewTabPosition( UITab* tab ) {
+	UITabWidget* tabWidget = tab->getTabWidget();
+	if ( !tabWidget )
+		return;
+	switch ( mConfig.editor.newTabPosition ) {
+		case NewTabPosition::AfterActive: {
+			Uint32 selectedIdx = tabWidget->getTabSelectedIndex();
+			Uint32 newIdx = eemin<Uint32>( selectedIdx + 1, tabWidget->getTabCount() - 1 );
+			tabWidget->moveTab( tab, newIdx );
+			break;
+		}
+		case NewTabPosition::First:
+			tabWidget->moveTab( tab, 0 );
+			break;
+		case NewTabPosition::LeftOfActive: {
+			Uint32 selectedIdx = tabWidget->getTabSelectedIndex();
+			tabWidget->moveTab( tab, eemin<Uint32>( selectedIdx, tabWidget->getTabCount() - 1 ) );
+			break;
+		}
+		case NewTabPosition::Last:
+		default:
+			break;
+	}
 }
 
 void App::onColorSchemeChanged( const std::string& ) {

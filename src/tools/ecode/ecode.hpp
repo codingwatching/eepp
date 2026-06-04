@@ -384,44 +384,7 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 		mSplitter->registerSplitterCommands( t );
 
 		// Overwrite it
-		t.setCommand( "create-new", [this] {
-			UITabWidget* tabWidget = getSplitter()->getPreferredTabWidget();
-			Uint32 selectedIdx =
-				tabWidget && tabWidget->getTabCount() > 0 ? tabWidget->getTabSelectedIndex() : 0;
-			auto d = getSplitter()->createCodeEditorInTabWidget( tabWidget );
-			if ( d.first == nullptr || d.second == nullptr ) {
-				if ( !getSplitter()->getTabWidgets().empty() ) {
-					tabWidget = getSplitter()->getTabWidgets()[0];
-					selectedIdx = tabWidget && tabWidget->getTabCount() > 0
-									  ? tabWidget->getTabSelectedIndex()
-									  : 0;
-					d = getSplitter()->createCodeEditorInTabWidget( tabWidget );
-				}
-			}
-			if ( d.first == nullptr || d.second == nullptr ) {
-				Log::error( "Couldn't createCodeEditorInTabWidget in create-new command" );
-				return;
-			}
-			tabWidget = d.first->getTabWidget();
-			switch ( mConfig.editor.newTabPosition ) {
-				case NewTabPosition::AfterActive: {
-					Uint32 newIdx = eemin<Uint32>( selectedIdx + 1, tabWidget->getTabCount() - 1 );
-					tabWidget->moveTab( d.first, newIdx );
-					break;
-				}
-				case NewTabPosition::First:
-					tabWidget->moveTab( d.first, 0 );
-					break;
-				case NewTabPosition::LeftOfActive:
-					tabWidget->moveTab(
-						d.first, eemin<Uint32>( selectedIdx, tabWidget->getTabCount() - 1 ) );
-					break;
-				case NewTabPosition::Last:
-				default:
-					break;
-			}
-			tabWidget->setTabSelected( d.first );
-		} );
+		t.setCommand( "create-new", [this] { getSplitter()->createEditorInNewTab(); } );
 
 		t.setCommand( "next-tab", [this] {
 			UITabWidget* tabWidget =
@@ -870,6 +833,8 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	void onCodeEditorFocusChange( UICodeEditor* editor );
 
 	void onTabCreated( UITab* tab, UIWidget* widget );
+
+	void applyNewTabPosition( UITab* tab );
 
 	bool trySendUnlockedCmd( const KeyEvent& keyEvent );
 

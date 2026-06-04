@@ -447,6 +447,10 @@
         {
           "name": "minimax/minimax-m2.5:free",
           "display_name": "MiniMax: MiniMax M2.5 (free)"
+        },
+        {
+          "name": "NVIDIA: Nemotron 3 Ultra (free)",
+          "display_name": "nvidia/nemotron-3-ultra-550b-a55b:free"
         }
       ]
     },
