@@ -1314,9 +1314,6 @@ void UIWidget::pushState( const Uint32& State, bool emitEvent ) {
 
 		if ( emitEvent ) {
 			onStateChange();
-
-			if ( State & UIState::StateFocusWithin )
-				sendCommonEvent( Event::OnFocusWithin );
 		} else {
 			invalidateDraw();
 		}
@@ -1339,9 +1336,6 @@ void UIWidget::popState( const Uint32& State, bool emitEvent ) {
 
 		if ( emitEvent ) {
 			onStateChange();
-
-			if ( State & UIState::StateFocusWithin )
-				sendCommonEvent( Event::OnFocusWithinLoss );
 		} else {
 			invalidateDraw();
 		}
@@ -1350,11 +1344,14 @@ void UIWidget::popState( const Uint32& State, bool emitEvent ) {
 
 Uint32 UIWidget::onFocus( NodeFocusReason reason ) {
 	pushState( UIState::StateFocusWithin );
+	sendCommonEvent( Event::OnFocusWithin );
 
 	Node* parent = mParentNode;
 	while ( parent ) {
-		if ( parent->isUINode() )
+		if ( parent->isUINode() ) {
 			parent->asType<UINode>()->pushState( UIState::StateFocusWithin );
+			parent->asType<UINode>()->sendCommonEvent( Event::OnFocusWithin );
+		}
 		parent = parent->getParent();
 	}
 
@@ -1363,11 +1360,14 @@ Uint32 UIWidget::onFocus( NodeFocusReason reason ) {
 
 Uint32 UIWidget::onFocusLoss() {
 	popState( UIState::StateFocusWithin );
+	sendCommonEvent( Event::OnFocusWithinLoss );
 
 	Node* parent = mParentNode;
 	while ( parent ) {
-		if ( parent->isUINode() )
+		if ( parent->isUINode() ) {
 			parent->asType<UINode>()->popState( UIState::StateFocusWithin );
+			parent->asType<UINode>()->sendCommonEvent( Event::OnFocusWithinLoss );
+		}
 		parent = parent->getParent();
 	}
 

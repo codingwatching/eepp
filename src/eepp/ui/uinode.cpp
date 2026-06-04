@@ -1346,7 +1346,7 @@ void UINode::pushState( const Uint32& State, bool emitEvent ) {
 		if ( emitEvent ) {
 			onStateChange();
 
-			if ( State & UIState::StateFocusWithin )
+			if ( mState & UIState::StateFlagFocusWithin )
 				sendCommonEvent( Event::OnFocusWithin );
 		} else {
 			invalidateDraw();
@@ -1364,7 +1364,7 @@ void UINode::popState( const Uint32& State, bool emitEvent ) {
 		if ( emitEvent ) {
 			onStateChange();
 
-			if ( State & UIState::StateFocusWithin )
+			if ( mState & UIState::StateFlagFocusWithin )
 				sendCommonEvent( Event::OnFocusWithinLoss );
 		} else {
 			invalidateDraw();
