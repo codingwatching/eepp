@@ -804,24 +804,28 @@ UINode* UINode::setBorderRadius( const unsigned int& corners ) {
 UINode* UINode::setTopLeftRadius( const std::string& radius ) {
 	setBorderEnabled( true )->setTopLeftRadius( radius );
 	setBackgroundFillEnabled( true )->getBackgroundDrawable().setTopLeftRadius( radius );
+	invalidateDraw();
 	return this;
 }
 
 UINode* UINode::setTopRightRadius( const std::string& radius ) {
 	setBorderEnabled( true )->setTopRightRadius( radius );
 	setBackgroundFillEnabled( true )->getBackgroundDrawable().setTopRightRadius( radius );
+	invalidateDraw();
 	return this;
 }
 
 UINode* UINode::setBottomLeftRadius( const std::string& radius ) {
 	setBorderEnabled( true )->setBottomLeftRadius( radius );
 	setBackgroundFillEnabled( true )->getBackgroundDrawable().setBottomLeftRadius( radius );
+	invalidateDraw();
 	return this;
 }
 
 UINode* UINode::setBottomRightRadius( const std::string& radius ) {
 	setBorderEnabled( true )->setBottomRightRadius( radius );
 	setBackgroundFillEnabled( true )->getBackgroundDrawable().setBottomRightRadius( radius );
+	invalidateDraw();
 	return this;
 }
 

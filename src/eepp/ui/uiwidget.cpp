@@ -2373,24 +2373,31 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 			break;
 		case PropertyId::BorderRightColor:
 			setBorderEnabled( true )->setColorRight( attribute.asColor() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderTopColor:
 			setBorderEnabled( true )->setColorTop( attribute.asColor() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderBottomColor:
 			setBorderEnabled( true )->setColorBottom( attribute.asColor() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderLeftWidth:
 			setBorderEnabled( true )->setLeftWidth( attribute.value() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderRightWidth:
 			setBorderEnabled( true )->setRightWidth( attribute.value() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderTopWidth:
 			setBorderEnabled( true )->setTopWidth( attribute.value() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderBottomWidth:
 			setBorderEnabled( true )->setBottomWidth( attribute.value() );
+			invalidateDraw();
 			break;
 		case PropertyId::BorderTopLeftRadius:
 			setTopLeftRadius( attribute.value() );

@@ -888,6 +888,7 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 
 	return UILayout::applyProperty( attribute );
 }
+
 void UIHTMLWidget::updateLayout() {
 	if ( getLayouter() )
 		getLayouter()->updateLayout();

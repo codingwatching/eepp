@@ -320,9 +320,9 @@ UIRichText* UIRichText::NewBr() {
 };
 
 UIRichText* UIRichText::NewHr() {
-	auto* w = UILineBreak::New( "hr" );
-	w->mMinHeightEq = "1dp";
-	return w;
+	auto hr = UIRichText::NewWithTag( "hr" );
+	hr->setClipType( ClipType::None );
+	return hr;
 };
 
 UIRichText* UIRichText::New() {
