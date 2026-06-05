@@ -110,14 +110,16 @@ UIWindow* UIWidgetInspector::create( UISceneNode* sceneNode, const Float& menuIc
 
 		if ( node->isWidget() ) {
 			UIWidget* widget = node->asType<UIWidget>();
-			const auto& styles = widget->getUIStyle()->getDefinition()->getStyles();
-			String elemStyle;
-			for ( const auto& style : styles ) {
-				if ( style->getSelector().getName() != ":root" ||
-					 widget->getElementTag() == ":root" )
-					elemStyle += style->build( false, false );
+			if ( widget->getUIStyle() && widget->getUIStyle()->getDefinition() ) {
+				const auto& styles = widget->getUIStyle()->getDefinition()->getStyles();
+				String elemStyle;
+				for ( const auto& style : styles ) {
+					if ( style->getSelector().getName() != ":root" ||
+						 widget->getElementTag() == ":root" )
+						elemStyle += style->build( false, false );
+				}
+				stylesEditor->getDocument().textInput( elemStyle );
 			}
-			stylesEditor->getDocument().textInput( elemStyle );
 		}
 	} );
 
