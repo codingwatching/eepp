@@ -29,9 +29,11 @@ static bool isPseudoClassState( const std::string& pseudoClass ) {
 }
 
 static const char* StructuralPseudoClasses[] = {
-	"checked",		  "disabled",		  "empty",		  "enabled",	  "first-child",
-	"first-of-type",  "last-child",		  "last-of-type", "not",		  "nth-child",
-	"nth-last-child", "nth-last-of-type", "nth-of-type",  "only-of-type", "only-child" };
+	"checked",	   "disabled",		"empty",		  "enabled",
+	"first-child", "first-of-type", "last-child",	  "last-of-type",
+	"not",		   "nth-child",		"nth-last-child", "nth-last-of-type",
+	"nth-of-type", "only-of-type",	"only-child",	  "where",
+	"is" };
 
 static bool isStructuralPseudoClass( const std::string& pseudoClass ) {
 	for ( Uint32 i = 0; i < eeARRAY_SIZE( StructuralPseudoClasses ); i++ ) {
@@ -236,7 +238,12 @@ void StyleSheetSelectorRule::parseFragment( const std::string& selectorFragment 
 
 	if ( !mStructuralPseudoClasses.empty() ) {
 		mRequirementFlags |= StructuralPseudoClass;
-		mSpecificity += SpecificityStructuralPseudoClass * mStructuralPseudoClasses.size();
+		size_t count = 0;
+		for ( const auto& spc : mStructuralPseudoClasses ) {
+			if ( spc != "where" )
+				count++;
+		}
+		mSpecificity += SpecificityStructuralPseudoClass * count;
 	}
 }
 

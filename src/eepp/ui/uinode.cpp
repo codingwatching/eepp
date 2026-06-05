@@ -13,6 +13,7 @@
 #include <eepp/scene/scenenode.hpp>
 #include <eepp/ui/css/stylesheetspecification.hpp>
 #include <eepp/ui/uiborderdrawable.hpp>
+#include <eepp/ui/uihtmlwidget.hpp>
 #include <eepp/ui/uinode.hpp>
 #include <eepp/ui/uinodedrawable.hpp>
 #include <eepp/ui/uiscenenode.hpp>
@@ -1634,15 +1635,17 @@ Float UINode::getPropertyRelativeTargetContainerLength(
 	Float containerLength = defaultValue;
 	switch ( relativeTarget ) {
 		case PropertyRelativeTarget::ContainingBlockWidth: {
-			Node* parent = getParent(); // Text spans cannot be considered containing blocks
-			while ( parent->isType( UI_TYPE_TEXTSPAN ) )
+			Node* parent = getParent();
+			while ( parent && parent->isWidget() && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+					static_cast<UIHTMLWidget*>( parent )->isInline() )
 				parent = parent->getParent();
 			containerLength = parent ? parent->getPixelsSize().getWidth() : 0;
 			break;
 		}
 		case PropertyRelativeTarget::ContainingBlockHeight: {
-			Node* parent = getParent(); // Text spans cannot be considered containing blocks
-			while ( parent->isType( UI_TYPE_TEXTSPAN ) )
+			Node* parent = getParent();
+			while ( parent && parent->isWidget() && parent->isType( UI_TYPE_HTML_WIDGET ) &&
+					static_cast<UIHTMLWidget*>( parent )->isInline() )
 				parent = parent->getParent();
 			containerLength = parent ? parent->getPixelsSize().getHeight() : 0;
 			break;

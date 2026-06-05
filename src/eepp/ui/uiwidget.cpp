@@ -1875,6 +1875,16 @@ std::string UIWidget::getPropertyString( const PropertyDefinition* propertyDef,
 					   : "false";
 		case PropertyId::Focusable:
 			return isTabFocusable() ? "true" : "false";
+		case PropertyId::Class: {
+			std::string cls;
+			const auto& classes = getStyleSheetClasses();
+			for ( size_t i = 0; i < classes.size(); i++ ) {
+				if ( i > 0 )
+					cls += ' ';
+				cls += classes[i];
+			}
+			return cls;
+		}
 		default:
 			break;
 	}
@@ -2464,8 +2474,9 @@ void UIWidget::loadFromXmlNode( const pugi::xml_node& node ) {
 		}
 
 		// Create a property without trimming its value
-		StyleSheetProperty prop( ait->name(), ait->value(), false,
-								 StyleSheetSelectorRule::SpecificityInline );
+		Uint64 specificity =
+			( mFlags & UI_HTML_ELEMENT ) ? 0 : StyleSheetSelectorRule::SpecificityInline;
+		StyleSheetProperty prop( ait->name(), ait->value(), false, specificity );
 
 		if ( prop.getShorthandDefinition() != NULL ) {
 			auto properties = prop.getShorthandDefinition()->parse( ait->value() );

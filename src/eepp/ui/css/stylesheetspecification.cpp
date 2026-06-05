@@ -1,6 +1,7 @@
 #include <eepp/graphics/systemfontresolver.hpp>
 #include <eepp/system/log.hpp>
 #include <eepp/ui/css/propertyspecification.hpp>
+#include <eepp/ui/css/stylesheetselectorrule.hpp>
 #include <eepp/ui/css/stylesheetspecification.hpp>
 #include <eepp/ui/uiwidget.hpp>
 
@@ -626,6 +627,11 @@ static bool isNth( int a, int b, int count ) {
 	return ( x >= 0 && x * a + b == count );
 }
 
+static bool whereIsMatch( const UIWidget* node, const std::string& param ) {
+	StyleSheetSelectorRule rule( param, StyleSheetSelectorRule::PatternMatch::ANY );
+	return rule.matches( const_cast<UIWidget*>( node ) );
+}
+
 void StyleSheetSpecification::registerDefaultNodeSelectors() {
 	mNodeSelectors["empty"] = []( const UIWidget* node, int, int, const FunctionString& ) -> bool {
 		return node->getFirstChild() == NULL;
@@ -739,6 +745,22 @@ void StyleSheetSpecification::registerDefaultNodeSelectors() {
 		}
 		return false;
 	};
+
+	mNodeSelectors["where"] = []( const UIWidget* node, int, int,
+								  const FunctionString& data ) -> bool {
+		if ( data.isEmpty() || data.getParameters().empty() ||
+			 ( data.getName() != "where" && data.getName() != "is" ) )
+			return false;
+
+		for ( const auto& param : data.getParameters() ) {
+			if ( !param.empty() && whereIsMatch( node, param ) )
+				return true;
+		}
+		return false;
+	};
+
+	auto whereFn = mNodeSelectors["where"];
+	mNodeSelectors["is"] = whereFn;
 }
 
 StructuralSelector StyleSheetSpecification::getStructuralSelector( const std::string& name ) {

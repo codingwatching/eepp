@@ -1961,6 +1961,25 @@ void UIRichText::rebuildRichText( UILayout* container, RichText& richText, Intri
 					if ( widget->isType( UI_TYPE_TEXTSPAN ) &&
 						 widget->asType<UITextSpan>()->isInlineBlock() )
 						widget->asType<UITextSpan>()->updateLayout();
+
+					if ( widget->getLayoutWidthPolicy() == SizePolicy::Fixed &&
+						 widget->getUIStyle() ) {
+						const StyleSheetProperty* wprop =
+							widget->getUIStyle()->getProperty( PropertyId::Width );
+						if ( wprop && StyleSheetLength::isPercentage( wprop->value() ) ) {
+							widget->setPixelsSize( { widget->lengthFromValue( *wprop ),
+													 widget->getPixelsSize().getHeight() } );
+						}
+					}
+					if ( widget->getLayoutHeightPolicy() == SizePolicy::Fixed &&
+						 widget->getUIStyle() ) {
+						const StyleSheetProperty* hprop =
+							widget->getUIStyle()->getProperty( PropertyId::Height );
+						if ( hprop && StyleSheetLength::isPercentage( hprop->value() ) ) {
+							widget->setPixelsSize( { widget->getPixelsSize().getWidth(),
+													 widget->lengthFromValue( *hprop ) } );
+						}
+					}
 				}
 
 				Sizef size;

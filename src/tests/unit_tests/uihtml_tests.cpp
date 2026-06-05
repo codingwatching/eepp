@@ -3936,3 +3936,142 @@ UTEST( UIHTML, FlexLiItemsWrapContentWidth ) {
 
 	Engine::destroySingleton();
 }
+
+UTEST( UIHTML, ImagePercentageWidthRespectsParentMaxWidth ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "img pct width respects parent max-width", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/image_width.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto articles = sceneNode->getRoot()->findAllByTag( "article" );
+	ASSERT_GT( articles.size(), (size_t)0 );
+	auto* articleWidget = articles[0]->asType<UIWidget>();
+	ASSERT_TRUE( articleWidget != nullptr );
+
+	auto images = sceneNode->getRoot()->findAllByTag( "img" );
+	ASSERT_GT( images.size(), (size_t)0 );
+	auto* imgWidget = images[0]->asType<UIWidget>();
+	ASSERT_TRUE( imgWidget != nullptr );
+
+	EXPECT_GT( articleWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( articleWidget->getPixelsSize().getHeight(), 0.f );
+	EXPECT_LE( articleWidget->getPixelsSize().getWidth(), 474.f );
+
+	EXPECT_GT( imgWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( imgWidget->getPixelsSize().getHeight(), 0.f );
+	EXPECT_LE( imgWidget->getPixelsSize().getWidth(), articleWidget->getPixelsSize().getWidth() );
+
+	auto anchors = sceneNode->getRoot()->findAllByTag( "a" );
+	ASSERT_GT( anchors.size(), (size_t)0 );
+	auto* anchorWidget = anchors[0]->asType<UIWidget>();
+	ASSERT_TRUE( anchorWidget != nullptr );
+	EXPECT_GT( anchorWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( anchorWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, ImageCSSWidthOverridesHTMLWidthAttribute ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "img css width overrides html width attr", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/image_width_2.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto images = sceneNode->getRoot()->findAllByTag( "img" );
+	ASSERT_GT( images.size(), (size_t)0 );
+	auto* imgWidget = images[0]->asType<UIWidget>();
+	ASSERT_TRUE( imgWidget != nullptr );
+
+	auto mains = sceneNode->getRoot()->findAllByTag( "main" );
+	ASSERT_GT( mains.size(), (size_t)0 );
+	auto* mainWidget = mains[0]->asType<UIWidget>();
+	ASSERT_TRUE( mainWidget != nullptr );
+
+	Float imgWidth = imgWidget->getPixelsSize().getWidth();
+	Float imgHeight = imgWidget->getPixelsSize().getHeight();
+	Float mainWidth = mainWidget->getPixelsSize().getWidth();
+
+	EXPECT_GT( imgWidth, 0.f );
+	EXPECT_GT( imgHeight, 0.f );
+
+	// CSS width: 100% should override HTML width="1500"
+	// Image should be no wider than its container
+	EXPECT_LE( imgWidth, mainWidth );
+
+	// Image should NOT be 1500 (the HTML attribute value)
+	EXPECT_LT( imgWidth, 1500.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, ImageMaxWidthConstrainsWebpWithHeightAuto ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "img max-width constrains webp with height auto",
+						WindowStyle::Default, WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	std::string html;
+	FileSystem::fileGet( "assets/html/image_width_3.html", html );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ) );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto articles = sceneNode->getRoot()->findAllByTag( "article" );
+	ASSERT_GT( articles.size(), (size_t)0 );
+	auto* articleWidget = articles[0]->asType<UIWidget>();
+	ASSERT_TRUE( articleWidget != nullptr );
+
+	auto images = sceneNode->getRoot()->findAllByTag( "img" );
+	ASSERT_GT( images.size(), (size_t)0 );
+	auto* imgWidget = images[0]->asType<UIWidget>();
+	ASSERT_TRUE( imgWidget != nullptr );
+
+	EXPECT_GT( articleWidget->getPixelsSize().getWidth(), 0.f );
+	EXPECT_GT( articleWidget->getPixelsSize().getHeight(), 0.f );
+	EXPECT_LE( articleWidget->getPixelsSize().getWidth(), 1140.f );
+
+	Float imgWidth = imgWidget->getPixelsSize().getWidth();
+	Float imgHeight = imgWidget->getPixelsSize().getHeight();
+
+	EXPECT_GT( imgWidth, 0.f );
+	EXPECT_GT( imgHeight, 0.f );
+	EXPECT_LE( imgWidth, articleWidget->getPixelsSize().getWidth() );
+
+	// max-width: 100% should prevent the image from using the HTML width="2560"
+	EXPECT_LT( imgWidth, 2560.f );
+
+	// height should be proportional to width (aspect ratio: 1436/2560)
+	Float expectedRatio = 1436.f / 2560.f;
+	Float actualRatio = imgHeight / imgWidth;
+	EXPECT_GT( actualRatio, expectedRatio * 0.9f );
+	EXPECT_LT( actualRatio, expectedRatio * 1.1f );
+
+	Engine::destroySingleton();
+}

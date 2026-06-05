@@ -146,6 +146,17 @@ void UIImage::onAutoSize() {
 		}
 	} else if ( mHeightPolicy == SizePolicy::WrapContent ) {
 		Float contentWidth = std::max( 0.f, size.x - mPaddingPx.Left - mPaddingPx.Right );
+
+		if ( !mMaxWidthEq.empty() ) {
+			Float maxWidth =
+				lengthFromValue( mMaxWidthEq, CSS::PropertyRelativeTarget::ContainingBlockWidth );
+			Float maxContentWidth = std::max( 0.f, maxWidth - mPaddingPx.Left - mPaddingPx.Right );
+			if ( contentWidth > maxContentWidth ) {
+				contentWidth = maxContentWidth;
+				size.x = maxWidth;
+			}
+		}
+
 		size.y = (int)( contentWidth * ( drawableSize.getHeight() / drawableSize.getWidth() ) ) +
 				 mPaddingPx.Top + mPaddingPx.Bottom;
 		if ( !mMaxHeightEq.empty() ) {
