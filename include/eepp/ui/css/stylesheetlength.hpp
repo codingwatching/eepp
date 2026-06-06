@@ -2,6 +2,7 @@
 #define EE_UI_CSS_STYLESHEETLENGTH_HPP
 
 #include <eepp/config.hpp>
+#include <eepp/core/small_vector.hpp>
 #include <eepp/math/size.hpp>
 #include <eepp/scene/scenenode.hpp>
 #include <string>
@@ -39,7 +40,13 @@ class EE_API StyleSheetLength {
 		Dpru,
 		Dpr,
 		Ch,
+		Clamp,
+		Min,
+		Max,
+		Calc,
 	};
+
+	using Arguments = SmallVector<std::string, 4>;
 
 	static Unit unitFromString( std::string_view unitStr );
 
@@ -84,9 +91,26 @@ class EE_API StyleSheetLength {
 
 	std::string toString() const;
 
+	const Arguments& getArgs() const;
+
+	void setArgs( const Arguments& args );
+
   protected:
+	static bool isFunctionString( std::string_view str );
+
+	static bool parseFunction( const std::string& str, Unit& outUnit, Arguments& outArgs );
+
+	Float resolveFunction( const Float& parentSize, const Sizef& viewSize, const Float& displayDpi,
+						   const Float& elFontSize, const Float& globalFontSize,
+						   Graphics::Font* font ) const;
+
+	Float resolveCalc( const Float& parentSize, const Sizef& viewSize, const Float& displayDpi,
+					   const Float& elFontSize, const Float& globalFontSize,
+					   Graphics::Font* font ) const;
+
 	Unit mUnit;
 	Float mValue;
+	Arguments mArgs;
 };
 
 }}} // namespace EE::UI::CSS

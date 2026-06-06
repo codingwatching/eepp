@@ -838,3 +838,168 @@ UTEST( CSSVariables, LightDarkWithVarRgb ) {
 	EXPECT_EQ( 0, result.g );
 	EXPECT_EQ( 0, result.b );
 }
+
+UTEST( CSSFunctions, ClampResolvesPixels ) {
+	auto len = StyleSheetLength::fromString( "clamp(10px, 50px, 100px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Clamp, len.getUnit() );
+	EXPECT_EQ( 3u, (size_t)len.getArgs().size() );
+	EXPECT_STREQ( "10px", len.getArgs()[0].c_str() );
+	EXPECT_STREQ( "50px", len.getArgs()[1].c_str() );
+	EXPECT_STREQ( "100px", len.getArgs()[2].c_str() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, ClampHonorsMinimum ) {
+	auto len = StyleSheetLength::fromString( "clamp(40px, 30px, 100px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 40, resolved );
+}
+
+UTEST( CSSFunctions, ClampHonorsMaximum ) {
+	auto len = StyleSheetLength::fromString( "clamp(10px, 150px, 100px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 100, resolved );
+}
+
+UTEST( CSSFunctions, ClampWithPercentage ) {
+	auto len = StyleSheetLength::fromString( "clamp(10px, 50%, 100px)" );
+	Float resolved = len.asPixels( 200, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 100, resolved );
+}
+
+UTEST( CSSFunctions, MinBasic ) {
+	auto len = StyleSheetLength::fromString( "min(100px, 50px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Min, len.getUnit() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, MinThreeArgs ) {
+	auto len = StyleSheetLength::fromString( "min(100px, 50px, 75px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, MaxBasic ) {
+	auto len = StyleSheetLength::fromString( "max(10px, 50px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Max, len.getUnit() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, CaseInsensitive ) {
+	auto len = StyleSheetLength::fromString( "CLAMP(10px, 50px, 100px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Clamp, len.getUnit() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, WhitespaceTolerance ) {
+	auto len = StyleSheetLength::fromString( "clamp( 10px , 50% , 100px )" );
+	EXPECT_EQ( 3u, (size_t)len.getArgs().size() );
+	EXPECT_STREQ( "10px", len.getArgs()[0].c_str() );
+	EXPECT_STREQ( "50%", len.getArgs()[1].c_str() );
+	EXPECT_STREQ( "100px", len.getArgs()[2].c_str() );
+}
+
+UTEST( CSSFunctions, NestedClampInMin ) {
+	auto len = StyleSheetLength::fromString( "min(clamp(10px, 50px, 100px), 200px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Min, len.getUnit() );
+	EXPECT_EQ( 2u, (size_t)len.getArgs().size() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, IsLengthRecognizesFunctions ) {
+	EXPECT_TRUE( StyleSheetLength::isLength( "clamp(10px, 50%, 100px)" ) );
+	EXPECT_TRUE( StyleSheetLength::isLength( "min(10px, 50px)" ) );
+	EXPECT_TRUE( StyleSheetLength::isLength( "max(10px, 50px)" ) );
+	EXPECT_TRUE( StyleSheetLength::isLength( "calc(10px + 20px)" ) );
+}
+
+UTEST( CSSFunctions, CalcBasicAddition ) {
+	auto len = StyleSheetLength::fromString( "calc(10px + 20px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Calc, len.getUnit() );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 30, resolved );
+}
+
+UTEST( CSSFunctions, CalcSubtraction ) {
+	auto len = StyleSheetLength::fromString( "calc(100px - 30px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 70, resolved );
+}
+
+UTEST( CSSFunctions, CalcMultiplication ) {
+	auto len = StyleSheetLength::fromString( "calc(10px * 5)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, CalcDivision ) {
+	auto len = StyleSheetLength::fromString( "calc(100px / 4)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 25, resolved );
+}
+
+UTEST( CSSFunctions, CalcOperatorPrecedence ) {
+	auto len = StyleSheetLength::fromString( "calc(10px + 20px * 3)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 70, resolved );
+}
+
+UTEST( CSSFunctions, CalcParentheses ) {
+	auto len = StyleSheetLength::fromString( "calc((10px + 20px) * 3)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 90, resolved );
+}
+
+UTEST( CSSFunctions, CalcWithPercentage ) {
+	auto len = StyleSheetLength::fromString( "calc(50% + 10px)" );
+	Float resolved = len.asPixels( 200, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 110, resolved );
+}
+
+UTEST( CSSFunctions, CalcWithEm ) {
+	auto len = StyleSheetLength::fromString( "calc(2em + 10px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 16, 16, nullptr );
+	EXPECT_EQ( 42, resolved );
+}
+
+UTEST( CSSFunctions, CalcNegativeValues ) {
+	auto len = StyleSheetLength::fromString( "calc(10px + -5px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 5, resolved );
+}
+
+UTEST( CSSFunctions, CalcUnaryMinus ) {
+	auto len = StyleSheetLength::fromString( "calc(-10px + 30px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 20, resolved );
+}
+
+UTEST( CSSFunctions, CalcNestedInClamp ) {
+	auto len = StyleSheetLength::fromString( "clamp(10px, calc(50% + 20px), 200px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Clamp, len.getUnit() );
+	Float resolved = len.asPixels( 100, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 70, resolved );
+}
+
+UTEST( CSSFunctions, CalcNestedInMin ) {
+	auto len = StyleSheetLength::fromString( "min(calc(100px - 20px), 50px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, CalcComplexExpression ) {
+	auto len = StyleSheetLength::fromString( "calc((100px + 20px) / 2 - 10px)" );
+	Float resolved = len.asPixels( 0, Sizef::Zero, 96, 12, 12, nullptr );
+	EXPECT_EQ( 50, resolved );
+}
+
+UTEST( CSSFunctions, NotAFunctionReturnsDefault ) {
+	auto len = StyleSheetLength::fromString( "notaclamp(10px, 50px, 100px)" );
+	EXPECT_EQ( StyleSheetLength::Unit::Px, len.getUnit() );
+	EXPECT_EQ( 0, len.getValue() );
+}

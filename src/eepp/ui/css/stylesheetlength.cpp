@@ -4,6 +4,7 @@
 #include <eepp/math/math.hpp>
 #include <eepp/system/luapattern.hpp>
 #include <eepp/ui/css/stylesheetlength.hpp>
+#include <limits>
 
 using namespace EE::Graphics;
 using namespace std::literals;
@@ -167,6 +168,14 @@ std::string StyleSheetLength::unitToString( const StyleSheetLength::Unit& unit )
 			return "dpr";
 		case Unit::Ch:
 			return "ch";
+		case Unit::Clamp:
+			return "clamp";
+		case Unit::Min:
+			return "min";
+		case Unit::Max:
+			return "max";
+		case Unit::Calc:
+			return "calc";
 	}
 	return "px";
 }
@@ -174,6 +183,9 @@ std::string StyleSheetLength::unitToString( const StyleSheetLength::Unit& unit )
 bool StyleSheetLength::isLength( std::string_view unitStr ) {
 	if ( unitStr.empty() )
 		return false;
+
+	if ( isFunctionString( unitStr ) )
+		return true;
 
 	size_t pos = 0;
 	if ( unitStr[pos] == '-' || unitStr[pos] == '+' )
@@ -222,7 +234,7 @@ bool StyleSheetLength::isPercentage( std::string_view val ) {
 	return !val.empty() && val.back() == '%';
 }
 
-StyleSheetLength::StyleSheetLength() : mUnit( Px ), mValue( 0 ) {}
+StyleSheetLength::StyleSheetLength() : mUnit( Unit::Px ), mValue( 0 ) {}
 
 StyleSheetLength::StyleSheetLength( const Float& val, const StyleSheetLength::Unit& unit ) :
 	mUnit( unit ), mValue( val ) {}
@@ -233,11 +245,13 @@ StyleSheetLength::StyleSheetLength( const std::string& val, const Float& default
 StyleSheetLength::StyleSheetLength( const StyleSheetLength& val ) {
 	mUnit = val.mUnit;
 	mValue = val.mValue;
+	mArgs = val.mArgs;
 }
 
 void StyleSheetLength::setValue( const Float& val, const StyleSheetLength::Unit& units ) {
 	mValue = val;
 	mUnit = units;
+	mArgs.clear();
 }
 
 const Float& StyleSheetLength::getValue() const {
@@ -251,6 +265,13 @@ const StyleSheetLength::Unit& StyleSheetLength::getUnit() const {
 Float StyleSheetLength::asPixels( const Float& parentSize, const Sizef& viewSize,
 								  const Float& displayDpi, const Float& elFontSize,
 								  const Float& globalFontSize, Graphics::Font* font ) const {
+	if ( mUnit == Unit::Clamp || mUnit == Unit::Min || mUnit == Unit::Max )
+		return resolveFunction( parentSize, viewSize, displayDpi, elFontSize, globalFontSize,
+								font );
+
+	if ( mUnit == Unit::Calc )
+		return resolveCalc( parentSize, viewSize, displayDpi, elFontSize, globalFontSize, font );
+
 	Float ret = 0;
 
 	// CSS dictates a base 96 DPI for logical pixels.
@@ -346,7 +367,7 @@ Float StyleSheetLength::asDp( const Float& parentSize, const Sizef& viewSize,
 }
 
 bool StyleSheetLength::operator==( const StyleSheetLength& length ) const {
-	return mValue == length.mValue && mUnit == length.mUnit;
+	return mValue == length.mValue && mUnit == length.mUnit && mArgs == length.mArgs;
 }
 
 bool StyleSheetLength::operator!=( const StyleSheetLength& length ) const {
@@ -356,12 +377,14 @@ bool StyleSheetLength::operator!=( const StyleSheetLength& length ) const {
 StyleSheetLength& StyleSheetLength::operator=( const Float& val ) {
 	mValue = val;
 	mUnit = Unit::Px;
+	mArgs.clear();
 	return *this;
 }
 
 StyleSheetLength& StyleSheetLength::operator=( const StyleSheetLength& val ) {
 	mUnit = val.mUnit;
 	mValue = val.mValue;
+	mArgs = val.mArgs;
 	return *this;
 }
 
@@ -373,6 +396,19 @@ StyleSheetLength StyleSheetLength::fromString( const std::string& str, const Flo
 
 	StyleSheetLength length;
 	length.setValue( defaultValue, Unit::Px );
+
+	if ( isFunctionString( str ) ) {
+		Unit funcUnit = Unit::Px;
+		Arguments args;
+		if ( parseFunction( str, funcUnit, args ) ) {
+			length.mUnit = funcUnit;
+			length.mArgs = std::move( args );
+			length.mValue = 0;
+			return length;
+		}
+		return length;
+	}
+
 	std::string num;
 	std::string unit;
 
@@ -404,6 +440,17 @@ StyleSheetLength StyleSheetLength::fromString( const std::string& str, const Flo
 }
 
 std::string StyleSheetLength::toString() const {
+	if ( mUnit == Unit::Clamp || mUnit == Unit::Min || mUnit == Unit::Max || mUnit == Unit::Calc ) {
+		std::string res( unitToString( mUnit ) );
+		res += "(";
+		for ( size_t i = 0; i < mArgs.size(); i++ ) {
+			if ( i > 0 )
+				res += ", ";
+			res += mArgs[i];
+		}
+		res += ")";
+		return res;
+	}
 	std::string res( String::format( "%.2f", mValue ) );
 	String::replace( res, ",", "." );
 	String::numberCleanInPlace( res );
@@ -411,4 +458,306 @@ std::string StyleSheetLength::toString() const {
 	return res;
 }
 
+const StyleSheetLength::Arguments& StyleSheetLength::getArgs() const {
+	return mArgs;
+}
+
+void StyleSheetLength::setArgs( const Arguments& args ) {
+	mArgs = args;
+}
+
+bool StyleSheetLength::isFunctionString( std::string_view str ) {
+	str = String::trim( str );
+	return String::istartsWith( str, "clamp(" ) || String::istartsWith( str, "min(" ) ||
+		   String::istartsWith( str, "max(" ) || String::istartsWith( str, "calc(" );
+}
+
+bool StyleSheetLength::parseFunction( const std::string& str, Unit& outUnit, Arguments& outArgs ) {
+	std::string_view sv( str );
+	std::string_view trimmed = String::trim( sv );
+
+	if ( String::istartsWith( trimmed, "clamp(" ) ) {
+		outUnit = Unit::Clamp;
+	} else if ( String::istartsWith( trimmed, "min(" ) ) {
+		outUnit = Unit::Min;
+	} else if ( String::istartsWith( trimmed, "max(" ) ) {
+		outUnit = Unit::Max;
+	} else if ( String::istartsWith( trimmed, "calc(" ) ) {
+		outUnit = Unit::Calc;
+	} else {
+		return false;
+	}
+
+	size_t parenOpen = trimmed.find( '(' );
+	if ( parenOpen == std::string_view::npos )
+		return false;
+
+	size_t parenClose = trimmed.find_last_of( ')' );
+	if ( parenClose == std::string_view::npos || parenClose <= parenOpen )
+		return false;
+
+	std::string_view argsSv = trimmed.substr( parenOpen + 1, parenClose - parenOpen - 1 );
+
+	outArgs.clear();
+
+	if ( outUnit == Unit::Calc ) {
+		std::string expr( String::trim( argsSv ) );
+		if ( !expr.empty() )
+			outArgs.push_back( std::move( expr ) );
+		return !outArgs.empty();
+	}
+
+	size_t depth = 0;
+	size_t start = 0;
+	for ( size_t i = 0; i < argsSv.size(); i++ ) {
+		char c = argsSv[i];
+		if ( c == '(' ) {
+			depth++;
+		} else if ( c == ')' ) {
+			if ( depth > 0 )
+				depth--;
+		} else if ( c == ',' && depth == 0 ) {
+			std::string_view arg = argsSv.substr( start, i - start );
+			std::string trimmedArg( String::trim( arg ) );
+			if ( !trimmedArg.empty() )
+				outArgs.push_back( std::move( trimmedArg ) );
+			start = i + 1;
+		}
+	}
+	std::string_view lastArg = argsSv.substr( start );
+	std::string trimmedLast( String::trim( lastArg ) );
+	if ( !trimmedLast.empty() )
+		outArgs.push_back( std::move( trimmedLast ) );
+
+	return !outArgs.empty();
+}
+
+Float StyleSheetLength::resolveFunction( const Float& parentSize, const Sizef& viewSize,
+										 const Float& displayDpi, const Float& elFontSize,
+										 const Float& globalFontSize, Graphics::Font* font ) const {
+	if ( mArgs.empty() )
+		return 0;
+
+	switch ( mUnit ) {
+		case Unit::Clamp: {
+			if ( mArgs.size() < 3 )
+				return 0;
+			StyleSheetLength minVal = fromString( mArgs[0] );
+			StyleSheetLength prefVal = fromString( mArgs[1] );
+			StyleSheetLength maxVal = fromString( mArgs[2] );
+			Float resolvedMin = minVal.asPixels( parentSize, viewSize, displayDpi, elFontSize,
+												 globalFontSize, font );
+			Float resolvedPref = prefVal.asPixels( parentSize, viewSize, displayDpi, elFontSize,
+												   globalFontSize, font );
+			Float resolvedMax = maxVal.asPixels( parentSize, viewSize, displayDpi, elFontSize,
+												 globalFontSize, font );
+			return eemin( eemax( resolvedPref, resolvedMin ), resolvedMax );
+		}
+		case Unit::Min: {
+			Float result = std::numeric_limits<Float>::max();
+			for ( size_t i = 0; i < mArgs.size(); i++ ) {
+				StyleSheetLength arg = fromString( mArgs[i] );
+				Float resolved = arg.asPixels( parentSize, viewSize, displayDpi, elFontSize,
+											   globalFontSize, font );
+				result = eemin( result, resolved );
+			}
+			return result;
+		}
+		case Unit::Max: {
+			Float result = -std::numeric_limits<Float>::max();
+			for ( size_t i = 0; i < mArgs.size(); i++ ) {
+				StyleSheetLength arg = fromString( mArgs[i] );
+				Float resolved = arg.asPixels( parentSize, viewSize, displayDpi, elFontSize,
+											   globalFontSize, font );
+				result = eemax( result, resolved );
+			}
+			return result;
+		}
+		default:
+			return 0;
+	}
+}
+
+Float StyleSheetLength::resolveCalc( const Float& parentSize, const Sizef& viewSize,
+									 const Float& displayDpi, const Float& elFontSize,
+									 const Float& globalFontSize, Graphics::Font* font ) const {
+	if ( mArgs.empty() )
+		return 0;
+
+	const std::string& expr = mArgs[0];
+
+	enum class TokenType { Number, Unit, Op, ParenOpen, ParenClose };
+	struct Token {
+		TokenType type;
+		std::string val;
+	};
+
+	SmallVector<Token, 16> tokens;
+
+	auto isOpChar = []( char c ) {
+		return c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')';
+	};
+
+	size_t i = 0;
+	while ( i < expr.size() ) {
+		char c = expr[i];
+		if ( c == ' ' || c == '\t' || c == '\n' ) {
+			i++;
+			continue;
+		}
+		if ( c == '(' ) {
+			tokens.push_back( { TokenType::ParenOpen, std::string( expr.substr( i, 1 ) ) } );
+			i++;
+		} else if ( c == ')' ) {
+			tokens.push_back( { TokenType::ParenClose, std::string( expr.substr( i, 1 ) ) } );
+			i++;
+		} else if ( c == '+' || c == '*' || c == '/' ) {
+			tokens.push_back( { TokenType::Op, std::string( expr.substr( i, 1 ) ) } );
+			i++;
+		} else if ( c == '-' ) {
+			bool isNegNum = false;
+			if ( tokens.empty() || ( tokens.back().type == TokenType::Op ||
+									 tokens.back().type == TokenType::ParenOpen ) ) {
+				size_t j = i + 1;
+				while ( j < expr.size() && expr[j] == ' ' )
+					j++;
+				if ( j < expr.size() && ( String::isNumber( expr[j], false ) || expr[j] == '.' ) )
+					isNegNum = true;
+			}
+			if ( isNegNum ) {
+				size_t start = i;
+				i++;
+				while ( i < expr.size() &&
+						( String::isNumber( expr[i], false ) || expr[i] == '.' ) )
+					i++;
+				tokens.push_back(
+					{ TokenType::Number, std::string( expr.substr( start, i - start ) ) } );
+				if ( i < expr.size() && !isOpChar( expr[i] ) && expr[i] != ' ' ) {
+					size_t unitStart = i;
+					while ( i < expr.size() && !isOpChar( expr[i] ) && expr[i] != ' ' &&
+							expr[i] != '(' && expr[i] != ')' )
+						i++;
+					tokens.push_back( { TokenType::Unit,
+										std::string( expr.substr( unitStart, i - unitStart ) ) } );
+				}
+			} else {
+				tokens.push_back( { TokenType::Op, std::string( expr.substr( i, 1 ) ) } );
+				i++;
+			}
+		} else if ( String::isNumber( c, false ) || c == '.' ) {
+			size_t start = i;
+			while ( i < expr.size() && ( String::isNumber( expr[i], false ) || expr[i] == '.' ) )
+				i++;
+			tokens.push_back(
+				{ TokenType::Number, std::string( expr.substr( start, i - start ) ) } );
+			if ( i < expr.size() && !isOpChar( expr[i] ) && expr[i] != ' ' ) {
+				size_t unitStart = i;
+				while ( i < expr.size() && !isOpChar( expr[i] ) && expr[i] != ' ' &&
+						expr[i] != '(' && expr[i] != ')' )
+					i++;
+				tokens.push_back(
+					{ TokenType::Unit, std::string( expr.substr( unitStart, i - unitStart ) ) } );
+			}
+		} else {
+			i++;
+		}
+	}
+
+	if ( tokens.empty() )
+		return 0;
+
+	struct Evaluator {
+		const SmallVector<Token, 16>& tokens;
+		const Float& parentSize;
+		const Sizef& viewSize;
+		const Float& displayDpi;
+		const Float& elFontSize;
+		const Float& globalFontSize;
+		Graphics::Font* font;
+		size_t pos = 0;
+
+		Float resolveAtom( const Token& numTok, const Token* unitTok ) const {
+			if ( unitTok && !unitTok->val.empty() ) {
+				std::string valStr( numTok.val );
+				valStr += unitTok->val;
+				StyleSheetLength len = StyleSheetLength::fromString( valStr );
+				return len.asPixels( parentSize, viewSize, displayDpi, elFontSize, globalFontSize,
+									 font );
+			}
+			Float v = 0;
+			String::fromString( v, numTok.val );
+			return v;
+		}
+
+		Float evalFactor() {
+			if ( pos >= tokens.size() )
+				return 0;
+
+			auto& tok = tokens[pos];
+
+			if ( tok.type == TokenType::ParenOpen ) {
+				pos++;
+				Float result = evalExpr();
+				if ( pos < tokens.size() && tokens[pos].type == TokenType::ParenClose )
+					pos++;
+				return result;
+			}
+
+			if ( tok.type == TokenType::Op && tok.val == "-" ) {
+				pos++;
+				return -evalFactor();
+			}
+			if ( tok.type == TokenType::Op && tok.val == "+" ) {
+				pos++;
+				return evalFactor();
+			}
+
+			if ( tok.type == TokenType::Number ) {
+				const Token* unitTok =
+					( pos + 1 < tokens.size() && tokens[pos + 1].type == TokenType::Unit )
+						? &tokens[pos + 1]
+						: nullptr;
+				Float v = resolveAtom( tok, unitTok );
+				pos += unitTok ? 2 : 1;
+				return v;
+			}
+
+			pos++;
+			return 0;
+		}
+
+		Float evalTerm() {
+			Float left = evalFactor();
+			while ( pos < tokens.size() && tokens[pos].type == TokenType::Op &&
+					( tokens[pos].val == "*" || tokens[pos].val == "/" ) ) {
+				char op = tokens[pos].val[0];
+				pos++;
+				Float right = evalFactor();
+				if ( op == '*' )
+					left = left * right;
+				else if ( right != 0 )
+					left = left / right;
+			}
+			return left;
+		}
+
+		Float evalExpr() {
+			Float left = evalTerm();
+			while ( pos < tokens.size() && tokens[pos].type == TokenType::Op &&
+					( tokens[pos].val == "+" || tokens[pos].val == "-" ) ) {
+				char op = tokens[pos].val[0];
+				pos++;
+				Float right = evalTerm();
+				if ( op == '+' )
+					left = left + right;
+				else
+					left = left - right;
+			}
+			return left;
+		}
+	};
+
+	Evaluator ev{ tokens, parentSize, viewSize, displayDpi, elFontSize, globalFontSize, font, 0 };
+	return ev.evalExpr();
+}
 }}} // namespace EE::UI::CSS
