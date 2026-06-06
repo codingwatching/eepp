@@ -3,19 +3,38 @@
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
 #include <eepp/graphics/richtext.hpp>
+#include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/clock.hpp>
 #include <eepp/system/filesystem.hpp>
 #include <eepp/system/sys.hpp>
+#include <eepp/ui/uimarkdownview.hpp>
+#include <eepp/ui/uiscenenode.hpp>
+#include <eepp/ui/uiscrollview.hpp>
+#include <eepp/ui/uithememanager.hpp>
 #include <eepp/window/engine.hpp>
+
+#include <cstdlib>
 
 using namespace EE;
 using namespace EE::Graphics;
+using namespace EE::Scene;
+using namespace EE::UI;
 using namespace EE::Window;
 
 static constexpr int numBoxes = 100;
 static constexpr int numSpansPerBox = 20;
 static constexpr int layoutIterations = 50;
+static constexpr int markdownFlushIterations = 1;
 static constexpr Float maxWidth = 800;
+
+static int getMarkdownFlushIterations() {
+	if ( const char* env = std::getenv( "EE_MARKDOWN_BENCH_FLUSH_ITERATIONS" ) ) {
+		Int32 val = markdownFlushIterations;
+		if ( String::fromString( val, std::string( env ) ) )
+			return eemax<Int32>( 0, val );
+	}
+	return markdownFlushIterations;
+}
 
 UTEST( Benchmark, InlineLayout ) {
 	Engine::instance()->createWindow( WindowSettings(
@@ -79,5 +98,107 @@ UTEST( Benchmark, InlineLayout ) {
 		String::format( "Per iteration: %lld us", elapsed.asMicroseconds() / layoutIterations )
 			.c_str() );
 
+	Engine::destroySingleton();
+}
+
+UTEST( Benchmark, MarkdownReadme ) {
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+
+	const std::string readmePath = "../../README.md";
+	std::string markdown;
+	if ( !FileSystem::fileGet( readmePath, markdown ) ) {
+		UTEST_PRINT_INFO(
+			String::format( "Failed to load %s from cwd '%s', skipping benchmark",
+							readmePath.c_str(), FileSystem::getCurrentWorkingDirectory().c_str() )
+				.c_str() );
+		return;
+	}
+
+	EE::Window::Window* window = Engine::instance()->createWindow(
+		WindowSettings( 1280, 720, "markdown bench", WindowStyle::Default, WindowBackend::Default,
+						32, {}, 1, false, true ) );
+	if ( !window || !window->isOpen() ) {
+		Engine::destroySingleton();
+		UTEST_PRINT_INFO( "Failed to create window, skipping benchmark" );
+		return;
+	}
+	Engine::instance()->disableSharedGLContext();
+
+	PixelDensity::setPixelDensity( 1.f );
+	UISceneNode* ui = UISceneNode::New( window );
+	SceneManager::instance()->add( ui );
+
+	FontTrueType* font = FontTrueType::New( "NotoSans-Regular" );
+	font->loadFromFile( "../assets/fonts/NotoSans-Regular.ttf" );
+	FontTrueType* monoFont = FontTrueType::New( "monospace" );
+	monoFont->loadFromFile( "../assets/fonts/DejaVuSansMono.ttf" );
+	if ( !font->loaded() || !monoFont->loaded() ) {
+		Engine::destroySingleton();
+		UTEST_PRINT_INFO( "Failed to load fonts, skipping benchmark" );
+		return;
+	}
+	monoFont->setEnableDynamicMonospace( true );
+	FontFamily::loadFromRegular( font );
+	FontFamily::loadFromRegular( monoFont );
+	ui->getUIThemeManager()->setDefaultFont( font );
+
+	UIScrollView* scrollView = UIScrollView::New();
+	scrollView->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::MatchParent );
+	scrollView->setParent( ui->getRoot() );
+
+	UIMarkdownView* markdownView = UIMarkdownView::New();
+	markdownView->setLayoutSizePolicy( SizePolicy::MatchParent, SizePolicy::WrapContent );
+	markdownView->setPadding( Rectf( 16, 16, 16, 16 ) );
+	markdownView->setParent( scrollView->getContainer() );
+
+	UILayout::resetMetrics();
+
+	Clock loadClock;
+	markdownView->loadFromString( markdown );
+	Time loadElapsed = loadClock.getElapsedTime();
+	UILayout::Metrics afterLoad = UILayout::getMetrics();
+
+	int flushIterations = getMarkdownFlushIterations();
+	Clock updateClock;
+	for ( int i = 0; i < flushIterations; ++i )
+		ui->update( Seconds( 0 ) );
+	Time updateElapsed = updateClock.getElapsedTime();
+	UILayout::Metrics afterUpdate = UILayout::getMetrics();
+
+	if ( flushIterations > 0 )
+		EXPECT_GT( markdownView->getPixelsSize().getHeight(), 0.f );
+
+	UTEST_PRINT_INFO( String::format( "README path: %s", readmePath.c_str() ).c_str() );
+	UTEST_PRINT_INFO( String::format( "README bytes: %zu", markdown.size() ).c_str() );
+	UTEST_PRINT_INFO( String::format( "Flush iterations: %d", flushIterations ).c_str() );
+	UTEST_PRINT_INFO( String::format( "Load: %s", loadElapsed.toString().c_str() ).c_str() );
+	UTEST_PRINT_INFO(
+		String::format( "Layout flush: %s", updateElapsed.toString().c_str() ).c_str() );
+	UTEST_PRINT_INFO(
+		String::format( "After load - child changes: %llu, auto-size children: %llu, rich text "
+						"rebuilds: %llu, invalidations: %llu, sync updates: %llu, tree updates: "
+						"%llu",
+						(unsigned long long)afterLoad.childCountChanges,
+						(unsigned long long)afterLoad.autoSizeChildren,
+						(unsigned long long)afterLoad.richTextRebuilds,
+						(unsigned long long)afterLoad.invalidations,
+						(unsigned long long)afterLoad.synchronousUpdates,
+						(unsigned long long)afterLoad.treeUpdates )
+			.c_str() );
+	UTEST_PRINT_INFO(
+		String::format( "After flush - child changes: %llu, auto-size children: %llu, rich text "
+						"rebuilds: %llu, invalidations: %llu, sync updates: %llu, tree updates: "
+						"%llu",
+						(unsigned long long)afterUpdate.childCountChanges,
+						(unsigned long long)afterUpdate.autoSizeChildren,
+						(unsigned long long)afterUpdate.richTextRebuilds,
+						(unsigned long long)afterUpdate.invalidations,
+						(unsigned long long)afterUpdate.synchronousUpdates,
+						(unsigned long long)afterUpdate.treeUpdates )
+			.c_str() );
+
+	UILayout::setMetricsEnabled( false );
+	SceneManager::instance()->remove( ui );
+	eeDelete( ui );
 	Engine::destroySingleton();
 }

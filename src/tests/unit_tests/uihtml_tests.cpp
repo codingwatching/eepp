@@ -4,7 +4,9 @@
 
 #include <eepp/graphics/fontfamily.hpp>
 #include <eepp/graphics/fonttruetype.hpp>
+#include <eepp/graphics/image.hpp>
 #include <eepp/graphics/renderer/renderer.hpp>
+#include <eepp/graphics/texturefactory.hpp>
 #include <eepp/scene/keyevent.hpp>
 #include <eepp/scene/scenemanager.hpp>
 #include <eepp/system/filesystem.hpp>
@@ -17,6 +19,7 @@
 #include <eepp/ui/uicodeeditor.hpp>
 #include <eepp/ui/uihtmldetails.hpp>
 #include <eepp/ui/uihtmlinput.hpp>
+#include <eepp/ui/uihtmlimage.hpp>
 #include <eepp/ui/uihtmltable.hpp>
 #include <eepp/ui/uihtmltextarea.hpp>
 #include <eepp/ui/uihtmltextinput.hpp>
@@ -3978,6 +3981,70 @@ UTEST( UIHTML, ImagePercentageWidthRespectsParentMaxWidth ) {
 	ASSERT_TRUE( anchorWidget != nullptr );
 	EXPECT_GT( anchorWidget->getPixelsSize().getWidth(), 0.f );
 	EXPECT_GT( anchorWidget->getPixelsSize().getHeight(), 0.f );
+
+	Engine::destroySingleton();
+}
+
+UTEST( UIHTML, TextureReplaceInvalidatesRichTextAncestors ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "texture replace img relayout", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+
+	UIWebView* webView = UIWebView::New();
+	webView->setParent( sceneNode->getRoot() );
+	webView->setPixelsSize( win->getWidth(), win->getHeight() );
+	webView->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+	std::string html = R"html(
+		<!doctype html>
+		<html>
+		<body>
+			<article id="article" style="display:block; width: 480px;">
+				<p>Before image</p>
+				<img id="late-img">
+				<p>After image</p>
+			</article>
+		</body>
+		</html>
+	)html";
+	sceneNode->setURI( "file://delayed-image-resize.html" );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ), webView->getDocumentContainer(),
+									 String::hash( "delayed-image-resize" ) );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto* article = sceneNode->getRoot()->find( "article" )->asType<UIRichText>();
+	auto* body = sceneNode->getRoot()->findByType( UI_TYPE_HTML_BODY )->asType<UIWidget>();
+	auto* doc = webView->getDocumentContainer();
+	auto images = sceneNode->getRoot()->findAllByTag( "img" );
+	ASSERT_TRUE( article != nullptr );
+	ASSERT_TRUE( body != nullptr );
+	ASSERT_TRUE( doc != nullptr );
+	ASSERT_EQ( images.size(), (size_t)1 );
+	auto* img = images[0]->asType<UIHTMLImage>();
+	ASSERT_TRUE( img != nullptr );
+
+	Texture* texture = TextureFactory::instance()->createEmptyTexture( 1, 1, 4, Color::Transparent );
+	ASSERT_TRUE( texture != nullptr );
+	img->setDrawable( texture );
+	sceneNode->updateDirtyLayouts();
+
+	Float articleInitialHeight = article->getPixelsSize().getHeight();
+	Float bodyInitialHeight = body->getPixelsSize().getHeight();
+	Float docInitialHeight = doc->getPixelsSize().getHeight();
+
+	Image loadedImage( 320, 180, 4, Color::White );
+	texture->replace( &loadedImage );
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_GT( article->getPixelsSize().getHeight(), articleInitialHeight + 150.f );
+	EXPECT_GT( body->getPixelsSize().getHeight(), bodyInitialHeight + 150.f );
+	EXPECT_GT( doc->getPixelsSize().getHeight(), docInitialHeight + 150.f );
 
 	Engine::destroySingleton();
 }

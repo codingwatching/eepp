@@ -916,13 +916,34 @@ void UISceneNode::setIsLoading( bool isLoading ) {
 void UISceneNode::updateDirtyLayouts() {
 	if ( !mDirtyLayouts.empty() ) {
 		Clock clock;
+
+		// Process a snapshot instead of iterating mDirtyLayouts directly. Layout is allowed to
+		// invalidate more layouts while this pass is running: size changes can happen as children
+		// are measured, async resources can resolve, and HTML/RichText can discover that a parent
+		// needs another pass. Those new invalidations must remain in mDirtyLayouts for the outer
+		// invalidation-depth loop to process next. If we iterate the live set and clear it at the
+		// end, any invalidation created during layout is silently lost; if we force everything to
+		// update synchronously instead, RichText/block layout can re-enter the same parent many
+		// times and rebuild the same inline stream repeatedly.
+		//
+		// Keep the snapshot as reusable storage instead of moving mDirtyLayouts into a temporary
+		// set. Moving the set transfers its bucket/node allocation and frees it at the end of this
+		// function, which makes large documents rebuild the dirty-set allocation on every layout
+		// wave. Copying only layout pointers into a SmallVector keeps common passes inline, lets
+		// large bursts grow once and retain capacity, and mDirtyLayouts.clear() preserves the set
+		// buckets for invalidations produced by the current pass.
+		mDirtyLayoutsSnapshot.clear();
+		mDirtyLayoutsSnapshot.reserve( mDirtyLayouts.size() );
+		for ( auto layout : mDirtyLayouts )
+			mDirtyLayoutsSnapshot.push_back( layout );
+		mDirtyLayouts.clear();
+
 		mUpdatingLayouts = true;
 
-		for ( UILayout* layout : mDirtyLayouts ) {
+		for ( UILayout* layout : mDirtyLayoutsSnapshot ) {
 			layout->updateLayoutTree();
 		}
 
-		mDirtyLayouts.clear();
 		mUpdatingLayouts = false;
 
 		if ( mVerbose )

@@ -1078,18 +1078,22 @@ void UIRichText::loadFromXmlNode( const pugi::xml_node& node ) {
 }
 
 void UIRichText::onSizeChange() {
-	if ( getCSSPosition() == CSSPosition::Fixed ) {
-		// Fixed-position elements are sized relative to the viewport. Do not
-		// trigger a self-layout pass (tryUpdateLayout via
-		// UIHTMLWidget::onSizeChange) nor propagate size changes upward
-		// (notifyLayoutAttrChangeParent): neither ancestors nor this element
-		// need to re-layout in response to a viewport-relative size change,
-		// and doing so would cause unnecessary re-layout or infinite recursion.
+	if ( isOutOfFlow() ) {
+		// Out-of-flow elements are sized/positioned by updateOutOfFlowPosition(). That routine can
+		// apply a computed width/height after the normal layouter has run. Running
+		// UIHTMLWidget::onSizeChange() from here would call tryUpdateLayout() on the same element
+		// while updateOutOfFlowPosition() is still on the stack, which can recurse forever through
+		// updateLayout() -> updateOutOfFlowPosition() -> setPixelsSize() -> onSizeChange().
+		//
+		// We still emit the generic UIWidget size-change notification so drawing/events stay
+		// current, and absolute elements still notify ancestors below: body-like containers may
+		// include absolute descendants when computing their effective content height. Fixed
+		// elements are excluded from the parent notification because they are viewport-relative and
+		// do not participate in normal-flow sizing.
 		UIWidget::onSizeChange();
 	} else {
 		UIHTMLWidget::onSizeChange();
 	}
-	notifyLayoutAttrChange();
 	if ( getCSSPosition() != CSSPosition::Fixed )
 		notifyLayoutAttrChangeParent();
 }
@@ -1590,6 +1594,7 @@ static Drawable* getInlineBorderDrawable( UIWidget* widget ) {
 }
 
 void UIRichText::rebuildRichText( UILayout* container, RichText& richText, IntrinsicMode mode ) {
+	UILayout::countRichTextRebuild();
 	richText.clear();
 	if ( container->isType( UI_TYPE_RICHTEXT ) || container->isType( UI_TYPE_TEXTSPAN ) ) {
 		auto* uiRt = static_cast<UIRichText*>( container );
@@ -2170,24 +2175,58 @@ Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 			bool packing = isPacking();
 			if ( packing )
 				return 1;
-			if ( Msg->getSender() != this ) {
+			bool senderIsFixed = Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) &&
+								 static_cast<const UIHTMLWidget*>( Msg->getSender() )
+									 ->getCSSPosition() == CSSPosition::Fixed;
+
+			// updateOutOfFlowPosition() may set this element's own size while the scene is already
+			// updating layouts. That self size-change message has already been accounted for by
+			// the out-of-flow positioning routine; responding to it by relaying into tryUpdateLayout()
+			// re-enters updateOutOfFlowPosition() and can recurse until stack overflow. Parent
+			// notifications for absolute elements are handled by onSizeChange(), so ignoring this
+			// self-message does not hide the size change from ancestors that need it.
+			if ( Msg->getSender() == this && isOutOfFlow() && mUISceneNode->isUpdatingLayouts() )
+				return 1;
+
+			// A block RichText owns an inline formatting stream built from its descendants.
+			// During updateLayoutTree(), BlockLayouter rebuilds that stream, measures embedded
+			// widgets, and positions children. Those child size/position changes naturally emit
+			// LayoutAttributeChange messages back to this RichText. Re-entering this same block
+			// immediately would throw away the stream being built and rebuild it again while the
+			// first pass is still positioning descendants. Documents expose this as
+			// thousands of redundant rebuildRichText()/onAutoSizeChild() calls per frame.
+			//
+			// When mUpdatingLayoutTree is true, the current pass is already incorporating these
+			// descendant measurements, so the correct action is to invalidate intrinsic width
+			// caches and absorb the message. External changes, async image resize notifications,
+			// and normal post-layout mutations arrive outside this active pass and still follow the
+			// regular notifyLayoutAttrChangeParent()/tryUpdateLayout() path below.
+			if ( !senderIsFixed && mUISceneNode->isUpdatingLayouts() && mUpdatingLayoutTree &&
+				 !isOutOfFlow() ) {
 				invalidateIntrinsicSize();
-				// Fixed-position children are sized relative to the viewport
-				// and never affect the parent's normal-flow layout. Suppress
-				// ancestor notification and parent re-layout for these; absolute
-				// children are allowed because parents like body compute their
-				// minHeight from absolute children.
-				if ( !Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) ||
-					 static_cast<const UIHTMLWidget*>( Msg->getSender() )->getCSSPosition() !=
-						 CSSPosition::Fixed ) {
-					notifyLayoutAttrChangeParent();
-				}
+				return 1;
 			}
-			if ( !Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) ||
-				 static_cast<const UIHTMLWidget*>( Msg->getSender() )->getCSSPosition() !=
-					 CSSPosition::Fixed ) {
+
+			if ( Msg->getSender() != this ) {
+				// A descendant change invalidates the inline/block formatting stream owned by this
+				// RichText. Do not immediately relay that invalidation to the parent: the parent's
+				// layout depends on this RichText's box, not on the raw descendant event. Relaying
+				// first lets dirty-layout coalescing replace this dirty RichText with an ancestor
+				// layout, and generic ancestors such as UILinearLayout measure children before the
+				// recursive child update runs. Delayed image loads then leave the ancestor with the
+				// old RichText height until an unrelated hover/resize causes another invalidation.
+				//
+				// Rebuild this RichText instead. If the rebuilt stream changes the RichText box,
+				// UIRichText::onSizeChange() will notify ancestors with the actual size change; if
+				// the box does not change, no ancestor layout work was necessary. Fixed-position
+				// descendants are still ignored below because they are viewport-relative and do not
+				// affect this normal-flow box.
+				invalidateIntrinsicSize();
+			}
+
+			if ( !senderIsFixed )
 				tryUpdateLayout();
-			}
+
 			return 1;
 		}
 		case NodeMessage::MouseDown: {

@@ -3,12 +3,18 @@
 
 namespace EE { namespace UI {
 
+static UILayout::Metrics sMetrics;
+static bool sMetricsEnabled{ false };
+
 UILayout::UILayout( const std::string& tag ) : UIWidget( tag ) {
 	mNodeFlags |= NODE_FLAG_LAYOUT;
 	unsetFlags( UI_TAB_FOCUSABLE );
 }
 
 void UILayout::onChildCountChange( Node* child, const bool& removed ) {
+	if ( sMetricsEnabled )
+		sMetrics.childCountChanges++;
+
 	UIWidget::onChildCountChange( child, removed );
 
 	if ( child->isLayout() ) {
@@ -63,6 +69,9 @@ void UILayout::updateLayout() {}
 
 void UILayout::setLayoutDirty() {
 	if ( !mDirtyLayout ) {
+		if ( sMetricsEnabled )
+			sMetrics.invalidations++;
+
 		mUISceneNode->invalidateLayout( this );
 		mDirtyLayout = true;
 	}
@@ -78,19 +87,29 @@ void UILayout::setGravityOwner( bool gravityOwner ) {
 
 void UILayout::tryUpdateLayout() {
 	if ( mUISceneNode->isUpdatingLayouts() ) {
-		updateLayout();
+		if ( !isPacking() ) {
+			if ( sMetricsEnabled ) {
+				sMetrics.synchronousUpdates++;
+			}
+			updateLayout();
+		}
 	} else if ( !mDirtyLayout ) {
 		setLayoutDirty();
 	}
 }
 
 void UILayout::updateLayoutTree() {
+	if ( sMetricsEnabled )
+		sMetrics.treeUpdates++;
+
+	mUpdatingLayoutTree = true;
 	updateLayout();
 
 	for ( auto layout : mLayouts ) {
 		layout->updateLayoutTree();
 	}
 
+	mUpdatingLayoutTree = false;
 	onLayoutUpdate();
 }
 
@@ -138,10 +157,32 @@ void UILayout::updateLayoutWrappingContents() {
 }
 
 void UILayout::onAutoSizeChild( UIWidget* child ) {
+	if ( sMetricsEnabled )
+		sMetrics.autoSizeChildren++;
+
 	if ( child->isLayout() ) {
 		child->asType<UILayout>()->updateLayoutWrappingContents();
-	} else
+	} else {
 		child->onAutoSize();
+	}
+}
+
+void UILayout::resetMetrics() {
+	sMetrics = {};
+	sMetricsEnabled = true;
+}
+
+UILayout::Metrics UILayout::getMetrics() {
+	return sMetrics;
+}
+
+void UILayout::setMetricsEnabled( bool enabled ) {
+	sMetricsEnabled = enabled;
+}
+
+void UILayout::countRichTextRebuild() {
+	if ( sMetricsEnabled )
+		sMetrics.richTextRebuilds++;
 }
 
 }} // namespace EE::UI

@@ -787,10 +787,11 @@ class EE_API UISceneNode : public SceneNode {
 	UnorderedSet<UIWidget*> mDirtyStyleState;
 	UnorderedMap<UIWidget*, bool> mDirtyStyleStateCSSAnimations;
 	UnorderedSet<UILayout*> mDirtyLayouts;
+	SmallVector<UILayout*, 64> mDirtyLayoutsSnapshot;
 	std::vector<std::pair<Float, std::string>> mTimes;
 	ColorSchemePreference mColorSchemePreference{ ColorSchemePreference::Dark };
 	ContrastPreference mContrastPreference{ ContrastPreference::NoPreference };
-	Uint32 mMaxInvalidationDepth{ 2 };
+	Uint32 mMaxInvalidationDepth{ 3 };
 	Node* mCurParent{ nullptr };
 	Uint32 mCurOnSizeChangeListener{ 0 };
 	Uint32 mCurrentMarker{ 0 };
