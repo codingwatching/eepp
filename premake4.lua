@@ -1671,7 +1671,7 @@ solution "eepp"
 	project "eepp-ui-markdownview"
 		set_kind()
 		language "C++"
-		incdirs { "src/thirdparty" }
+		includedirs { "src/thirdparty" }
 		files { "src/examples/ui_markdownview/*.cpp" }
 		build_link_configuration( "eepp-ui-markdownview", true )
 
