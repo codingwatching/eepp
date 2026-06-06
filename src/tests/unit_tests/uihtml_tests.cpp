@@ -4049,6 +4049,63 @@ UTEST( UIHTML, TextureReplaceInvalidatesRichTextAncestors ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, HtmlContainsTableBodyHeight ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "html contains table body height", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+
+	UIWebView* webView = UIWebView::New();
+	webView->setParent( sceneNode->getRoot() );
+	webView->setPixelsSize( win->getWidth(), win->getHeight() );
+	webView->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
+	std::string html;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/hn_frontpage.html", html ) );
+	for ( std::string::size_type pos = 0;
+		  ( pos = html.find( "<link rel=\"stylesheet\"", pos ) ) != std::string::npos; ) {
+		auto end = html.find( "/>", pos );
+		ASSERT_TRUE( end != std::string::npos );
+		html.erase( pos, end + 2 - pos );
+	}
+
+	sceneNode->setURI( "file://html-table-body-height.html" );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ), webView->getDocumentContainer(),
+									 String::hash( "html-table-body-height" ) );
+
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	std::string css;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/base.css", css ) );
+	css += "\n";
+	std::string newsCss;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/news.css", newsCss ) );
+	css += newsCss;
+	sceneNode->runOnMainThread( [sceneNode, css = std::move( css )] {
+		sceneNode->combineStyleSheet( css, true, String::hash( "html-table-body-height-late-css" ) );
+	} );
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto* htmlNode = sceneNode->getRoot()->findByType( UI_TYPE_HTML_HTML )->asType<UIWidget>();
+	auto* body = sceneNode->getRoot()->findByType( UI_TYPE_HTML_BODY )->asType<UIWidget>();
+	auto* table = sceneNode->getRoot()->find( "hnmain" )->asType<UIWidget>();
+	ASSERT_TRUE( htmlNode != nullptr );
+	ASSERT_TRUE( body != nullptr );
+	ASSERT_TRUE( table != nullptr );
+
+	EXPECT_GE( htmlNode->getPixelsSize().getHeight(), body->getPixelsSize().getHeight() );
+	EXPECT_GE( body->getPixelsSize().getHeight() + 4.f, table->getPixelsSize().getHeight() );
+	EXPECT_GT( table->getPixelsSize().getHeight(), 500.f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTML, ImageCSSWidthOverridesHTMLWidthAttribute ) {
 	auto win = Engine::instance()->createWindow(
 		WindowSettings( 1024, 768, "img css width overrides html width attr", WindowStyle::Default,

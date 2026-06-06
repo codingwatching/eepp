@@ -283,6 +283,20 @@ void UIHTMLBody::updateLayout() {
 		}
 
 		mSettingBodyHeight = false;
+
+		if ( getParent() && getParent()->isType( UI_TYPE_HTML_HTML ) ) {
+			auto* html = getParent()->asType<UIHTMLHtml>();
+			const Float bodyBottom = getPixelsPosition().y + getPixelsSize().getHeight();
+			if ( bodyBottom > html->getPixelsSize().getHeight() + 0.5f ) {
+				// The body has a special relationship with the root html element: after late
+				// resource/style changes, body can discover a content height while html is already
+				// walking its layout tree. The RichText re-entrancy guard intentionally absorbs that
+				// child notification to avoid rebuilding the same inline stream many times. Since
+				// browsers require the root html box to contain body, enqueue exactly the html
+				// layout for a normal later pass instead of forcing a synchronous parent recompute.
+				html->setLayoutDirty();
+			}
+		}
 	}
 }
 
