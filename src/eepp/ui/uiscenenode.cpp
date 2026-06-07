@@ -294,10 +294,11 @@ std::vector<UIWidget*> UISceneNode::loadNode( pugi::xml_node node, Node* parent,
 			auto type = widget.attribute( "type" );
 			auto href = widget.attribute( "href" );
 			auto rel = widget.attribute( "rel" );
+			auto defer = widget.attribute( "defer" );
 			if ( !href.empty() &&
 				 ( String::iequals( type.value(), "text/css" ) ||
 				   String::icontains( std::string_view{ rel.value() }, "stylesheet" ) ) ) {
-				loadCSS( href.as_string() );
+				loadCSS( href.as_string(), Milliseconds( defer.as_int() ) );
 			}
 			continue;
 		} else if ( String::iequals( widget.name(), "meta" ) ) {
@@ -1297,18 +1298,43 @@ URI UISceneNode::solveRelativePath( URI uri, URI baseURI ) {
 	return base;
 }
 
-void UISceneNode::loadCSS( URI uri ) {
+void UISceneNode::loadCSS( URI uri, std::optional<Time> defer ) {
 	uri = solveRelativePath( uri );
 	std::string url = uri.toString();
 	Log::debug( "UISceneNode::loadCSS: %s", url );
 
 	if ( "file" == uri.getScheme() ||
 		 ( uri.getScheme().empty() && FileSystem::fileExists( uri.getFSPath() ) ) ) {
-		std::string filePath( uri.getFSPath() );
-		std::string css;
-		if ( FileSystem::fileExists( filePath ) && FileSystem::fileGet( filePath, css ) ) {
-			combineStyleSheet( css, true, String::hash( url ), getURIFromURL( url ) );
-			Log::debug( "UISceneNode::loadCSS: Loaded - %s", url );
+		if ( defer && mThreadPool ) {
+			mThreadPool->run( [this, uri, url, defer] {
+				Clock c;
+				std::string filePath( uri.getFSPath() );
+				std::string css;
+				if ( FileSystem::fileExists( filePath ) && FileSystem::fileGet( filePath, css ) ) {
+					CSS::StyleSheetParser parser;
+					if ( parser.loadFromString( css ) ) {
+						parser.getStyleSheet().setMarker( String::hash( url ) );
+						auto baseURL = getURIFromURL( url );
+						auto delay = defer.has_value() ? *defer - c.getElapsedTime() : Time::Zero;
+						if ( delay < Time::Zero )
+							delay = Time::Zero;
+						runOnMainThread(
+							[this, url, baseURL = std::move( baseURL ),
+							 parser = std::move( parser )]() mutable {
+								combineStyleSheet( parser.getStyleSheet(), true, baseURL );
+								Log::debug( "UISceneNode::loadCSS: Loaded - %s", url );
+							},
+							delay );
+					}
+				}
+			} );
+		} else {
+			std::string filePath( uri.getFSPath() );
+			std::string css;
+			if ( FileSystem::fileExists( filePath ) && FileSystem::fileGet( filePath, css ) ) {
+				combineStyleSheet( css, true, String::hash( url ), getURIFromURL( url ) );
+				Log::debug( "UISceneNode::loadCSS: Loaded - %s", url );
+			}
 		}
 	} else if ( "http" == uri.getScheme() || "https" == uri.getScheme() ) {
 		Http::getAsync(

@@ -42,7 +42,8 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 	}
 
 	UIApplication app(
-		WindowSettings{ 1280, 720, "eepp - UI HTML Example" },
+		WindowSettings{ 1280, 720, "eepp - UI HTML Example", WindowStyle::Default,
+						WindowBackend::Default, 32, Sys::getProcessPath() + "assets/icon/ee.png" },
 		UIApplication::Settings( {}, pixelDensityConf ? pixelDensityConf.Get() : 0.f ),
 		ContextSettings( false,
 						 benchmarkMode.Get() ? 0 : ContextSettings::FrameRateLimitScreenRefreshRate,
@@ -60,6 +61,7 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 		return EXIT_FAILURE;
 
 	auto ui = app.getUI();
+	ui->setThreadPool( threadPool );
 
 	FontTrueType* remixIconFont = FontTrueType::New( "icon", "assets/fonts/remixicon.ttf" );
 	FontTrueType* noniconsFont = FontTrueType::New( "nonicons", "assets/fonts/nonicons.ttf" );
@@ -75,16 +77,38 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 	bool useHNDark = hnDark.Get();
 
 	auto vbox = ui->loadLayoutFromString( R"xml(
+	<style>
+		PushButton.webview_ui {
+			border-top-color: transparent;
+			border-right-color: transparent;
+			border-bottom-color: transparent;
+			border-left-color: transparent;
+		}
+		PushButton.webview_ui:hover {
+			border-top-color: var(--primary);
+			border-right-color: var(--primary);
+			border-bottom-color: var(--primary);
+			border-left-color: var(--primary);
+		}
+	</style>
 	<vbox layout_width="match_parent" layout_height="match_parent">
 		<hbox layout_width="match_parent" layout_height="wrap_content">
-			<PushButton id="backbtn" text="@string(back, Back)" />
-			<PushButton id="fwdbtn" text="@string(forward, Forward)" />
+			<PushButton lw="26dp" id="backbtn" class="webview_ui" text="@string(back, Back)"
+				icon="icon(arrow-left-s, 22dp)"
+				text-as-fallback="true" />
+			<PushButton lw="26dp" id="fwdbtn"  class="webview_ui" text="@string(forward, Forward)"
+				icon="icon(arrow-right-s, 22dp)"
+				text-as-fallback="true" />
+			<PushButton lw="26dp" id="refreshbtn"  class="webview_ui" text="@string(refresh, Refresh)"
+				icon="icon(refresh, 18dp)"
+				text-as-fallback="true" />
 			<TextInput id="url_bar" layout_width="0" layout_weight="1"
 				hint="@string(enter_address, Enter Address)" />
 		</hbox>
 		<WebView id="webview" layout_width="match_parent" layout_height="0" layout_weight="1" />
 	</vbox>
-	)xml" );
+	)xml",
+										  nullptr, app.getStyleSheetDefaultMarker() );
 
 	UIWebView* webView = vbox->find( "webview" )->asType<UIWebView>();
 	webView->setStyleSheetDefaultMarker( app.getStyleSheetDefaultMarker() );
@@ -92,6 +116,7 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 	auto urlBar = ui->find( "url_bar" )->asType<UITextInput>();
 	auto backBtn = ui->find( "backbtn" )->asType<UIPushButton>();
 	auto fwdBtn = ui->find( "fwdbtn" )->asType<UIPushButton>();
+	auto refreshBtn = ui->find( "refreshbtn" )->asType<UIPushButton>();
 
 	auto updateNavButtons = [webView, backBtn, fwdBtn]() {
 		backBtn->setEnabled( webView->canGoBack() );
@@ -152,6 +177,8 @@ EE_MAIN_FUNC int main( int argc, char** argv ) {
 		webView->goHistoryForward();
 		updateNavButtons();
 	} );
+
+	refreshBtn->onClick( [webView]( const MouseEvent* ) { webView->refresh(); } );
 
 	updateNavButtons();
 

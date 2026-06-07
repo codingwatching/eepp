@@ -963,8 +963,9 @@ class EE_API UISceneNode : public SceneNode {
 	 * (files, URLs, VFS).
 	 *
 	 * @param uri URI to load
+	 * @param defer Defer some specific time the CSS load (0 to just load it asynchronously)
 	 */
-	void loadCSS( URI uri );
+	void loadCSS( URI uri, std::optional<Time> defer = {} );
 
 	/**
 	 * @brief Loads glyph icons from @glyph-icon rules.

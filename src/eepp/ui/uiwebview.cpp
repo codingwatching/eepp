@@ -222,6 +222,10 @@ void UIWebView::goHistoryForward() {
 		navigateToHistoryIndex( mHistoryIndex + 1 );
 }
 
+void UIWebView::refresh() {
+	navigateToHistoryIndex( mHistoryIndex );
+}
+
 bool UIWebView::canGoBack() const {
 	return mHistoryIndex > 0;
 }

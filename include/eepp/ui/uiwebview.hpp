@@ -50,6 +50,8 @@ class EE_API UIWebView : public UIScrollView {
 
 	void goHistoryForward();
 
+	void refresh();
+
 	bool canGoBack() const;
 
 	bool canGoForward() const;
