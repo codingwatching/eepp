@@ -164,6 +164,632 @@ The state should live near `UILayout` / `UIHTMLWidget` boundaries rather than in
 ad-hoc element code. HTML-specific reasons can be layered on top of the generic
 bits when needed.
 
+## Implementation Design
+
+This section is intentionally detailed. The implementation should be incremental
+and reversible, but every phase should move toward one invariant:
+
+> Layout invalidation records what dependency became stale. Layout update later
+> consumes that dependency at the smallest correct relayout boundary.
+
+Do not start by changing all callers. First introduce storage and instrumentation
+that behaves exactly like current `setLayoutDirty()`. Only after the baseline is
+identical should callers start emitting more precise reasons.
+
+### Core Data Model
+
+Add a compact dirty-reason bitset. Prefer a plain integer-backed type over an
+allocation-heavy structure.
+
+Conceptual header-level API:
+
+```cpp
+enum class LayoutDirtyReason : Uint32 {
+	None = 0,
+	SelfLayout = 1u << 0,
+	NormalChildLayout = 1u << 1,
+	OutOfFlowChildLayout = 1u << 2,
+	IntrinsicSize = 1u << 3,
+	Style = 1u << 4,
+	FormattingContext = 1u << 5,
+	DocumentExtent = 1u << 6,
+	Viewport = 1u << 7,
+};
+
+using LayoutDirtyFlags = Uint32;
+```
+
+`UILayout` should own the local dirty state:
+
+```cpp
+class UILayout : public UIWidget {
+  protected:
+	bool mDirtyLayout{ false };
+	LayoutDirtyFlags mDirtyReasons{ 0 };
+	LayoutDirtyFlags mDeferredDirtyReasons{ 0 };
+	bool mUpdatingLayoutTree{ false };
+};
+```
+
+The initial compatibility behavior should be:
+
+```cpp
+void UILayout::setLayoutDirty() {
+	setLayoutDirty( LayoutDirtyReason::SelfLayout );
+}
+```
+
+Then add the explicit API:
+
+```cpp
+void UILayout::setLayoutDirty( LayoutDirtyReason reason );
+void UILayout::addLayoutDirtyReasons( LayoutDirtyFlags reasons );
+LayoutDirtyFlags UILayout::consumeLayoutDirtyReasons();
+LayoutDirtyFlags UILayout::getLayoutDirtyReasons() const;
+```
+
+The reason bits must be merged, never replaced:
+
+```cpp
+mDirtyReasons |= toBits( reason );
+```
+
+If a layout is already dirty and receives a new reason, the dirty queue should
+not add a duplicate node, but the node must retain the additional reason. This
+is the first major difference from the current boolean-only state.
+
+### Dirty Queue Entries
+
+`UISceneNode::mDirtyLayouts` can remain a set of `UILayout*` for the first
+implementation. Reason bits live on the `UILayout`, so the queue does not need
+to allocate an entry object per invalidation.
+
+Keep the existing reusable snapshot strategy:
+
+- `mDirtyLayouts` remains the live coalescing set.
+- `mDirtyLayoutsSnapshot` remains reusable `SmallVector<UILayout*, 64>`.
+- `updateDirtyLayouts()` copies pointers into the snapshot, then clears the set.
+- invalidations created during the pass stay in `mDirtyLayouts` for the next
+  outer invalidation-depth iteration.
+
+Do not move `mDirtyLayouts` into a local temporary. Moving the set transfers its
+buckets and makes large documents rebuild allocation state on the next wave.
+
+The dirty queue can later evolve to:
+
+```cpp
+struct DirtyLayoutEntry {
+	UILayout* layout{ nullptr };
+	LayoutDirtyFlags reasons{ 0 };
+};
+```
+
+but that should happen only if profiling shows per-layout reason reads are not
+enough. The first version should avoid expanding queue memory and focus on
+correct semantics.
+
+### Coalescing Rules
+
+The current queue performs two important coalescing operations:
+
+1. If a dirty ancestor already exists and the path is all layouts, skip adding
+   the child.
+2. If adding an ancestor, remove dirty descendants that the ancestor will update.
+
+Typed reasons change when those rules are valid.
+
+Safe ancestor coalescing:
+
+- `SelfLayout` on a child can be coalesced into a dirty ancestor only if the
+  ancestor's update will recursively update that child before using stale child
+  geometry.
+- `NormalChildLayout`, `FormattingContext`, and `IntrinsicSize` cannot be
+  blindly discarded when an ancestor is already dirty. Their reason bits must be
+  preserved somewhere the ancestor update can see.
+- `OutOfFlowChildLayout` should coalesce toward the containing block, not the
+  normal parent chain.
+- `DocumentExtent` should coalesce toward the document root, not ordinary UI
+  ancestors.
+
+Initial conservative rule:
+
+```cpp
+if ( dirtyAncestorAlreadyQueued ) {
+	ancestor->addLayoutDirtyReasons( reasonsThatAncestorMustKnow );
+	node->addLayoutDirtyReasons( reasonsThatChildMustKeep );
+	return;
+}
+```
+
+For phase 2, `reasonsThatAncestorMustKnow` can simply be all reasons. That keeps
+behavior conservative without adding more queue entries. Later phases can split
+reasons more precisely.
+
+When adding an ancestor and removing dirty descendants, do not lose descendant
+reason bits. Either:
+
+- merge descendant reasons into the ancestor before erasing the descendant from
+  `mDirtyLayouts`, or
+- leave descendants queued when their reasons are not implied by the ancestor.
+
+The first option is simpler but can be too broad. The second option is more
+browser-like, because child-dirty work can remain below a relayout boundary. The
+recommended path is:
+
+1. Phase 2: merge reasons upward to preserve correctness.
+2. Phase 3+: stop merging reasons that belong to a child formatting context or
+   out-of-flow containing block.
+
+### Update Pass Contract
+
+`UILayout::updateLayoutTree()` should consume reasons in a controlled order.
+
+Current behavior:
+
+```cpp
+mUpdatingLayoutTree = true;
+updateLayout();
+for ( auto layout : mLayouts )
+	layout->updateLayoutTree();
+mUpdatingLayoutTree = false;
+onLayoutUpdate();
+```
+
+This is parent-first. That is fine for many eepp layouts, but it is the source
+of several HTML issues: a parent can measure child geometry before child layout
+has discovered final intrinsic or block size.
+
+Do not flip the whole tree to child-first. That would break layouters that must
+assign child constraints before children can lay out. Instead, make the contract
+explicit:
+
+- parent layout establishes constraints,
+- child layouts settle under those constraints,
+- parent may perform a bounded reconciliation step if child exposed geometry
+  changed in a way the parent depends on.
+
+Conceptual shape:
+
+```cpp
+void UILayout::updateLayoutTree() {
+	LayoutDirtyFlags reasons = consumeLayoutDirtyReasons();
+	mUpdatingLayoutTree = true;
+
+	LayoutUpdateResult before = captureExposedLayoutResult();
+	updateLayoutWithReasons( reasons );
+
+	for ( auto layout : mLayouts )
+		layout->updateLayoutTree();
+
+	LayoutDirtyFlags childEffects = consumeDeferredDirtyReasons();
+	if ( needsLocalReconcile( reasons, childEffects ) ) {
+		updateLayoutWithReasons( childEffects );
+	}
+
+	mUpdatingLayoutTree = false;
+
+	LayoutUpdateResult after = captureExposedLayoutResult();
+	propagateLayoutResult( before, after, reasons | childEffects );
+	onLayoutUpdate();
+}
+```
+
+The first implementation does not need all these functions. It can start with:
+
+- record dirty reasons,
+- preserve deferred reasons during active layout,
+- expose `onLayoutUpdate()` enough data to compare old/new size.
+
+But this is the direction: absorbed invalidations must become explicit deferred
+reasons, not vanish.
+
+### Layout Update Result
+
+Each layout pass should eventually report what changed externally.
+
+Conceptual result:
+
+```cpp
+struct LayoutUpdateResult {
+	Sizef oldSize;
+	Sizef newSize;
+	Float oldMinIntrinsicWidth{ 0 };
+	Float newMinIntrinsicWidth{ 0 };
+	Float oldMaxIntrinsicWidth{ 0 };
+	Float newMaxIntrinsicWidth{ 0 };
+	bool positionChanged{ false };
+	bool childGeometryChanged{ false };
+	bool documentExtentChanged{ false };
+};
+```
+
+Avoid computing intrinsic widths for every layout pass in phase 1. Intrinsic
+fields should be lazy or provided only by layouters that already computed them.
+
+The important minimal comparison is:
+
+```cpp
+bool exposedSizeChanged =
+	eeabs( oldSize.x - newSize.x ) > 0.01f ||
+	eeabs( oldSize.y - newSize.y ) > 0.01f;
+```
+
+If exposed size did not change, do not notify ancestors. If child positions
+changed but the owner size did not, redraw/hit-testing may need invalidation,
+but parent layout usually does not.
+
+### Active Layout Guard
+
+The current `UIRichText` guard is performance-critical:
+
+- while the owner is already rebuilding/positioning its formatting stream,
+  descendant `LayoutAttributeChange` messages must not re-enter the owner,
+- re-entry produces thousands of duplicate `rebuildRichText()` calls on large
+  Markdown documents.
+
+The future guard should not simply `return 1`. It should record why it returned.
+
+Conceptual API:
+
+```cpp
+void UILayout::deferLayoutDirtyReason( LayoutDirtyReason reason ) {
+	mDeferredDirtyReasons |= toBits( reason );
+}
+```
+
+In `UIRichText::onMessage()`:
+
+```cpp
+if ( mUISceneNode->isUpdatingLayouts() && mUpdatingLayoutTree && !isOutOfFlow() ) {
+	invalidateIntrinsicSize();
+	deferLayoutDirtyReason( LayoutDirtyReason::FormattingContext );
+	return 1;
+}
+```
+
+Do not use this as a generic "retry me every time" switch. A previous attempt to
+dirty direct layout children from this guard fixed some stale cases but regressed
+the README benchmark to thousands of extra rebuilds. The deferred reason must be
+interpreted at the owner boundary and propagated only if the owner exposes a new
+size/intrinsic result.
+
+### Message Translation Layer
+
+`NodeMessage::LayoutAttributeChange` is too coarse. Keep it for compatibility,
+but translate it near the receiver into dirty reasons.
+
+Initial mapping:
+
+| Sender / condition | Receiver | Dirty reason |
+|---|---|---|
+| own size/padding/margin/style changed | self layout | `SelfLayout` |
+| child normal-flow size changed | parent layout | `NormalChildLayout` |
+| child text/font/style changed inside `UIRichText` | nearest rich-text owner | `FormattingContext | IntrinsicSize` |
+| image natural size changed | image and rich-text owner | `IntrinsicSize | FormattingContext` |
+| absolute child changed | containing block | `OutOfFlowChildLayout` |
+| fixed child changed | viewport/document root | `OutOfFlowChildLayout | Viewport` |
+| stylesheet combined in `UIWebView` | document root | `Style | DocumentExtent | Viewport` |
+
+Do not try to infer all of this inside `UIWidget::notifyLayoutAttrChangeParent()`
+at first. That function lacks enough CSS/layout context. Prefer receiver-side
+translation in `UIRichText`, `UIHTMLTable`, block/flex/grid layouters, and
+document root handling.
+
+### Relayout Boundaries
+
+A relayout boundary is a node where dirty work can usually stop because the
+boundary owns a formatting context and can decide whether its exposed result
+changed.
+
+Boundaries to model:
+
+- `UIRichText` formatting-context owner.
+- `UIHTMLTable` / `TableLayouter`.
+- flex and grid containers.
+- out-of-flow containing blocks.
+- `UIWebView` document root.
+- future per-document `UISceneNode`.
+
+Rules:
+
+- Dirty descendants inside a boundary first dirty the boundary owner.
+- Ancestors are notified only if the boundary's exposed size, intrinsic size, or
+  document extent changed.
+- Boundaries with definite sizes can often avoid propagating size dirtiness while
+  still updating child geometry.
+- Out-of-flow descendants must not dirty normal-flow auto size. They dirty their
+  containing block positioning context.
+
+### Document Boundary Implementation
+
+The recent deferred-CSS Hacker News issue showed a concrete current-architecture
+gap:
+
+- local file CSS can now load asynchronously through `<link defer>`,
+- CSS can finish during `loadLayoutNodes()` while `mIsLoading` is still true,
+- `combineStyleSheet()` then sets `mStyleDuringLoad` and returns,
+- after loading finishes, styles are applied, but WebView document sizing was
+  not refreshed the way it is on viewport resize,
+- `#bigbox > td` and `#bigbox > td > table` initially had stale heights and only
+  became correct after a 1px viewport-height change.
+
+The bridge for the current architecture is:
+
+- `UIWebView::refreshDocumentLayout()` owns WebView document refresh.
+- It calls `containerUpdate()`.
+- It calls `updateHTMLMinHeightForDocument()`.
+- It dirties `webview::doc` if it is a layout.
+- `UISceneNode::combineStyleSheet()` calls this after forced stylesheet reload.
+- `UISceneNode::loadLayoutNodes()` calls it when `mStyleDuringLoad` was set.
+
+This is not "perfect invalidation"; it is a scoped document-boundary repair.
+The reason it belongs here, not in generic `UIRichText`, is that stylesheet
+combines are document-level mutations. They can alter inherited metrics and
+viewport/root/body constraints across the entire document. A generic RichText
+ancestor retry fixes symptoms but reintroduces the Markdown rebuild storm.
+
+Future typed invalidation should replace this bridge with:
+
+```cpp
+documentRoot->setLayoutDirty(
+	LayoutDirtyReason::Style |
+	LayoutDirtyReason::DocumentExtent |
+	LayoutDirtyReason::Viewport );
+```
+
+The document root would then refresh root/body/viewport state as part of
+consuming those reasons.
+
+### Intrinsic Size Cache Invalidation
+
+Intrinsic caches exist in several places:
+
+- `UIWidget::mIntrinsicWidthsDirty`,
+- `UIRichText::mIntrinsicWidthsDirty`,
+- `UILayouter::mIntrinsicWidthsDirty`,
+- `TableLayouter` column min/max vectors,
+- flex/grid item measurements.
+
+Typed invalidation must make cache invalidation explicit.
+
+Examples:
+
+- `FormattingContext` implies `IntrinsicSize` for `UIRichText` only if text,
+  inline block, float, or wrapping-affecting style changed.
+- `Style` implies `IntrinsicSize` when the property affects metrics:
+  `font-*`, `line-height`, `white-space`, `word-break`, `overflow-wrap`,
+  margins/padding/borders, width/min/max constraints, display, position, float,
+  table/flex/grid properties.
+- `Style` does not imply `IntrinsicSize` for paint-only properties:
+  color, background color, text decoration when decoration does not affect
+  metrics, cursor, pointer-events.
+
+The first implementation can conservatively invalidate intrinsic size for all
+style changes in HTML content. Later optimize by property category. Correctness
+comes first, but benchmark counters must catch over-broad invalidations.
+
+### Property Categories
+
+Add helper classification near the CSS/property layer:
+
+```cpp
+enum class LayoutPropertyImpact : Uint8 {
+	None,
+	PaintOnly,
+	SelfGeometry,
+	ChildGeometry,
+	IntrinsicSize,
+	FormattingContext,
+	Document,
+};
+```
+
+Examples:
+
+| Property | Impact |
+|---|---|
+| `color` | `PaintOnly` |
+| `background-color` | `PaintOnly` |
+| `font-size` | `FormattingContext | IntrinsicSize` |
+| `line-height` | `FormattingContext | IntrinsicSize` |
+| `white-space` | `FormattingContext | IntrinsicSize` |
+| `width` / `height` | `SelfGeometry | IntrinsicSize` |
+| `min-width` / `max-width` | `SelfGeometry | IntrinsicSize` |
+| `display` | `ChildGeometry | FormattingContext | IntrinsicSize` |
+| `position` | `SelfGeometry | OutOfFlowChildLayout` depending on value |
+| `float` / `clear` | `FormattingContext | IntrinsicSize` |
+| table layout properties | `IntrinsicSize | ChildGeometry` |
+| flex/grid properties | `ChildGeometry | IntrinsicSize` |
+
+This allows style reload to emit reasoned invalidation instead of every setter
+calling the same coarse message path.
+
+### Parent Notification Policy
+
+Ancestor notification should happen after an owner has reconciled its own
+layout, not before.
+
+Current dangerous pattern:
+
+```cpp
+childChanged();
+notifyLayoutAttrChangeParent();
+tryUpdateLayout();
+```
+
+This lets a generic ancestor become the queued dirty layout and measure stale
+child geometry before the actual owner has recomputed.
+
+Preferred pattern:
+
+```cpp
+markOwnerDirty( reason );
+owner recomputes;
+if ( owner exposed result changed )
+	notify dependent ancestor;
+```
+
+For existing code, migrate class by class:
+
+1. `UIRichText`: do not relay descendant changes before owner reflow.
+2. `UIHTMLTable`: invalidate table intrinsic widths locally; notify ancestors
+   only when table exposed size/intrinsic result changes.
+3. `FlexLayouter` / `GridLayouter`: keep item collection local; notify parent
+   only when container size/intrinsic result changes.
+4. Generic `UILinearLayout` / `UIGridLayout` remain simpler; they are not HTML
+   formatting contexts unless explicitly used as document wrappers.
+
+### Out-Of-Flow Handling
+
+Out-of-flow positioning needs separate dirty routing.
+
+Rules:
+
+- `position: absolute` dirties the nearest containing block.
+- `position: fixed` dirties the viewport/document root.
+- out-of-flow size/position does not contribute to normal-flow parent auto size,
+  except for current compatibility code that intentionally includes some
+  absolute descendants in body effective content height.
+- `UIRichText::rebuildRichText()` should continue skipping out-of-flow children.
+- `updateOutOfFlowPosition()` should run after normal-flow layout because it
+  depends on containing block geometry.
+
+Typed reason:
+
+```cpp
+containingBlock->setLayoutDirty( LayoutDirtyReason::OutOfFlowChildLayout );
+```
+
+Do not let this become `NormalChildLayout`, or fixed/absolute elements will
+reintroduce unnecessary parent auto-size recomputation.
+
+### Tables
+
+Table layout needs a dedicated result object because table dependencies are
+multi-stage:
+
+1. collect rows/cells,
+2. compute intrinsic column widths,
+3. resolve table used width,
+4. assign cell widths,
+5. lay out cell contents,
+6. compute row heights,
+7. set table wrapper size.
+
+`TableLayouter` should eventually expose:
+
+```cpp
+struct TableLayoutResult {
+	bool rowHeightsChanged{ false };
+	bool columnWidthsChanged{ false };
+	bool minIntrinsicWidthChanged{ false };
+	bool maxIntrinsicWidthChanged{ false };
+	bool tableSizeChanged{ false };
+};
+```
+
+When a cell changes:
+
+- dirty table intrinsic widths if the change can affect min/max width,
+- dirty row heights if the cell block-size can change,
+- do not notify the table parent until the table pass knows whether
+  `tableSizeChanged` or intrinsic widths changed.
+
+Important: a previous attempt to schedule generic table retries during packing
+did not fix the deferred-CSS issue and was not the right abstraction. Tables
+need result-based propagation, not blind retry.
+
+### RichText
+
+`UIRichText` should grow a small formatting dirty state:
+
+```cpp
+bool mFormattingContextDirty{ false };
+bool mIntrinsicSizeDirty{ true };
+LayoutDirtyFlags mDeferredFormattingReasons{ 0 };
+```
+
+The update path should be:
+
+1. collect old exposed size and maybe cached intrinsic generation,
+2. rebuild rich text only if formatting context is dirty or layout constraints
+   changed,
+3. update `Graphics::RichText` layout,
+4. position child widgets/text nodes,
+5. compare exposed size,
+6. notify parent only if exposed size/intrinsic result changed.
+
+Avoid rebuilding the rich-text stream for:
+
+- pure child position updates,
+- paint-only style changes,
+- fixed-position descendant changes,
+- descendant notifications already produced by this same active positioning
+  pass.
+
+Potential generation counters:
+
+```cpp
+Uint32 mFormattingGeneration{ 0 };
+Uint32 mLastLaidOutFormattingGeneration{ 0 };
+Uint32 mConstraintGeneration{ 0 };
+```
+
+These can prevent repeated rebuilds when the dirty queue processes multiple
+layout roots that point at the same RichText owner.
+
+### WebView Document Root
+
+Current architecture:
+
+- `UIWebView` is a scroll view in the normal UI scene.
+- `mDocContainer` is a `UILinearLayout`.
+- `html` and `body` are children inside that container.
+- root/body/document sizing is maintained partly by `UIWebView`.
+
+Near-term:
+
+- keep WebView-specific document refresh in `UIWebView`,
+- route async stylesheet load and resource completion through document refresh
+  instead of generic ancestor invalidation,
+- keep the helper scoped to `UI_TYPE_WEBVIEW` and `UI_TYPE_HTML_HTML`.
+
+Future per-document scene:
+
+- each `UIWebView` owns a document `UISceneNode`,
+- the document scene has its own dirty style/layout queues,
+- root/body/viewport handling is a document-scene responsibility,
+- host UI receives only final scrollable size / viewport invalidations,
+- standalone `UIRichText` continues to use shared formatting and layouters but
+  does not inherit WebView document semantics.
+
+### Rollback Checkpoint Implementation
+
+At the end of every phase:
+
+```sh
+git stash push -m "phase-N topic validated-tests" -- <changed files>
+git stash apply stash@{0}
+```
+
+Do not use `git stash pop`; the checkpoint must remain. If a phase spans many
+files, include all relevant files explicitly. If generated files or unrelated
+dirty user files exist, do not stash them unless they belong to the phase.
+
+Validation should be mentioned in the stash message:
+
+```text
+phase-3 richtext-formatting-dirty validated-markdown-hn-image
+phase-5 webview-document-boundary validated-deferred-css-markdown
+```
+
+Before creating the stash:
+
+- run focused tests,
+- run `Benchmark.MarkdownReadme`,
+- run `git diff --check`,
+- inspect `git status --short` and make sure unrelated files are not included.
+
 ## Propagation Rules
 
 ### Self Layout

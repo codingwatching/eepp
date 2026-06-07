@@ -4106,6 +4106,65 @@ UTEST( UIHTML, HtmlContainsTableBodyHeight ) {
 	Engine::destroySingleton();
 }
 
+UTEST( UIHTML, DeferredCSSKeepsTableHeightStableAfterViewportResize ) {
+	auto win = Engine::instance()->createWindow(
+		WindowSettings( 1024, 768, "deferred css table height stable", WindowStyle::Default,
+						WindowBackend::Default, 32, {}, 1, false, true ),
+		ContextSettings( false, 0, 0, GLv_default, true, false ) );
+
+	UISceneNode* sceneNode = init_test_inline_block();
+	sceneNode->setURI( "file://" + Sys::getProcessPath() + "assets/html/" );
+
+	UIWebView* webView = UIWebView::New();
+	webView->setParent( sceneNode->getRoot() );
+	webView->setPixelsSize( win->getWidth(), win->getHeight() );
+	webView->setLayoutSizePolicy( SizePolicy::Fixed, SizePolicy::Fixed );
+
+	std::string html;
+	ASSERT_TRUE( FileSystem::fileGet( "assets/html/hn_empty_thread.html", html ) );
+	sceneNode->loadLayoutFromString( HTMLFormatter::HTMLtoXML( html ),
+									 webView->getDocumentContainer(),
+									 String::hash( "hn-empty-thread-deferred-css" ) );
+
+	auto* titleCell = sceneNode->getRoot()->querySelector( ".title" );
+	ASSERT_TRUE( titleCell != nullptr );
+	ASSERT_TRUE( titleCell->isType( UI_TYPE_RICHTEXT ) );
+
+	const Color expectedTitleColor( "#828282" );
+	for ( int i = 0;
+		  i < 120 && titleCell->asType<UIRichText>()->getFontColor() != expectedTitleColor; ++i ) {
+		win->getInput()->update();
+		SceneManager::instance()->update();
+		sceneNode->updateDirtyLayouts();
+		Sys::sleep( Milliseconds( 5 ) );
+	}
+
+	ASSERT_TRUE( titleCell->asType<UIRichText>()->getFontColor() == expectedTitleColor );
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	auto* bigboxTd = sceneNode->getRoot()->querySelector( "#bigbox > td" );
+	auto* bigboxTable = sceneNode->getRoot()->querySelector( "#bigbox > td > table" );
+	ASSERT_TRUE( bigboxTd != nullptr );
+	ASSERT_TRUE( bigboxTable != nullptr );
+
+	const Float initialTdHeight = bigboxTd->getPixelsSize().getHeight();
+	const Float initialTableHeight = bigboxTable->getPixelsSize().getHeight();
+	EXPECT_GT( initialTdHeight, 0.f );
+	EXPECT_GT( initialTableHeight, 0.f );
+
+	webView->setPixelsSize( win->getWidth(), win->getHeight() + 1 );
+	win->getInput()->update();
+	SceneManager::instance()->update();
+	sceneNode->updateDirtyLayouts();
+
+	EXPECT_NEAR( initialTdHeight, bigboxTd->getPixelsSize().getHeight(), 0.1f );
+	EXPECT_NEAR( initialTableHeight, bigboxTable->getPixelsSize().getHeight(), 0.1f );
+
+	Engine::destroySingleton();
+}
+
 UTEST( UIHTML, ImageCSSWidthOverridesHTMLWidthAttribute ) {
 	auto win = Engine::instance()->createWindow(
 		WindowSettings( 1024, 768, "img css width overrides html width attr", WindowStyle::Default,

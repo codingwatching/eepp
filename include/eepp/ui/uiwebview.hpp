@@ -74,6 +74,8 @@ class EE_API UIWebView : public UIScrollView {
 
 	void setDefaultTimeout( const Time& timeout );
 
+	void refreshDocumentLayout();
+
 	Uint32 onNavigationStarted( std::function<void( const URI& )> cb );
 
 	Uint32 onNavigationCompleted( std::function<void( const URI& )> cb );

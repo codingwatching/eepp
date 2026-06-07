@@ -23,6 +23,7 @@
 #include <eepp/ui/uistyle.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <eepp/ui/uitooltip.hpp>
+#include <eepp/ui/uiwebview.hpp>
 #include <eepp/ui/uiwidgetcreator.hpp>
 #include <eepp/ui/uiwindow.hpp>
 #include <eepp/window/engine.hpp>
@@ -34,6 +35,30 @@
 using namespace EE::Network;
 
 namespace EE { namespace UI {
+
+static void refreshWebViewDocumentLayoutAfterStyleChange( UIWidget* root ) {
+	if ( !root )
+		return;
+
+	// A stylesheet combine is a document-level style mutation: inherited font metrics,
+	// table sizing, percentage constraints, and root/body dimensions can all change after the
+	// first HTML layout pass. UIWebView already performs this html/body reset when the viewport
+	// size changes; deferred CSS needs the same document-boundary invalidation even if the
+	// viewport did not move. Keeping it scoped to WebView documents avoids reopening the generic
+	// RichText parent-recompute storm, while the final html dirty mark gives the normal layout
+	// queue one coalesced pass from the document root.
+	auto webViews = root->findAllByType( UI_TYPE_WEBVIEW );
+	for ( auto webViewNode : webViews ) {
+		auto* webView = webViewNode->asType<UIWebView>();
+		webView->refreshDocumentLayout();
+	}
+
+	auto htmls = root->findAllByType( UI_TYPE_HTML_HTML );
+	for ( auto html : htmls ) {
+		if ( html->isLayout() )
+			html->asType<UILayout>()->setLayoutDirty();
+	}
+}
 
 UISceneNode* UISceneNode::New( EE::Window::Window* window ) {
 	return eeNew( UISceneNode, ( window ) );
@@ -378,13 +403,17 @@ UIWidget* UISceneNode::loadLayoutNodes( pugi::xml_node node, Node* parent, const
 					innerClock.getElapsedTimeAndReset().asMilliseconds() );
 	}
 
-	if ( mStyleDuringLoad ) {
+	bool styleChangedDuringLoad = mStyleDuringLoad;
+	if ( styleChangedDuringLoad ) {
 		updateStyleSheet( false );
 		mStyleDuringLoad = false;
 	}
 
 	for ( auto& widget : widgets )
 		widget->reloadStyle( true, true, true );
+
+	if ( styleChangedDuringLoad )
+		refreshWebViewDocumentLayoutAfterStyleChange( mRoot );
 
 	if ( mVerbose ) {
 		Log::debug( "UISceneNode::loadLayoutNodes reloaded styles in: %.2f ms",
@@ -456,6 +485,8 @@ void UISceneNode::combineStyleSheet( const CSS::StyleSheet& styleSheet, bool for
 	}
 
 	updateStyleSheet( forceReloadStyle );
+	if ( forceReloadStyle )
+		refreshWebViewDocumentLayoutAfterStyleChange( mRoot );
 }
 
 void UISceneNode::combineStyleSheet( const std::string& inlineStyleSheet, bool forceReloadStyle,

@@ -274,6 +274,13 @@ void UIWebView::setDefaultTimeout( const Time& timeout ) {
 	mDefaultTimeout = timeout;
 }
 
+void UIWebView::refreshDocumentLayout() {
+	containerUpdate();
+	updateHTMLMinHeightForDocument();
+	if ( mDocContainer && mDocContainer->isLayout() )
+		mDocContainer->asType<UILayout>()->setLayoutDirty();
+}
+
 void UIWebView::navigateToHistoryIndex( int index ) {
 	mHistoryIndex = index;
 	loadURI( mHistory[mHistoryIndex], true );
