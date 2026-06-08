@@ -199,6 +199,8 @@ class EE_API UIRichText : public UIHTMLWidget {
 	bool mLineWrap{ true };
 	TextTransform::Value mTextTransform{ TextTransform::None };
 
+	LayoutInvalidationFlags mDeferredLayoutReasons{ 0 };
+
 	explicit UIRichText( const std::string& tag = "richtext" );
 
 	virtual Uint32 onMessage( const NodeMessage* Msg );
@@ -213,6 +215,7 @@ class EE_API UIRichText : public UIHTMLWidget {
 	virtual void onFontChanged();
 	virtual void onFontStyleChanged();
 	virtual void onSelectionChange();
+	virtual void onLayoutUpdate() override;
 
 	void selCurInit( const Int64& init );
 	void selCurEnd( const Int64& end );
@@ -241,13 +244,22 @@ class EE_API UIHTMLBody : public UIRichText {
 	bool isType( const Uint32& type ) const override;
 	bool applyProperty( const StyleSheetProperty& attribute ) override;
 	virtual void updateLayout() override;
+	void setDocumentViewportMinHeight( const Float& height );
 
   protected:
 	bool mPropagatedBackground{ false };
 	StyleSheetLength mMinHeightLocal;
 	bool mSettingBodyHeight{ false };
+	Float mDocumentViewportMinHeight{ 0 };
+	Float mDocumentContentMinHeight{ 0 };
 
 	UIHTMLBody( const std::string& tag = "body" );
+
+	Float getLocalMinHeight() const;
+	void setDocumentContentMinHeight( const Float& height );
+	void updateDocumentMinHeight();
+	void updateDocumentContentMinHeightFromChildren();
+	virtual Uint32 onMessage( const NodeMessage* Msg ) override;
 };
 
 class EE_API UIHTMLHead : public UIWidget {

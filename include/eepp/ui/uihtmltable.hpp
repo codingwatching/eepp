@@ -32,7 +32,11 @@ class EE_API UIHTMLTable : public UIHTMLWidget {
   protected:
 	virtual Uint32 onMessage( const NodeMessage* Msg );
 
+	virtual void onLayoutUpdate();
+
 	void computeIntrinsicWidths() const;
+
+	LayoutInvalidationFlags mTableDirtyReasons{ 0 };
 };
 
 class EE_API UIHTMLTableCell : public UIRichText {
@@ -61,6 +65,8 @@ class EE_API UIHTMLTableCell : public UIRichText {
 
   protected:
 	Uint32 mColSpan{ 1 };
+
+	virtual void onLayoutUpdate() override;
 };
 
 class EE_API UIHTMLTableRow : public UIHTMLWidget {

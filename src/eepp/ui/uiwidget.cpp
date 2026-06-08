@@ -106,8 +106,8 @@ UIWidget* UIWidget::setLayoutMargin( const Rectf& margin ) {
 		mLayoutMargin = margin;
 		mLayoutMarginPx = PixelDensity::dpToPx( mLayoutMargin ).ceil();
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -118,8 +118,8 @@ UIWidget* UIWidget::setLayoutMarginLeft( const Float& marginLeft ) {
 		mLayoutMargin.Left = marginLeft;
 		mLayoutMarginPx.Left = eeceil( PixelDensity::dpToPx( mLayoutMargin.Left ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -130,8 +130,8 @@ UIWidget* UIWidget::setLayoutMarginRight( const Float& marginRight ) {
 		mLayoutMargin.Right = marginRight;
 		mLayoutMarginPx.Right = eeceil( PixelDensity::dpToPx( mLayoutMargin.Right ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -142,8 +142,8 @@ UIWidget* UIWidget::setLayoutMarginTop( const Float& marginTop ) {
 		mLayoutMargin.Top = marginTop;
 		mLayoutMarginPx.Top = eeceil( PixelDensity::dpToPx( mLayoutMargin.Top ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -154,8 +154,8 @@ UIWidget* UIWidget::setLayoutMarginBottom( const Float& marginBottom ) {
 		mLayoutMargin.Bottom = marginBottom;
 		mLayoutMarginPx.Bottom = eeceil( PixelDensity::dpToPx( mLayoutMargin.Bottom ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -168,8 +168,8 @@ UIWidget* UIWidget::setLayoutMarginAuto( Uint32 dir, bool isAuto ) {
 			calculateAutoMargin();
 		} else {
 			mMarginAuto &= ~dir;
-			notifyLayoutAttrChange();
-			notifyLayoutAttrChangeParent();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
+			notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 		}
 	}
 	return this;
@@ -229,8 +229,8 @@ UIWidget* UIWidget::setLayoutPixelsMargin( const Rectf& margin ) {
 		mLayoutMarginPx = margin;
 		mLayoutMargin = PixelDensity::pxToDp( mLayoutMarginPx ).ceil();
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -241,8 +241,8 @@ UIWidget* UIWidget::setLayoutPixelsMarginLeft( const Float& marginLeft ) {
 		mLayoutMarginPx.Left = marginLeft;
 		mLayoutMargin.Left = eeceil( PixelDensity::pxToDp( mLayoutMarginPx.Left ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -253,8 +253,8 @@ UIWidget* UIWidget::setLayoutPixelsMarginRight( const Float& marginRight ) {
 		mLayoutMarginPx.Right = marginRight;
 		mLayoutMargin.Right = eeceil( PixelDensity::pxToDp( mLayoutMarginPx.Right ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -265,8 +265,8 @@ UIWidget* UIWidget::setLayoutPixelsMarginTop( const Float& marginTop ) {
 		mLayoutMarginPx.Top = marginTop;
 		mLayoutMargin.Top = eeceil( PixelDensity::pxToDp( mLayoutMarginPx.Top ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -277,8 +277,8 @@ UIWidget* UIWidget::setLayoutPixelsMarginBottom( const Float& marginBottom ) {
 		mLayoutMarginPx.Bottom = marginBottom;
 		mLayoutMargin.Bottom = eeceil( PixelDensity::pxToDp( mLayoutMarginPx.Bottom ) );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 
 	return this;
@@ -291,7 +291,7 @@ Float UIWidget::getLayoutWeight() const {
 UIWidget* UIWidget::setLayoutWeight( const Float& weight ) {
 	if ( mLayoutWeight != weight ) {
 		mLayoutWeight = weight;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -304,7 +304,7 @@ Uint32 UIWidget::getLayoutGravity() const {
 UIWidget* UIWidget::setLayoutGravity( const Uint32& layoutGravity ) {
 	if ( mLayoutGravity != layoutGravity ) {
 		mLayoutGravity = layoutGravity;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -320,7 +320,7 @@ UIWidget* UIWidget::setLayoutWidthPolicy( const SizePolicy& widthPolicy ) {
 		if ( mWidthPolicy == SizePolicy::WrapContent )
 			onAutoSize();
 		onSizePolicyChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -336,7 +336,7 @@ UIWidget* UIWidget::setLayoutHeightPolicy( const SizePolicy& heightPolicy ) {
 		if ( mHeightPolicy == SizePolicy::WrapContent )
 			onAutoSize();
 		onSizePolicyChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -351,7 +351,7 @@ UIWidget* UIWidget::setLayoutSizePolicy( const SizePolicy& widthPolicy,
 			onAutoSize();
 		}
 		onSizePolicyChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -362,7 +362,7 @@ UIWidget* UIWidget::setLayoutPositionPolicy( const PositionPolicy& layoutPositio
 	if ( mLayoutPositionPolicy != layoutPositionPolicy || mLayoutPositionPolicyWidget != of ) {
 		mLayoutPositionPolicy = layoutPositionPolicy;
 		mLayoutPositionPolicyWidget = of;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -673,8 +673,8 @@ void UIWidget::calculateAutoMargin() {
 	if ( changed ) {
 		mLayoutMargin = PixelDensity::pxToDp( mLayoutMarginPx );
 		onMarginChange();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 	}
 }
 
@@ -692,8 +692,9 @@ void UIWidget::onPositionChange() {
 
 void UIWidget::onVisibilityChange() {
 	updateAnchorsDistances();
-	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	notifyLayoutAttrChange( toLayoutInvalidationFlags( LayoutInvalidationReason::SelfGeometry ) );
+	notifyLayoutAttrChangeParent(
+		toLayoutInvalidationFlags( LayoutInvalidationReason::NormalFlowChild ) );
 	UINode::onVisibilityChange();
 }
 
@@ -711,7 +712,7 @@ void UIWidget::onSizeChange() {
 	if ( mForeground != NULL )
 		mForeground->invalidate();
 
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::Self );
 }
 
 void UIWidget::onSizePolicyChange() {}
@@ -721,26 +722,41 @@ void UIWidget::onAutoSize() {}
 void UIWidget::onWidgetCreated() {}
 
 void UIWidget::notifyLayoutAttrChange() {
-	invalidateIntrinsicSize();
+	notifyLayoutAttrChange( toLayoutInvalidationFlags( LayoutInvalidationReason::SelfGeometry ) |
+							toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) );
+}
+
+void UIWidget::notifyLayoutAttrChange( LayoutInvalidationFlags reasons ) {
+	if ( reasons & toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) )
+		invalidateIntrinsicSize();
 
 	if ( 0 == mAttributesTransactionCount ) {
-		NodeMessage msg( this, NodeMessage::LayoutAttributeChange );
+		NodeMessage msg( this, NodeMessage::LayoutAttributeChange, reasons );
 		messagePost( &msg );
 	} else {
+		mPendingLayoutReasons |= reasons;
 		mFlags |= UI_ATTRIBUTE_CHANGED;
 	}
 }
 
 void UIWidget::notifyLayoutAttrChangeParent() {
+	notifyLayoutAttrChangeParent(
+		toLayoutInvalidationFlags( LayoutInvalidationReason::NormalFlowChild ) |
+		toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) );
+}
+
+void UIWidget::notifyLayoutAttrChangeParent( LayoutInvalidationFlags reasons ) {
 	if ( NULL == mParentNode )
 		return;
 
-	invalidateIntrinsicSize();
+	if ( reasons & toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) )
+		invalidateIntrinsicSize();
 
 	if ( 0 == mAttributesTransactionCount ) {
-		NodeMessage msg( this, NodeMessage::LayoutAttributeChange );
+		NodeMessage msg( this, NodeMessage::LayoutAttributeChange, reasons );
 		mParentNode->messagePost( &msg );
 	} else {
+		mPendingParentLayoutReasons |= reasons;
 		mFlags |= UI_PARENT_ATTRIBUTE_CHANGED;
 	}
 }
@@ -873,7 +889,7 @@ UIWidget* UIWidget::setPadding( const Rectf& padding ) {
 		mPaddingPx = PixelDensity::dpToPx( mPadding ).ceil();
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -885,7 +901,7 @@ UIWidget* UIWidget::setPaddingLeft( const Float& paddingLeft ) {
 		mPaddingPx.Left = eeceil( PixelDensity::dpToPx( mPadding.Left ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -897,7 +913,7 @@ UIWidget* UIWidget::setPaddingRight( const Float& paddingRight ) {
 		mPaddingPx.Right = eeceil( PixelDensity::dpToPx( mPadding.Right ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -909,7 +925,7 @@ UIWidget* UIWidget::setPaddingTop( const Float& paddingTop ) {
 		mPaddingPx.Top = eeceil( PixelDensity::dpToPx( mPadding.Top ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -921,7 +937,7 @@ UIWidget* UIWidget::setPaddingBottom( const Float& paddingBottom ) {
 		mPaddingPx.Bottom = eeceil( PixelDensity::dpToPx( mPadding.Bottom ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -933,7 +949,7 @@ UIWidget* UIWidget::setPaddingPixels( const Rectf& padding ) {
 		mPadding = PixelDensity::pxToDp( mPadding ).ceil();
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -945,7 +961,7 @@ UIWidget* UIWidget::setPaddingPixelsLeft( const Float& paddingLeft ) {
 		mPadding.Left = eeceil( PixelDensity::pxToDp( mPadding.Left ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -957,7 +973,7 @@ UIWidget* UIWidget::setPaddingPixelsRight( const Float& paddingRight ) {
 		mPadding.Right = eeceil( PixelDensity::pxToDp( mPadding.Right ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -969,7 +985,7 @@ UIWidget* UIWidget::setPaddingPixelsTop( const Float& paddingTop ) {
 		mPadding.Top = eeceil( PixelDensity::pxToDp( mPadding.Top ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -981,7 +997,7 @@ UIWidget* UIWidget::setPaddingPixelsBottom( const Float& paddingBottom ) {
 		mPadding.Bottom = eeceil( PixelDensity::pxToDp( mPadding.Bottom ) );
 		onAutoSize();
 		onPaddingChange();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::Self );
 	}
 
 	return this;
@@ -1443,14 +1459,17 @@ void UIWidget::endAttributesTransaction() {
 
 	if ( 0 == mAttributesTransactionCount ) {
 		if ( mFlags & UI_ATTRIBUTE_CHANGED ) {
-			notifyLayoutAttrChange();
-
+			LayoutInvalidationFlags reasons = mPendingLayoutReasons;
+			mPendingLayoutReasons = 0;
+			notifyLayoutAttrChange( reasons ? reasons : LayoutInvalidation::Self );
 			mFlags &= ~UI_ATTRIBUTE_CHANGED;
 		}
 
 		if ( mFlags & UI_PARENT_ATTRIBUTE_CHANGED ) {
-			notifyLayoutAttrChangeParent();
-
+			LayoutInvalidationFlags reasons = mPendingParentLayoutReasons;
+			mPendingParentLayoutReasons = 0;
+			notifyLayoutAttrChangeParent( reasons ? reasons
+												  : LayoutInvalidation::ParentChildChange );
 			mFlags &= ~UI_PARENT_ATTRIBUTE_CHANGED;
 		}
 	}
@@ -1972,13 +1991,13 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 			setLayoutWidthPolicy( SizePolicy::Fixed );
 			setInternalPosition(
 				Vector2f( eefloor( lengthFromValueAsDp( attribute ) ), mDpPos.y ) );
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			break;
 		case PropertyId::Y:
 			setLayoutWidthPolicy( SizePolicy::Fixed );
 			setInternalPosition(
 				Vector2f( mDpPos.x, eefloor( lengthFromValueAsDp( attribute ) ) ) );
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			break;
 		case PropertyId::Width:
 			if ( attribute.value() == "auto" ) {
@@ -1991,7 +2010,7 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 				}
 				setLayoutWidthPolicy( SizePolicy::Fixed );
 				setSize( eefloor( lengthFromValueAsDp( attribute ) ), mDpSize.getHeight() );
-				notifyLayoutAttrChange();
+				notifyLayoutAttrChange( LayoutInvalidation::Self );
 			}
 			break;
 		case PropertyId::Height:
@@ -2005,7 +2024,7 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 				}
 				setLayoutHeightPolicy( SizePolicy::Fixed );
 				setSize( mDpSize.getWidth(), eefloor( lengthFromValueAsDp( attribute ) ) );
-				notifyLayoutAttrChange();
+				notifyLayoutAttrChange( LayoutInvalidation::Self );
 			}
 			break;
 		case PropertyId::BackgroundColor:
@@ -2117,7 +2136,7 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 					}
 				}
 
-				notifyLayoutAttrChange();
+				notifyLayoutAttrChange( LayoutInvalidation::Self );
 			}
 			break;
 		}
@@ -2133,14 +2152,14 @@ bool UIWidget::applyProperty( const StyleSheetProperty& attribute ) {
 
 					if ( "auto_size" == cur || "autosize" == cur ) {
 						setFlags( UI_AUTO_SIZE );
-						notifyLayoutAttrChange();
+						notifyLayoutAttrChange( LayoutInvalidation::Self );
 					} else if ( "clip" == cur ) {
 						setClipType( ClipType::ContentBox );
 					} else if ( "multiselect" == cur ) {
 						setFlags( UI_MULTI_SELECT );
 					} else if ( "auto_padding" == cur || "autopadding" == cur ) {
 						setFlags( UI_AUTO_PADDING );
-						notifyLayoutAttrChange();
+						notifyLayoutAttrChange( LayoutInvalidation::Self );
 					} else if ( "reportsizechangetochildren" == cur ||
 								"report_size_change_to_children" == cur ) {
 						enableReportSizeChangeToChildren();

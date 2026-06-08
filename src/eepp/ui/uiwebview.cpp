@@ -54,7 +54,7 @@ void UIWebView::onSizeChange() {
 void UIWebView::updateHTMLMinHeight( UIHTMLHtml* html, UIHTMLBody* body ) {
 	Float h = PixelDensity::pxToDp( getPixelsSize().getHeight() );
 	html->setMinHeight( h );
-	body->setMinHeight( h );
+	body->setDocumentViewportMinHeight( h );
 	body->setPixelsSize( { html->getPixelsSize().getWidth(), 0 } );
 	html->setPixelsSize( { html->getPixelsSize().getWidth(), 0 } );
 }
@@ -275,10 +275,20 @@ void UIWebView::setDefaultTimeout( const Time& timeout ) {
 }
 
 void UIWebView::refreshDocumentLayout() {
-	containerUpdate();
-	updateHTMLMinHeightForDocument();
+	invalidateDocumentLayout( LayoutInvalidation::Document |
+							  toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) );
+}
+
+void UIWebView::invalidateDocumentLayout( LayoutInvalidationFlags reasons ) {
+	bool docExtent =
+		reasons & ( toLayoutInvalidationFlags( LayoutInvalidationReason::DocumentExtent ) |
+					toLayoutInvalidationFlags( LayoutInvalidationReason::Viewport ) );
+	if ( docExtent ) {
+		containerUpdate();
+		updateHTMLMinHeightForDocument();
+	}
 	if ( mDocContainer && mDocContainer->isLayout() )
-		mDocContainer->asType<UILayout>()->setLayoutDirty();
+		mDocContainer->asType<UILayout>()->setLayoutDirty( reasons );
 }
 
 void UIWebView::navigateToHistoryIndex( int index ) {

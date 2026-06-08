@@ -50,13 +50,15 @@ static void refreshWebViewDocumentLayoutAfterStyleChange( UIWidget* root ) {
 	auto webViews = root->findAllByType( UI_TYPE_WEBVIEW );
 	for ( auto webViewNode : webViews ) {
 		auto* webView = webViewNode->asType<UIWebView>();
-		webView->refreshDocumentLayout();
+		webView->invalidateDocumentLayout(
+			LayoutInvalidation::Document |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) );
 	}
 
 	auto htmls = root->findAllByType( UI_TYPE_HTML_HTML );
 	for ( auto html : htmls ) {
 		if ( html->isLayout() )
-			html->asType<UILayout>()->setLayoutDirty();
+			html->asType<UILayout>()->setLayoutDirty( LayoutInvalidation::Document );
 	}
 }
 
@@ -877,34 +879,39 @@ void UISceneNode::invalidateStyleState( UIWidget* node, bool disableCSSAnimation
 	mDirtyStyleStateCSSAnimations[node] = disableCSSAnimations;
 }
 
-void UISceneNode::invalidateLayout( UILayout* node ) {
+void UISceneNode::invalidateLayout( UILayout* node, LayoutInvalidationFlags reasons ) {
 	eeASSERT( NULL != node );
 
 	if ( node->isClosing() )
 		return;
 
-	if ( mDirtyLayouts.count( node ) > 0 )
+	if ( mDirtyLayouts.count( node ) > 0 ) {
+		node->mDirtyReasons |= reasons;
 		return;
+	}
 
 	// 1. Walk UP the tree.
 	// If any ancestor is already dirty AND the path to it is entirely layouts,
-	// we can early-out because that ancestor will naturally update this node.
+	// merge the descendant reasons into the ancestor and skip adding this node.
 	Node* ancestorIt = node->getParent();
 	while ( ancestorIt != nullptr ) {
 		if ( !ancestorIt->isLayout() ) {
 			// The invalidation path is broken by a non-layout node.
-			// Any dirty layouts above this won't automatically trickle down to 'node'.
+			// Any dirty layouts above this will not automatically update this node.
 			break;
 		}
 
-		if ( mDirtyLayouts.count( ancestorIt->asType<UILayout>() ) > 0 )
-			return; // A valid ancestor is already dirty! Skip adding this node.
+		if ( mDirtyLayouts.count( ancestorIt->asType<UILayout>() ) > 0 ) {
+			ancestorIt->asType<UILayout>()->mDirtyReasons |= reasons;
+			return;
+		}
 
 		ancestorIt = ancestorIt->getParent();
 	}
 
 	// 2. Walk DOWN the dirty list.
-	// Remove any already-dirty layouts that will be naturally updated by THIS node.
+	// Remove any already-dirty layouts that will be naturally updated by THIS node,
+	// merging their reasons into this node.
 	SmallVector<UILayout*> eraseList;
 
 	for ( auto layout : mDirtyLayouts ) {
@@ -913,31 +920,36 @@ void UISceneNode::invalidateLayout( UILayout* node ) {
 			continue;
 		}
 
-		// Traverse up from 'layout' to 'node'.
+		// Traverse up from the already-dirty layout to the new node. Coalescing is valid only when
+		// every intermediate node is a layout, because updateLayoutTree() recursively walks layout
+		// children but does not cross arbitrary widget boundaries.
 		Node* it = layout->getParent();
 		bool isValidPath = false;
 
 		while ( it != nullptr ) {
 			if ( it == node ) {
-				// We reached 'node', and every node in between was a layout!
+				// We reached node, and every node in between was a layout.
 				isValidPath = true;
 				break;
 			}
 			if ( !it->isLayout() ) {
-				// The invalidation path is broken, or 'node' isn't an ancestor.
+				// The invalidation path is broken, or node is not an ancestor.
 				break;
 			}
 			it = it->getParent();
 		}
 
-		if ( isValidPath )
+		if ( isValidPath ) {
+			reasons |= layout->mDirtyReasons;
 			eraseList.push_back( layout );
+		}
 	}
 
-	// 3. Clean up and insert
 	for ( auto layout : eraseList )
 		mDirtyLayouts.erase( layout );
 
+	// 3. Insert the coalesced layout after preserving any descendant reasons removed above.
+	node->mDirtyReasons |= reasons;
 	mDirtyLayouts.insert( node );
 }
 

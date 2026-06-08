@@ -10,6 +10,7 @@
 #include <eepp/ui/colorschemepreferences.hpp>
 #include <eepp/ui/css/stylesheet.hpp>
 #include <eepp/ui/keyboardshortcut.hpp>
+#include <eepp/ui/layoutinvalidation.hpp>
 
 using namespace EE::Network;
 
@@ -406,7 +407,7 @@ class EE_API UISceneNode : public SceneNode {
 	 *
 	 * @param widget Pointer to the UILayout to invalidate.
 	 */
-	void invalidateLayout( UILayout* widget );
+	void invalidateLayout( UILayout* widget, LayoutInvalidationFlags reasons = 0 );
 
 	/**
 	 * @brief Sets the loading state flag.

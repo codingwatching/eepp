@@ -4,6 +4,7 @@
 #include <eepp/ui/css/propertydefinition.hpp>
 #include <eepp/ui/css/stylesheetproperty.hpp>
 #include <eepp/ui/css/stylesheetselector.hpp>
+#include <eepp/ui/layoutinvalidation.hpp>
 #include <eepp/ui/uinode.hpp>
 
 namespace pugi {
@@ -569,12 +570,29 @@ class EE_API UIWidget : public UINode {
 	void notifyLayoutAttrChange();
 
 	/**
+	 * @brief Notifies that layout attributes have changed with specific reasons.
+	 *
+	 * Emits a reasoned layout invalidation that receivers can use for precise
+	 * propagation decisions instead of coarse ancestor dirtying.
+	 *
+	 * @param reasons Bitmask of LayoutInvalidationReason describing what changed.
+	 */
+	void notifyLayoutAttrChange( LayoutInvalidationFlags reasons );
+
+	/**
 	 * @brief Notifies parent that layout attributes have changed.
 	 *
 	 * Triggers layout recalculation in the parent widget when this widget's
 	 * layout attributes change. This ensures proper layout propagation.
 	 */
 	void notifyLayoutAttrChangeParent();
+
+	/**
+	 * @brief Notifies parent that layout attributes have changed with specific reasons.
+	 *
+	 * @param reasons Bitmask of LayoutInvalidationReason describing the child effect.
+	 */
+	void notifyLayoutAttrChangeParent( LayoutInvalidationFlags reasons );
 
 	/**
 	 * @brief Sets an inline CSS property.
@@ -1405,6 +1423,8 @@ class EE_API UIWidget : public UINode {
 	PositionPolicy mLayoutPositionPolicy;
 	UIWidget* mLayoutPositionPolicyWidget;
 	int mAttributesTransactionCount;
+	LayoutInvalidationFlags mPendingLayoutReasons{ 0 };
+	LayoutInvalidationFlags mPendingParentLayoutReasons{ 0 };
 	Uint32 mPseudoClasses{ 0 };
 	std::string mSkinName;
 	std::vector<std::string> mClasses;

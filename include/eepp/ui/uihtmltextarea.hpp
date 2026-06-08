@@ -46,6 +46,10 @@ class EE_API UIHTMLTextArea : public UITextEdit {
 	bool mPacking{ false };
 
 	virtual void onAutoSize();
+
+	virtual void onFontChanged();
+
+	virtual void onFontStyleChanged();
 };
 
 }} // namespace EE::UI

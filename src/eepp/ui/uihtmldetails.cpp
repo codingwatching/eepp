@@ -87,7 +87,7 @@ void UIHTMLDetails::setOpen( bool open ) {
 	syncDetailsChildrenVisibility();
 	markSummaryMarkersDirty();
 	sendCommonEvent( Event::OnToggle );
-	setLayoutDirty();
+	setLayoutDirty( LayoutInvalidation::ParentReplacedFormatting );
 	invalidateDraw();
 }
 

@@ -124,17 +124,59 @@ Float UIHTMLTable::getMaxIntrinsicWidth() const {
 Uint32 UIHTMLTable::onMessage( const NodeMessage* Msg ) {
 	switch ( Msg->getMsg() ) {
 		case NodeMessage::LayoutAttributeChange: {
-			if ( Msg->getSender() != this && !isPacking() ) {
+			auto reasons = layoutInvalidationFromMessage( Msg );
+
+			if ( reasons && ( reasons & ~toLayoutInvalidationFlags(
+											LayoutInvalidationReason::PaintOnly ) ) == 0 )
+				return 1;
+
+			bool isChild = Msg->getSender() != this;
+			if ( isChild && isPacking() ) {
+				mTableDirtyReasons |= reasons;
+				return 1;
+			}
+
+			if ( isChild && ( reasons & toLayoutInvalidationFlags(
+											LayoutInvalidationReason::IntrinsicSize ) ) ) {
 				if ( getLayouter() )
 					getLayouter()->invalidateIntrinsicWidths();
-				notifyLayoutAttrChangeParent();
 			}
+
+			if ( isChild ) {
+				notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
+			}
+
 			tryUpdateLayout();
 			return 1;
 		}
 	}
 
 	return 0;
+}
+
+void UIHTMLTable::onLayoutUpdate() {
+	UIHTMLWidget::onLayoutUpdate();
+
+	if ( !mTableDirtyReasons )
+		return;
+
+	LayoutInvalidationFlags reasons = mTableDirtyReasons;
+	mTableDirtyReasons = 0;
+
+	LayoutInvalidationFlags nonPaint =
+		reasons & ~toLayoutInvalidationFlags( LayoutInvalidationReason::PaintOnly );
+	if ( !nonPaint )
+		return;
+
+	if ( nonPaint & toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) ) {
+		if ( getLayouter() )
+			getLayouter()->invalidateIntrinsicWidths();
+	}
+
+	const Sizef oldSize = getPixelsSize();
+	tryUpdateLayout();
+	if ( oldSize != getPixelsSize() )
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 }
 
 UIHTMLTableRow* UIHTMLTableRow::New() {
@@ -202,7 +244,7 @@ bool UIHTMLTableCell::applyProperty( const StyleSheetProperty& attribute ) {
 			mColSpan = attribute.asUint( 1 );
 			if ( mColSpan == 0 )
 				mColSpan = 1;
-			notifyLayoutAttrChangeParent();
+			notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 			return true;
 		}
 		default:
@@ -217,6 +259,20 @@ Uint32 UIHTMLTableCell::getColSpan() const {
 
 void UIHTMLTableCell::onSizeChange() {
 	UIRichText::onSizeChange();
+}
+
+void UIHTMLTableCell::onLayoutUpdate() {
+	LayoutInvalidationFlags deferred = mDeferredLayoutReasons;
+	UIRichText::onLayoutUpdate();
+
+	LayoutInvalidationFlags nonPaint =
+		deferred & ~toLayoutInvalidationFlags( LayoutInvalidationReason::PaintOnly );
+
+	if ( nonPaint & ( toLayoutInvalidationFlags( LayoutInvalidationReason::NormalFlowChild ) |
+					  toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) |
+					  toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext ) ) ) {
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
+	}
 }
 
 UIHTMLTableHead* UIHTMLTableHead::New() {

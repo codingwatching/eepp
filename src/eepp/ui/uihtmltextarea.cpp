@@ -100,6 +100,7 @@ void UIHTMLTextArea::onAutoSize() {
 	if ( mPacking )
 		return;
 	mPacking = true;
+	const Sizef oldSize = getPixelsSize();
 
 	if ( mWidthPolicy == SizePolicy::WrapContent && getFont() ) {
 		Float width = getMinIntrinsicWidth();
@@ -114,6 +115,11 @@ void UIHTMLTextArea::onAutoSize() {
 		}
 	}
 	mPacking = false;
+
+	if ( oldSize != getPixelsSize() ) {
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
+	}
 }
 
 Uint32 UIHTMLTextArea::getRows() const {
@@ -138,6 +144,17 @@ void UIHTMLTextArea::setCols( Uint32 cols ) {
 		invalidateIntrinsicSize();
 		onAutoSize();
 	}
+}
+void UIHTMLTextArea::onFontChanged() {
+	UITextEdit::onFontChanged();
+	invalidateIntrinsicSize();
+	onAutoSize();
+}
+
+void UIHTMLTextArea::onFontStyleChanged() {
+	UITextEdit::onFontStyleChanged();
+	invalidateIntrinsicSize();
+	onAutoSize();
 }
 
 }} // namespace EE::UI

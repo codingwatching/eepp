@@ -100,7 +100,7 @@ const String& UITextNode::getText() const {
 void UITextNode::setText( const String& text ) {
 	if ( mText != text ) {
 		mText = text;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 	}
 }
 

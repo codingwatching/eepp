@@ -248,7 +248,7 @@ UITextSpan* UITextSpan::setText( const String& text ) {
 	if ( mText != text ) {
 		mText = text;
 		onTextChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -264,7 +264,7 @@ void UITextSpan::setFontStyleConfig( const UIFontStyleConfig& fontStyleConfig ) 
 	mRichText.invalidate();
 	onFontChanged();
 	onFontStyleChanged();
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 }
 
 Font* UITextSpan::getFont() const {
@@ -277,7 +277,7 @@ UITextSpan* UITextSpan::setFont( Font* font ) {
 		mStyleState |= StyleStateFont;
 		mRichText.invalidate();
 		onFontChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 	}
 	return this;
 }
@@ -295,7 +295,7 @@ UITextSpan* UITextSpan::setFontSize( const Uint32& characterSize ) {
 		mStyleState |= StyleStateFontSize;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -311,7 +311,7 @@ UITextSpan* UITextSpan::setFontStyle( const Uint32& fontStyle ) {
 		mStyleState |= StyleStateFontStyle;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
@@ -338,7 +338,7 @@ UITextSpan* UITextSpan::setFontWeight( const FontWeight& weight ) {
 		mStyleState |= StyleStateFontStyle;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
@@ -364,7 +364,7 @@ UITextSpan* UITextSpan::setTextDecoration( const Uint32& textDecoration ) {
 		mStyleState |= StyleStateFontStyle;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -381,7 +381,7 @@ UITextSpan* UITextSpan::setOutlineThickness( const Float& outlineThickness ) {
 		mStyleState |= StyleStateOutlineThickness;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -448,7 +448,7 @@ UITextSpan* UITextSpan::setFontShadowColor( const Color& color ) {
 		mStyleState |= StyleStateFontShadowColor;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -464,7 +464,7 @@ UITextSpan* UITextSpan::setFontShadowOffset( const Vector2f& offset ) {
 		mStyleState |= StyleStateFontShadowOffset;
 		mRichText.invalidate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -472,18 +472,18 @@ UITextSpan* UITextSpan::setFontShadowOffset( const Vector2f& offset ) {
 
 void UITextSpan::onFontChanged() {
 	sendCommonEvent( Event::OnFontChanged );
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 }
 
 void UITextSpan::onFontStyleChanged() {
 	sendCommonEvent( Event::OnFontStyleChanged );
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 }
 
 void UITextSpan::onTextChanged() {
 	sendCommonEvent( Event::OnTextChanged );
 	sendCommonEvent( Event::OnValueChange );
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 }
 
 Uint32 UITextSpan::onMessage( const NodeMessage* Msg ) {
@@ -492,7 +492,7 @@ Uint32 UITextSpan::onMessage( const NodeMessage* Msg ) {
 
 	switch ( Msg->getMsg() ) {
 		case NodeMessage::LayoutAttributeChange: {
-			notifyLayoutAttrChangeParent();
+			notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 			return 1;
 		}
 	}
@@ -607,7 +607,7 @@ void UITextSpan::setInheritedStyle( const FontStyleConfig& fontStyleConfig ) {
 		onFontStyleChanged();
 
 	if ( fontChanged || fontStyleChanged )
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 
 	Node* child = mChild;
 	while ( NULL != child ) {

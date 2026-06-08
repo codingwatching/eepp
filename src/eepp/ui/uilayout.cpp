@@ -68,12 +68,18 @@ const Sizef& UILayout::getSize() const {
 void UILayout::updateLayout() {}
 
 void UILayout::setLayoutDirty() {
+	setLayoutDirty( 0 );
+}
+
+void UILayout::setLayoutDirty( LayoutInvalidationFlags reasons ) {
 	if ( !mDirtyLayout ) {
 		if ( sMetricsEnabled )
 			sMetrics.invalidations++;
 
-		mUISceneNode->invalidateLayout( this );
+		mUISceneNode->invalidateLayout( this, reasons );
 		mDirtyLayout = true;
+	} else if ( reasons ) {
+		mUISceneNode->invalidateLayout( this, reasons );
 	}
 }
 
@@ -94,7 +100,7 @@ void UILayout::tryUpdateLayout() {
 			updateLayout();
 		}
 	} else if ( !mDirtyLayout ) {
-		setLayoutDirty();
+		setLayoutDirty( LayoutInvalidation::Self );
 	}
 }
 
@@ -110,6 +116,7 @@ void UILayout::updateLayoutTree() {
 	}
 
 	mUpdatingLayoutTree = false;
+	mDirtyReasons = 0;
 	onLayoutUpdate();
 }
 

@@ -5,6 +5,7 @@
 #include <eepp/network/uri.hpp>
 #include <eepp/scene/event.hpp>
 #include <eepp/system/time.hpp>
+#include <eepp/ui/layoutinvalidation.hpp>
 #include <eepp/ui/uiscrollview.hpp>
 
 #include <functional>
@@ -75,6 +76,8 @@ class EE_API UIWebView : public UIScrollView {
 	void setDefaultTimeout( const Time& timeout );
 
 	void refreshDocumentLayout();
+
+	void invalidateDocumentLayout( LayoutInvalidationFlags reasons );
 
 	Uint32 onNavigationStarted( std::function<void( const URI& )> cb );
 

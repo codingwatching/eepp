@@ -62,7 +62,7 @@ void UILinearLayout::updateLayout() {
 			return;
 		mPacking = true;
 		setInternalPixelsSize( Sizef::Zero );
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 		mPacking = false;
 	} else {
 		if ( mOrientation == UIOrientation::Vertical )
@@ -244,7 +244,7 @@ void UILinearLayout::packVertical() {
 
 		if ( curY != (int)getPixelsSize().getHeight() ) {
 			setInternalPixelsHeight( curY );
-			notifyLayoutAttrChangeParent();
+			notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 		}
 	} else if ( getLayoutHeightPolicy() == SizePolicy::MatchParent ) {
 		int h =
@@ -269,7 +269,7 @@ void UILinearLayout::packVertical() {
 					setInternalPixelsWidth( maxX );
 					mPacking = false;
 					packVertical();
-					notifyLayoutAttrChangeParent();
+					notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 				}
 			}
 		}
@@ -378,7 +378,7 @@ void UILinearLayout::packHorizontal() {
 
 		if ( curX != (int)getPixelsSize().getWidth() ) {
 			setInternalPixelsWidth( curX );
-			notifyLayoutAttrChangeParent();
+			notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 		}
 	} else if ( getLayoutWidthPolicy() == SizePolicy::MatchParent ) {
 		int w = getMatchParentWidth();
@@ -396,7 +396,7 @@ void UILinearLayout::packHorizontal() {
 					setInternalPixelsHeight( maxY );
 					mPacking = false;
 					packHorizontal();
-					notifyLayoutAttrChangeParent();
+					notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 				}
 			}
 		}

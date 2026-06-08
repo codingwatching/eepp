@@ -106,7 +106,8 @@ bool UIHTMLWidget::isPacking() const {
 void UIHTMLWidget::onDisplayChange() {
 	eeSAFE_DELETE( mLayouter );
 	getLayouter();
-	notifyLayoutAttrChange();
+	notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
+	notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 }
 
 void UIHTMLWidget::setDisplay( CSSDisplay display ) {
@@ -188,14 +189,22 @@ void UIHTMLWidget::setCSSPosition( CSSPosition position ) {
 void UIHTMLWidget::setCSSFloat( CSSFloat cssFloat ) {
 	if ( mFloat != cssFloat ) {
 		mFloat = cssFloat;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange(
+			toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext ) |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 }
 
 void UIHTMLWidget::setCSSClear( CSSClear cssClear ) {
 	if ( mClear != cssClear ) {
 		mClear = cssClear;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange(
+			toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext ) |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 }
 
@@ -211,7 +220,9 @@ Rectf UIHTMLWidget::getNormalFlowLayoutPixelsMargin() const {
 void UIHTMLWidget::setBaselineAlign( const CSSBaselineAlignValue& baselineAlign ) {
 	if ( mBaselineAlign != baselineAlign ) {
 		mBaselineAlign = baselineAlign;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange(
+			toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) |
+			toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) );
 	}
 }
 
@@ -222,7 +233,7 @@ void UIHTMLWidget::setOffsets( const Rectf& offsets ) {
 		mLeftEq = String::fromFloat( offsets.Left, "dp" );
 		mRightEq = String::fromFloat( offsets.Right, "dp" );
 		mBottomEq = String::fromFloat( offsets.Bottom, "dp" );
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::OutOfFlow );
 	}
 }
 
@@ -359,7 +370,7 @@ void UIHTMLWidget::setFlexDirection( CSSFlexDirection val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->direction != val ) {
 		fs->direction = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -367,7 +378,7 @@ void UIHTMLWidget::setFlexWrap( CSSFlexWrap val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->wrap != val ) {
 		fs->wrap = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -375,7 +386,7 @@ void UIHTMLWidget::setJustifyContent( CSSJustifyContent val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->justifyContent != val ) {
 		fs->justifyContent = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -383,7 +394,7 @@ void UIHTMLWidget::setAlignItems( CSSAlignItems val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->alignItems != val ) {
 		fs->alignItems = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -391,7 +402,7 @@ void UIHTMLWidget::setAlignContent( CSSAlignContent val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->alignContent != val ) {
 		fs->alignContent = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -399,7 +410,7 @@ void UIHTMLWidget::setAlignSelf( CSSAlignSelf val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->alignSelf != val ) {
 		fs->alignSelf = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -407,7 +418,7 @@ void UIHTMLWidget::setFlexGrow( Float val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->flexGrow != val ) {
 		fs->flexGrow = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -415,7 +426,7 @@ void UIHTMLWidget::setFlexShrink( Float val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->flexShrink != val ) {
 		fs->flexShrink = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -423,7 +434,7 @@ void UIHTMLWidget::setFlexBasis( const std::string& val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->flexBasis != val ) {
 		fs->flexBasis = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -431,7 +442,7 @@ void UIHTMLWidget::setOrder( int val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->order != val ) {
 		fs->order = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -439,7 +450,7 @@ void UIHTMLWidget::setRowGap( const std::string& val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->rowGap != val ) {
 		fs->rowGap = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -447,7 +458,7 @@ void UIHTMLWidget::setColumnGap( const std::string& val ) {
 	auto* fs = ensureFlexState();
 	if ( fs->columnGap != val ) {
 		fs->columnGap = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -455,7 +466,7 @@ void UIHTMLWidget::setGridTemplateRows( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->templateRows != val ) {
 		gs->templateRows = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -463,7 +474,7 @@ void UIHTMLWidget::setGridTemplateColumns( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->templateColumns != val ) {
 		gs->templateColumns = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -471,7 +482,7 @@ void UIHTMLWidget::setGridTemplateAreas( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->templateAreas != val ) {
 		gs->templateAreas = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -479,7 +490,7 @@ void UIHTMLWidget::setGridAutoRows( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->autoRows != val ) {
 		gs->autoRows = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -487,7 +498,7 @@ void UIHTMLWidget::setGridAutoColumns( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->autoColumns != val ) {
 		gs->autoColumns = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -495,7 +506,7 @@ void UIHTMLWidget::setGridAutoFlow( CSSGridAutoFlow val ) {
 	auto* gs = ensureGridState();
 	if ( gs->autoFlow != val ) {
 		gs->autoFlow = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -503,7 +514,7 @@ void UIHTMLWidget::setGridAutoFlowDense( bool val ) {
 	auto* gs = ensureGridState();
 	if ( gs->autoFlowDense != val ) {
 		gs->autoFlowDense = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -511,7 +522,7 @@ void UIHTMLWidget::setGridRowStart( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->rowStart != val ) {
 		gs->rowStart = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -519,7 +530,7 @@ void UIHTMLWidget::setGridRowEnd( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->rowEnd != val ) {
 		gs->rowEnd = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -527,7 +538,7 @@ void UIHTMLWidget::setGridColumnStart( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->columnStart != val ) {
 		gs->columnStart = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -535,7 +546,7 @@ void UIHTMLWidget::setGridColumnEnd( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->columnEnd != val ) {
 		gs->columnEnd = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -543,7 +554,7 @@ void UIHTMLWidget::setGridArea( const std::string& val ) {
 	auto* gs = ensureGridState();
 	if ( gs->area != val ) {
 		gs->area = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -551,7 +562,7 @@ void UIHTMLWidget::setJustifyItems( CSSJustifyItems val ) {
 	auto* gs = ensureGridState();
 	if ( gs->justifyItems != val ) {
 		gs->justifyItems = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -559,7 +570,7 @@ void UIHTMLWidget::setJustifySelf( CSSJustifySelf val ) {
 	auto* gs = ensureGridState();
 	if ( gs->justifySelf != val ) {
 		gs->justifySelf = val;
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::ContainerLayout );
 	}
 }
 
@@ -740,22 +751,22 @@ bool UIHTMLWidget::applyProperty( const StyleSheetProperty& attribute ) {
 		}
 		case PropertyId::Top: {
 			mTopEq = attribute.asString();
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			return true;
 		}
 		case PropertyId::Right: {
 			mRightEq = attribute.asString();
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			return true;
 		}
 		case PropertyId::Bottom: {
 			mBottomEq = attribute.asString();
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			return true;
 		}
 		case PropertyId::Left: {
 			mLeftEq = attribute.asString();
-			notifyLayoutAttrChange();
+			notifyLayoutAttrChange( LayoutInvalidation::Self );
 			return true;
 		}
 		case PropertyId::AlignmentBaseline: {

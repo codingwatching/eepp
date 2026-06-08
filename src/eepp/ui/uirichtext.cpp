@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <eepp/core/debug.hpp>
 #include <eepp/graphics/fontmanager.hpp>
@@ -251,36 +252,7 @@ void UIHTMLBody::updateLayout() {
 	if ( mChild && mChild->isWidget() && !mSettingBodyHeight ) {
 		mSettingBodyHeight = true;
 
-		Float maxH = 0;
-		Node* child = mChild;
-		Float minHeight = std::max(
-			mMinHeightLocal.asPixels(
-				getParent()->isUINode() ? getParent()->asType<UINode>()->getPixelsSize().getHeight()
-										: getParent()->getSize().getHeight(),
-				getSceneNode()->getPixelsSize(), getSceneNode()->getDPI() ),
-			getMinSize().getHeight() );
-
-		while ( child ) {
-			if ( child->isWidget() ) {
-				UIWidget* widget = child->asType<UIWidget>();
-				bool isFixed = false;
-				if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
-					 widget->asType<UIHTMLWidget>()->getCSSPosition() == CSSPosition::Fixed ) {
-					isFixed = true;
-				}
-				if ( !isFixed ) {
-					Float childH =
-						widget->getPixelsPosition().y + widget->getPixelsSize().getHeight();
-					maxH = std::max( maxH, childH );
-				}
-			}
-			child = child->getNextNode();
-		}
-		if ( maxH > 0 ) {
-			Float dpH = std::trunc( PixelDensity::pxToDp( maxH ) );
-			if ( dpH != minHeight )
-				setMinHeight( dpH );
-		}
+		updateDocumentContentMinHeightFromChildren();
 
 		mSettingBodyHeight = false;
 
@@ -290,14 +262,92 @@ void UIHTMLBody::updateLayout() {
 			if ( bodyBottom > html->getPixelsSize().getHeight() + 0.5f ) {
 				// The body has a special relationship with the root html element: after late
 				// resource/style changes, body can discover a content height while html is already
-				// walking its layout tree. The RichText re-entrancy guard intentionally absorbs that
-				// child notification to avoid rebuilding the same inline stream many times. Since
-				// browsers require the root html box to contain body, enqueue exactly the html
-				// layout for a normal later pass instead of forcing a synchronous parent recompute.
-				html->setLayoutDirty();
+				// walking its layout tree. The RichText re-entrancy guard intentionally absorbs
+				// that child notification to avoid rebuilding the same inline stream many times.
+				// Since browsers require the root html box to contain body, enqueue exactly the
+				// html layout for a normal later pass instead of forcing a synchronous parent
+				// recompute.
+				html->setLayoutDirty( LayoutInvalidation::Document );
 			}
 		}
 	}
+}
+
+void UIHTMLBody::setDocumentViewportMinHeight( const Float& height ) {
+	if ( mDocumentViewportMinHeight == height )
+		return;
+	mDocumentViewportMinHeight = height;
+	updateDocumentMinHeight();
+}
+
+Float UIHTMLBody::getLocalMinHeight() const {
+	if ( !getParent() )
+		return 0;
+
+	Float parentHeight = getParent()->isUINode()
+							 ? getParent()->asType<UINode>()->getPixelsSize().getHeight()
+							 : getParent()->getSize().getHeight();
+
+	return convertLengthAsDp( mMinHeightLocal, parentHeight );
+}
+
+void UIHTMLBody::setDocumentContentMinHeight( const Float& height ) {
+	if ( mDocumentContentMinHeight == height )
+		return;
+	mDocumentContentMinHeight = height;
+	updateDocumentMinHeight();
+}
+
+void UIHTMLBody::updateDocumentMinHeight() {
+	const Float oldMinHeight = getCurMinSize().getHeight();
+	Float minHeight =
+		std::max( { getLocalMinHeight(), mDocumentViewportMinHeight, mDocumentContentMinHeight } );
+	setMinHeight( minHeight );
+
+	if ( minHeight < oldMinHeight &&
+		 getPixelsSize().getHeight() > PixelDensity::dpToPx( minHeight ) )
+		// Lowering min-height does not shrink the current box by itself. Reapply size through
+		// min/max fitting so the body can settle at the new floor.
+		setPixelsSize( { getPixelsSize().getWidth(), 0 } );
+}
+
+void UIHTMLBody::updateDocumentContentMinHeightFromChildren() {
+	Float maxH = 0;
+	Node* child = mChild;
+
+	while ( child ) {
+		if ( child->isWidget() ) {
+			UIWidget* widget = child->asType<UIWidget>();
+			bool isFixed = false;
+			if ( widget->isType( UI_TYPE_HTML_WIDGET ) &&
+				 widget->asType<UIHTMLWidget>()->getCSSPosition() == CSSPosition::Fixed ) {
+				isFixed = true;
+			}
+			if ( !isFixed ) {
+				Float childH = widget->getPixelsPosition().y + widget->getPixelsSize().getHeight();
+				maxH = std::max( maxH, childH );
+			}
+		}
+		child = child->getNextNode();
+	}
+
+	setDocumentContentMinHeight( maxH > 0 ? std::trunc( PixelDensity::pxToDp( maxH ) ) : 0 );
+}
+
+Uint32 UIHTMLBody::onMessage( const NodeMessage* Msg ) {
+	Uint32 ret = UIRichText::onMessage( Msg );
+
+	if ( Msg->getMsg() == NodeMessage::LayoutAttributeChange && Msg->getSender() != this &&
+		 !mSettingBodyHeight ) {
+		mSettingBodyHeight = true;
+		updateDocumentContentMinHeightFromChildren();
+		mSettingBodyHeight = false;
+
+		if ( getParent() && getParent()->isType( UI_TYPE_HTML_HTML ) )
+			getParent()->asType<UIHTMLHtml>()->setLayoutDirty( LayoutInvalidation::Document );
+	}
+
+	return ret;
 }
 
 UIHTMLHead* UIHTMLHead::New() {
@@ -626,8 +676,8 @@ UIRichText* UIRichText::setFont( Font* font ) {
 	if ( NULL != font && mRichText.getFontStyleConfig().Font != font ) {
 		mRichText.getFontStyleConfig().Font = font;
 		mRichText.invalidate();
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 	}
 	return this;
@@ -645,8 +695,8 @@ UIRichText* UIRichText::setFontSize( const Uint32& characterSize ) {
 		mRichText.invalidate();
 		mLineHeightPxDirty = true;
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 	}
 	return this;
@@ -668,8 +718,8 @@ UIRichText* UIRichText::setTextDecoration( const Uint32& textDecoration ) {
 		mRichText.getFontStyleConfig().Style |= textDecoration;
 		mRichText.invalidate();
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 	}
 	return this;
@@ -680,8 +730,8 @@ UIRichText* UIRichText::setFontStyle( const Uint32& fontStyle ) {
 		mRichText.getFontStyleConfig().Style = fontStyle;
 		mRichText.invalidate();
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
@@ -706,8 +756,8 @@ UIRichText* UIRichText::setFontWeight( const FontWeight& weight ) {
 		mRichText.getFontStyleConfig().Style = newStyle;
 		mRichText.invalidate();
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
@@ -783,8 +833,8 @@ UIRichText* UIRichText::setOutlineThickness( const Float& outlineThickness ) {
 		mRichText.getFontStyleConfig().OutlineThickness = outlineThickness;
 		mRichText.invalidate();
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 		updateDefaultSpansStyle();
 	}
 	return this;
@@ -811,8 +861,8 @@ UIRichText* UIRichText::setTextAlign( const Uint32& align ) {
 	if ( mRichText.getAlign() != align ) {
 		mRichText.setAlign( align );
 
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 	return this;
 }
@@ -824,8 +874,8 @@ UIRichText::WhiteSpaceCollapse UIRichText::getWhiteSpaceCollapse() const {
 void UIRichText::setWhiteSpaceCollapse( WhiteSpaceCollapse collapse ) {
 	if ( mWhiteSpaceCollapse != collapse ) {
 		mWhiteSpaceCollapse = collapse;
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 }
 
@@ -836,8 +886,8 @@ bool UIRichText::getLineWrap() const {
 void UIRichText::setLineWrap( bool lineWrap ) {
 	if ( mLineWrap != lineWrap ) {
 		mLineWrap = lineWrap;
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 }
 
@@ -912,8 +962,8 @@ UIRichText* UIRichText::setLineHeightEq( const std::string& eq ) {
 	if ( mLineHeightEq != eq ) {
 		mLineHeightEq = eq;
 		mLineHeightPxDirty = true;
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 	return this;
 }
@@ -958,8 +1008,8 @@ UIRichText* UIRichText::setTextIndentEq( const std::string& eq ) {
 	if ( mTextIndentEq != eq ) {
 		mTextIndentEq = eq;
 		mTextIndentPxDirty = true;
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 	return this;
 }
@@ -986,8 +1036,8 @@ UIRichText* UIRichText::setTabSize( Uint32 tabSize ) {
 	if ( mTabSize != tabSize ) {
 		mTabSize = tabSize;
 		mRichText.setTabWidth( mTabSize );
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 	return this;
 }
@@ -999,8 +1049,8 @@ const TextTransform::Value& UIRichText::getTextTransform() const {
 void UIRichText::setTextTransform( const TextTransform::Value& textTransform ) {
 	if ( textTransform != mTextTransform ) {
 		mTextTransform = textTransform;
-		notifyLayoutAttrChange();
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 	}
 }
 
@@ -1109,13 +1159,13 @@ void UIRichText::onSizeChange() {
 		UIHTMLWidget::onSizeChange();
 	}
 	if ( getCSSPosition() != CSSPosition::Fixed )
-		notifyLayoutAttrChangeParent();
+		notifyLayoutAttrChangeParent( LayoutInvalidation::ParentChildChange );
 }
 
 void UIRichText::onPaddingChange() {
 	UIHTMLWidget::onPaddingChange();
-	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+	notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 }
 
 void UIRichText::onChildCountChange( Node* child, const bool& removed ) {
@@ -1124,18 +1174,18 @@ void UIRichText::onChildCountChange( Node* child, const bool& removed ) {
 		static_cast<UITextSpan*>( child )->setInheritedStyle( mRichText.getFontStyleConfig() );
 	}
 
-	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+	notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 }
 
 void UIRichText::onFontChanged() {
-	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+	notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 }
 
 void UIRichText::onFontStyleChanged() {
-	notifyLayoutAttrChange();
-	notifyLayoutAttrChangeParent();
+	notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
+	notifyLayoutAttrChangeParent( LayoutInvalidation::ParentReplacedFormatting );
 }
 
 String UIRichText::UIRichText::collapseInternalWhitespace( const String& s ) {
@@ -2189,16 +2239,27 @@ Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 			bool packing = isPacking();
 			if ( packing )
 				return 1;
-			bool senderIsFixed = Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) &&
-								 static_cast<const UIHTMLWidget*>( Msg->getSender() )
-									 ->getCSSPosition() == CSSPosition::Fixed;
+			auto reasons = layoutInvalidationFromMessage( Msg );
+
+			// PaintOnly invalidations must not trigger layout.
+			if ( reasons && ( reasons & ~toLayoutInvalidationFlags(
+											LayoutInvalidationReason::PaintOnly ) ) == 0 ) {
+				invalidateDraw();
+				return 1;
+			}
+
+			bool senderIsFixed =
+				Msg->getSender()->isType( UI_TYPE_HTML_WIDGET ) &&
+				static_cast<const UIHTMLWidget*>( Msg->getSender() )->getCSSPosition() ==
+					CSSPosition::Fixed;
 
 			// updateOutOfFlowPosition() may set this element's own size while the scene is already
 			// updating layouts. That self size-change message has already been accounted for by
-			// the out-of-flow positioning routine; responding to it by relaying into tryUpdateLayout()
-			// re-enters updateOutOfFlowPosition() and can recurse until stack overflow. Parent
-			// notifications for absolute elements are handled by onSizeChange(), so ignoring this
-			// self-message does not hide the size change from ancestors that need it.
+			// the out-of-flow positioning routine; responding to it by relaying into
+			// tryUpdateLayout() re-enters updateOutOfFlowPosition() and can recurse until stack
+			// overflow. Parent notifications for absolute elements are handled by onSizeChange(),
+			// so ignoring this self-message does not hide the size change from ancestors that need
+			// it.
 			if ( Msg->getSender() == this && isOutOfFlow() && mUISceneNode->isUpdatingLayouts() )
 				return 1;
 
@@ -2207,36 +2268,36 @@ Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 			// widgets, and positions children. Those child size/position changes naturally emit
 			// LayoutAttributeChange messages back to this RichText. Re-entering this same block
 			// immediately would throw away the stream being built and rebuild it again while the
-			// first pass is still positioning descendants. Documents expose this as
-			// thousands of redundant rebuildRichText()/onAutoSizeChild() calls per frame.
+			// first pass is still positioning descendants. Documents expose this as thousands of
+			// redundant rebuildRichText()/onAutoSizeChild() calls per frame.
 			//
 			// When mUpdatingLayoutTree is true, the current pass is already incorporating these
 			// descendant measurements, so the correct action is to invalidate intrinsic width
-			// caches and absorb the message. External changes, async image resize notifications,
-			// and normal post-layout mutations arrive outside this active pass and still follow the
-			// regular notifyLayoutAttrChangeParent()/tryUpdateLayout() path below.
+			// caches and absorb the message. Unlike the original guard, the typed invalidation path
+			// keeps the reasons for onLayoutUpdate(), so async/resource/layout changes that still
+			// matter after the active pass can be replayed without re-entering the current rebuild.
 			if ( !senderIsFixed && mUISceneNode->isUpdatingLayouts() && mUpdatingLayoutTree &&
 				 !isOutOfFlow() ) {
 				invalidateIntrinsicSize();
+				mDeferredLayoutReasons |= reasons;
 				return 1;
 			}
 
-			if ( Msg->getSender() != this ) {
-				// A descendant change invalidates the inline/block formatting stream owned by this
-				// RichText. Do not immediately relay that invalidation to the parent: the parent's
-				// layout depends on this RichText's box, not on the raw descendant event. Relaying
-				// first lets dirty-layout coalescing replace this dirty RichText with an ancestor
-				// layout, and generic ancestors such as UILinearLayout measure children before the
-				// recursive child update runs. Delayed image loads then leave the ancestor with the
-				// old RichText height until an unrelated hover/resize causes another invalidation.
-				//
-				// Rebuild this RichText instead. If the rebuilt stream changes the RichText box,
-				// UIRichText::onSizeChange() will notify ancestors with the actual size change; if
-				// the box does not change, no ancestor layout work was necessary. Fixed-position
-				// descendants are still ignored below because they are viewport-relative and do not
-				// affect this normal-flow box.
+			// A descendant change invalidates the inline/block formatting stream owned by this
+			// RichText. Do not immediately relay that invalidation to the parent: the parent's
+			// layout depends on this RichText's box, not on the raw descendant event. Relaying
+			// first lets dirty-layout coalescing replace this dirty RichText with an ancestor
+			// layout, and generic ancestors such as UILinearLayout measure children before the
+			// recursive child update runs. Delayed image loads then leave the ancestor with the old
+			// RichText height until an unrelated hover/resize causes another invalidation.
+			//
+			// Rebuild this RichText instead. If the rebuilt stream changes the RichText box,
+			// UIRichText::onSizeChange() will notify ancestors with the actual size change; if the
+			// box does not change, no ancestor layout work was necessary. Fixed-position
+			// descendants are ignored below because they are viewport-relative and do not affect
+			// this normal-flow box.
+			if ( reasons & toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) )
 				invalidateIntrinsicSize();
-			}
 
 			if ( !senderIsFixed )
 				tryUpdateLayout();
@@ -2268,6 +2329,40 @@ Uint32 UIRichText::onMessage( const NodeMessage* Msg ) {
 
 bool UIRichText::isTextSelectionEnabled() const {
 	return 0 != ( mFlags & UI_TEXT_SELECTION_ENABLED );
+}
+
+void UIRichText::onLayoutUpdate() {
+	// This trashes too much the layout, there must be a better way, also, all tests pass without
+	// this, and also I cannot find an example where this ends up being 100% necessary.
+	/* if ( mDeferredLayoutReasons ) {
+		LayoutInvalidationFlags deferred = mDeferredLayoutReasons;
+		mDeferredLayoutReasons = 0;
+
+		LayoutInvalidationFlags nonPaint =
+			deferred & ~toLayoutInvalidationFlags( LayoutInvalidationReason::PaintOnly );
+
+		if ( nonPaint ) {
+			const Sizef oldSize = getPixelsSize();
+			const LayoutInvalidationFlags formattingReasons =
+				toLayoutInvalidationFlags( LayoutInvalidationReason::IntrinsicSize ) |
+				toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext ) |
+				toLayoutInvalidationFlags( LayoutInvalidationReason::Style ) |
+				toLayoutInvalidationFlags( LayoutInvalidationReason::DocumentExtent ) |
+				toLayoutInvalidationFlags( LayoutInvalidationReason::Viewport );
+			if ( nonPaint & formattingReasons )
+				tryUpdateLayout();
+			if ( nonPaint & toLayoutInvalidationFlags( LayoutInvalidationReason::OutOfFlowChild ) )
+				updateOutOfFlowPosition();
+			if ( oldSize != getPixelsSize() ) {
+				LayoutInvalidationFlags parentReasons = LayoutInvalidation::ParentChildChange;
+				if ( nonPaint &
+					 toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext ) )
+					parentReasons |=
+						toLayoutInvalidationFlags( LayoutInvalidationReason::FormattingContext );
+				notifyLayoutAttrChangeParent( parentReasons );
+			}
+		}
+	} */
 }
 
 void UIRichText::setTextSelectionEnabled( bool active ) {

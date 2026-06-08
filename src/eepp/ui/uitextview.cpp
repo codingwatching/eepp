@@ -109,7 +109,7 @@ UITextView* UITextView::setFont( Graphics::Font* font ) {
 		mFontStyleConfig.Font = font;
 		recalculate();
 		onFontChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 
@@ -128,7 +128,7 @@ UITextView* UITextView::setFontSize( const Uint32& characterSize ) {
 		mTextCache.setFontSize( characterSize );
 		recalculate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 
@@ -149,7 +149,7 @@ UITextView* UITextView::setOutlineThickness( const Float& outlineThickness ) {
 		mFontStyleConfig.OutlineThickness = outlineThickness;
 		recalculate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 
@@ -179,7 +179,7 @@ UITextView* UITextView::setFontStyle( const Uint32& fontStyle ) {
 		mFontStyleConfig.Style = fontStyle;
 		recalculate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 
 		if ( auto* newFont = getUISceneNode()->reevaluateFontStyle(
@@ -206,7 +206,7 @@ UITextView* UITextView::setFontWeight( const FontWeight& weight ) {
 		mFontStyleConfig.Style = newStyle;
 		recalculate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 
 		if ( auto* newFont =
@@ -231,7 +231,7 @@ UITextView* UITextView::setTextDecoration( const Uint32& textDecoration ) {
 
 		recalculate();
 		onFontStyleChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 		invalidateDraw();
 	}
 	return this;
@@ -249,7 +249,7 @@ UITextView* UITextView::setText( const String& text ) {
 
 		recalculate();
 		onTextChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 	}
 
 	return this;
@@ -263,7 +263,7 @@ UITextView* UITextView::setText( String&& text ) {
 
 		recalculate();
 		onTextChanged();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 	}
 
 	return this;
@@ -428,7 +428,7 @@ void UITextView::onAutoSize() {
 
 	if ( sizeChanged ) {
 		updateTextOverflow();
-		notifyLayoutAttrChange();
+		notifyLayoutAttrChange( LayoutInvalidation::TextFormatting );
 	}
 }
 
