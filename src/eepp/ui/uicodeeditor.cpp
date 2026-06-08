@@ -1481,8 +1481,10 @@ bool UICodeEditor::onCreateContextMenu( const Vector2i& position, const Uint32& 
 	UICodeEditor* editor = this;
 	const auto registerMenu = [editor, this]( UIMenu* menu ) {
 		menu->on( Event::OnItemClicked, [this, menu, editor]( const Event* event ) {
-			if ( !event->getNode()->isType( UI_TYPE_MENUITEM ) )
+			if ( !event->getNode()->isType( UI_TYPE_MENUITEM ) ||
+				 event->getNode()->isType( UI_TYPE_MENUSUBMENU ) ) {
 				return;
+			}
 			UIMenuItem* item = event->getNode()->asType<UIMenuItem>();
 			std::string txt( item->getId() );
 			mDoc->execute( txt, editor );
