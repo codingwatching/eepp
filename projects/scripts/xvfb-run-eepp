@@ -103,6 +103,26 @@ claim_display() {
         return 0
     fi
 
+    # Older versions of this script claimed displays from a command substitution,
+    # which left lock directories behind because LOCKDIR was set in a subshell.
+    # Recover those stale claims, but never touch a lock owned by a live process.
+    if [ -f "$lock/pid" ]; then
+        oldpid=$(cat "$lock/pid" 2>/dev/null || true)
+        case "$oldpid" in
+            *[!0-9]*|'') oldpid= ;;
+        esac
+        if [ -z "$oldpid" ] || ! kill -0 "$oldpid" >/dev/null 2>&1; then
+            rm -f "$lock/pid" 2>/dev/null || true
+            rmdir "$lock" 2>/dev/null || true
+            if mkdir "$lock" 2>/dev/null; then
+                LOCKDIR=$lock
+                SERVERNUM=$n
+                echo "$$" > "$LOCKDIR/pid" 2>/dev/null || true
+                return 0
+            fi
+        fi
+    fi
+
     return 1
 }
 
@@ -110,7 +130,6 @@ find_and_claim_display() {
     i=$SERVERNUM
     while [ "$i" -le "$MAX_SERVERNUM" ]; do
         if ! is_display_busy "$i" && claim_display "$i"; then
-            echo "$i"
             return 0
         fi
         i=$((i + 1))
@@ -195,8 +214,9 @@ if ! command -v Xvfb >/dev/null 2>&1; then
 fi
 
 if [ "$AUTO_SERVERNUM" = yes ]; then
-    if ! SERVERNUM=$(find_and_claim_display); then
-        error "could not find a free X display between $SERVERNUM and $MAX_SERVERNUM"
+    START_SERVERNUM=$SERVERNUM
+    if ! find_and_claim_display; then
+        error "could not find a free X display between $START_SERVERNUM and $MAX_SERVERNUM"
         exit 4
     fi
 else
