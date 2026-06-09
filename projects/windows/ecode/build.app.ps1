@@ -1,5 +1,6 @@
 param(
-  [string]$arch = "x64"
+  [string]$arch = "x64",
+  [string]$backend = "sdl2"
 )
 Set-Location (Resolve-Path "$PSScriptRoot\..\..\..")
 
@@ -16,14 +17,17 @@ if ($premakeInPath) {
 }
 
 $isArm64 = $arch -eq "arm64"
+$isSdl3 = $backend -eq "sdl3"
 $archSuffix = if ($isArm64) { "arm64" } else { "x86_64" }
 $premakeExtra = if ($isArm64) { "--arch=arm64" } else { "" }
 $msbuildPlat = if ($isArm64) { "ARM64" } else { "x64" }
+$backendArg = if ($isSdl3) { "SDL3" } else { "SDL2" }
+$sdlDll = if ($isSdl3) { "SDL3.dll" } else { "SDL2.dll" }
 
-& $premakeCmd --windows-vc-build $(if ($premakeExtra) { $premakeExtra }) --disable-static-build vs2022
+& $premakeCmd --windows-vc-build --with-backend=$backendArg $(if ($premakeExtra) { $premakeExtra }) --disable-static-build vs2022
 
 & "$env:MSBUILD_PATH/MSBuild.exe" .\make\windows\eepp.sln -m /t:ecode /p:Platform=$msbuildPlat /p:Configuration=release
 .\projects\scripts\copy_ecode_assets.ps1 .\bin .\projects\windows\ecode\ecode
-Copy-Item -Path ".\bin\SDL2.dll", ".\libs\windows\$archSuffix\eepp.dll", ".\bin\ecode.exe" -Destination ".\projects\windows\ecode\ecode"
+Copy-Item -Path ".\bin\$sdlDll", ".\libs\windows\$archSuffix\eepp.dll", ".\bin\ecode.exe" -Destination ".\projects\windows\ecode\ecode"
 Compress-Archive -LiteralPath ".\projects\windows\ecode\ecode" -DestinationPath .\projects\windows\ecode\ecode-windows-nightly-msvc-$archSuffix.zip -Force
 Compress-Archive -LiteralPath ".\bin\ecode.pdb" -DestinationPath .\projects\windows\ecode\ecode-windows-nightly-msvc-$archSuffix-pdb.zip -Force

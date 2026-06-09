@@ -164,6 +164,75 @@ remote_sdl2_devel_vc_url = "https://www.libsdl.org/release/SDL2-devel-" .. remot
 remote_sdl2_devel_vc_arm64_url = "https://github.com/mmozeiko/build-sdl2/releases/download/2025-12-14/SDL2-arm64-2025-12-14.zip"
 remote_sdl2_devel_mingw_url = "https://www.libsdl.org/release/SDL2-devel-" .. remote_sdl2_version_number .. "-mingw.zip"
 remote_sdl2_arm64_cross_tools_path = "/usr/local/cross-tools/aarch64-w64-mingw32"
+remote_sdl3_version_number = "3.4.10"
+remote_sdl3_version = "SDL3-" .. remote_sdl3_version_number
+remote_sdl3_devel_src_url = "https://libsdl.org/release/" .. remote_sdl3_version .. ".zip"
+remote_sdl3_devel_vc_url = "https://www.libsdl.org/release/SDL3-devel-" .. remote_sdl3_version_number .. "-VC.zip"
+remote_sdl3_devel_vc_arm64_url = "https://github.com/mmozeiko/build-sdl3/releases/download/2026-06-07/SDL3-arm64-2026-06-07.zip"
+remote_sdl3_devel_mingw_url = "https://www.libsdl.org/release/SDL3-devel-" .. remote_sdl3_version_number .. "-mingw.zip"
+remote_sdl3_arm64_cross_tools_path = "/usr/local/cross-tools/aarch64-w64-mingw32"
+sdl_version_dir_override = nil
+
+function is_sdl3_backend()
+	if _OPTIONS["with-backend"] then
+		return _OPTIONS["with-backend"] == "SDL3"
+	end
+	return false
+end
+
+function get_sdl_version_dir()
+	if sdl_version_dir_override then
+		return sdl_version_dir_override
+	end
+	if is_sdl3_backend() then
+		return remote_sdl3_version
+	end
+	return remote_sdl2_version
+end
+
+function get_sdl_dll_name()
+	if is_sdl3_backend() then
+		return "SDL3.dll"
+	end
+	return "SDL2.dll"
+end
+
+function get_sdl_include_sub()
+	if is_sdl3_backend() then
+		return "SDL3"
+	end
+	return "SDL2"
+end
+
+function get_sdl_arm64_cross_tools_path()
+	if is_sdl3_backend() then
+		return remote_sdl3_arm64_cross_tools_path
+	end
+	return remote_sdl2_arm64_cross_tools_path
+end
+
+function get_sdl_arm64_version_name()
+	if is_sdl3_backend() then
+		return "SDL3-arm64"
+	end
+	return "SDL2-arm64"
+end
+
+function get_sdl_devel_url(url_type)
+	if is_sdl3_backend() then
+		if url_type == "vc" then return remote_sdl3_devel_vc_url
+		elseif url_type == "vc_arm64" then return remote_sdl3_devel_vc_arm64_url
+		elseif url_type == "mingw" then return remote_sdl3_devel_mingw_url
+		elseif url_type == "src" then return remote_sdl3_devel_src_url
+		end
+	else
+		if url_type == "vc" then return remote_sdl2_devel_vc_url
+		elseif url_type == "vc_arm64" then return remote_sdl2_devel_vc_arm64_url
+		elseif url_type == "mingw" then return remote_sdl2_devel_mingw_url
+		elseif url_type == "src" then return remote_sdl2_devel_src_url
+		end
+	end
+end
 
 function incdirs( dirs )
 	if is_xcode() then
@@ -179,10 +248,10 @@ function popen( executable_path )
 	return result
 end
 
-function download_and_extract_sdl(sdl_url)
+function download_and_extract_sdl(sdl_url, sdl_version_dir)
 	print("Downloading: " .. sdl_url)
 	local dest_dir = "src/thirdparty/"
-	local local_file = dest_dir .. remote_sdl2_version .. ".zip"
+	local local_file = dest_dir .. sdl_version_dir .. ".zip"
 	local res, response_code = http.download(sdl_url, local_file)
 	if response_code == 200 then
 		print("Downloaded successfully to: " .. local_file)
@@ -195,15 +264,17 @@ function download_and_extract_sdl(sdl_url)
 end
 
 function copy_sdl()
+	local dll_name = get_sdl_dll_name()
+	local version_dir = get_sdl_version_dir()
 	if _OPTIONS["windows-vc-build"] and _OPTIONS["arch"] == "arm64" then
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/bin/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/SDL2.dll" )
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/bin/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/SDL2.dll" )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/bin/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/" .. dll_name )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/bin/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/unit_tests/" .. dll_name )
 	elseif _OPTIONS["windows-vc-build"] then
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/lib/x64/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/SDL2.dll" )
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/lib/x64/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/SDL2.dll" )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/lib/x64/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/" .. dll_name )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/lib/x64/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/unit_tests/" .. dll_name )
 	elseif _OPTIONS["windows-mingw-build"] and _OPTIONS["arch"] ~= "arm64" then
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/x86_64-w64-mingw32/bin/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/SDL2.dll" )
-		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. remote_sdl2_version .."/x86_64-w64-mingw32/bin/SDL2.dll", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/SDL2.dll" )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/x86_64-w64-mingw32/bin/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/" .. dll_name )
+		os.copyfile( _MAIN_SCRIPT_DIR .. "/src/thirdparty/" .. version_dir .."/x86_64-w64-mingw32/bin/" .. dll_name, _MAIN_SCRIPT_DIR .. "/bin/unit_tests/" .. dll_name )
 	end
 end
 
@@ -224,24 +295,28 @@ function version_to_number( version )
 end
 
 function download_and_extract_dependencies()
+	sdl_version_dir_override = nil
+
 	if _OPTIONS["windows-vc-build"] and _OPTIONS["arch"] == "arm64" then
-		remote_sdl2_version = "SDL2-arm64"
+		sdl_version_dir_override = get_sdl_arm64_version_name()
 	end
 
-	if not os.isdir("src/thirdparty/" .. remote_sdl2_version) then
+	local sdl_version_dir = get_sdl_version_dir()
+
+	if not os.isdir("src/thirdparty/" .. sdl_version_dir) then
 		if _OPTIONS["windows-vc-build"] and _OPTIONS["arch"] == "arm64" then
-			download_and_extract_sdl(remote_sdl2_devel_vc_arm64_url)
+			download_and_extract_sdl(get_sdl_devel_url("vc_arm64"), sdl_version_dir)
 			copy_sdl()
 		elseif _OPTIONS["windows-vc-build"] then
-			download_and_extract_sdl(remote_sdl2_devel_vc_url)
+			download_and_extract_sdl(get_sdl_devel_url("vc"), sdl_version_dir)
 			copy_sdl()
 		elseif _OPTIONS["windows-mingw-build"] and _OPTIONS["arch"] ~= "arm64" then
-			download_and_extract_sdl(remote_sdl2_devel_mingw_url)
+			download_and_extract_sdl(get_sdl_devel_url("mingw"), sdl_version_dir)
 			copy_sdl()
 		elseif _OPTIONS["windows-mingw-build"] and _OPTIONS["arch"] == "arm64" then
-			download_and_extract_sdl(remote_sdl2_devel_src_url)
+			download_and_extract_sdl(get_sdl_devel_url("src"), sdl_version_dir)
 		elseif os.istarget("ios") then
-			download_and_extract_sdl(remote_sdl2_devel_src_url)
+			download_and_extract_sdl(get_sdl_devel_url("src"), sdl_version_dir)
 		end
 	end
 end
@@ -462,26 +537,29 @@ function build_link_configuration( package_name, use_ee_icon )
 		if table.contains( backends, "SDL2" ) then
 			links { "SDL2", "SDL2main" }
 		end
+		if table.contains( backends, "SDL3" ) then
+			links { "SDL3" }
+		end
 
 	filter { "options:windows-vc-build", "options:arch=arm64" }
-		syslibdirs { "src/thirdparty/" .. remote_sdl2_version .."/lib" }
+		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib" }
 
 	filter { "options:windows-vc-build", "system:windows", "platforms:x86" }
-		syslibdirs { "src/thirdparty/" .. remote_sdl2_version .."/lib/x86" }
+		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x86" }
 
 	filter { "options:windows-vc-build", "system:windows", "platforms:x86_64", "not options:arch=arm64" }
-		syslibdirs { "src/thirdparty/" .. remote_sdl2_version .."/lib/x64" }
+		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x64" }
 
 	filter { "options:windows-mingw-build", "architecture:x86" }
-		syslibdirs { "src/thirdparty/" .. remote_sdl2_version .."/i686-w64-mingw32/lib/", "/usr/i686-w64-mingw32/sys-root/mingw/lib/" }
+		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/i686-w64-mingw32/lib/", "/usr/i686-w64-mingw32/sys-root/mingw/lib/" }
 
 	filter { "options:windows-mingw-build", "architecture:x86_64" }
 		if _OPTIONS["arch"] ~= "arm64" then
-			syslibdirs { "src/thirdparty/" .. remote_sdl2_version .."/x86_64-w64-mingw32/lib/", "/usr/x86_64-w64-mingw32/sys-root/mingw/lib/" }
+			syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/lib/", "/usr/x86_64-w64-mingw32/sys-root/mingw/lib/" }
 		end
 
 	filter { "options:windows-mingw-build", "options:arch=arm64" }
-		syslibdirs { remote_sdl2_arm64_cross_tools_path.. "/lib/" }
+		syslibdirs { get_sdl_arm64_cross_tools_path().. "/lib/" }
 
 	filter "system:emscripten"
 		targetname ( package_name .. extension )
@@ -716,7 +794,7 @@ function set_ios_config()
 		linkoptions { sysroot_ver }
 		libdirs { framework_libs_path }
 		linkoptions { " -F" .. framework_path .. " -L" .. framework_libs_path .. " -isysroot " .. sysroot_path }
-		incdirs { "src/thirdparty/" .. remote_sdl2_version .. "/include" }
+		incdirs { "src/thirdparty/" .. get_sdl_version_dir() .. "/include" }
 	end
 end
 
@@ -900,19 +978,19 @@ function build_eepp( build_name )
 		incdirs { "src/thirdparty/mojoAL" }
 
 	filter "options:windows-vc-build"
-		incdirs { "src/thirdparty/" .. remote_sdl2_version .. "/include" }
-		incdirs { "src/thirdparty/" .. remote_sdl2_version .. "/include/SDL2" }
+		incdirs { "src/thirdparty/" .. get_sdl_version_dir() .. "/include" }
+		incdirs { "src/thirdparty/" .. get_sdl_version_dir() .. "/include/" .. get_sdl_include_sub() }
 
 	filter { "options:windows-mingw-build", "architecture:x86" }
-		incdirs { "src/thirdparty/" .. remote_sdl2_version .."/i686-w64-mingw32/include/" }
+		incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/i686-w64-mingw32/include/" }
 
 	filter { "options:windows-mingw-build", "architecture:x86_64" }
 		if _OPTIONS["arch"] ~= "arm64" then
-			incdirs { "src/thirdparty/" .. remote_sdl2_version .."/x86_64-w64-mingw32/include/" }
+			incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/include/" }
 		end
 
 	filter { "options:windows-mingw-build", "options:arch=arm64" }
-		incdirs { remote_sdl2_arm64_cross_tools_path .. "/include/" }
+		incdirs { get_sdl_arm64_cross_tools_path() .. "/include/" }
 
 	filter "action:vs*"
 		incdirs { "src/thirdparty/libzip/vs" }
@@ -1276,16 +1354,16 @@ workspace "eepp"
 		build_base_cpp_configuration( "mojoal" )
 		target_dir_thirdparty()
 		filter "options:windows-vc-build"
-			incdirs { "src/thirdparty/" .. remote_sdl2_version .. "/include" }
-			incdirs { "src/thirdparty/" .. remote_sdl2_version .. "/include/SDL2" }
+			incdirs { "src/thirdparty/" .. get_sdl_version_dir() .. "/include" }
+			incdirs { "src/thirdparty/" .. get_sdl_version_dir() .. "/include/" .. get_sdl_include_sub() }
 		filter { "options:windows-mingw-build", "architecture:x86" }
-				incdirs { "src/thirdparty/" .. remote_sdl2_version .."/i686-w64-mingw32/include/" }
+				incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/i686-w64-mingw32/include/" }
 		filter { "options:windows-mingw-build", "architecture:x86_64" }
 			if _OPTIONS["arch"] ~= "arm64" then
-				incdirs { "src/thirdparty/" .. remote_sdl2_version .."/x86_64-w64-mingw32/include/" }
+				incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/include/" }
 			end
 		filter { "options:windows-mingw-build", "options:arch=arm64" }
-			incdirs { remote_sdl2_arm64_cross_tools_path .."/include/" }
+			incdirs { get_sdl_arm64_cross_tools_path() .."/include/" }
 
 	project "brotli-static"
 		kind "StaticLib"
