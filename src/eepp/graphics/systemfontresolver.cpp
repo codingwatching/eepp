@@ -430,25 +430,29 @@ void SystemFontResolver::populateGenericFallbacks() const {
 	};
 
 	static const Mapping mappings[] = {
-		{ GenericFamily::Serif, "times new roman" },
-		{ GenericFamily::Serif, "times" },
+		// Prefer native/open desktop families for CSS generics.
+		// Exact requests such as "Arial" or "Verdana" are still handled by resolve().
+		{ GenericFamily::Serif, "noto serif" },
 		{ GenericFamily::Serif, "dejavu serif" },
 		{ GenericFamily::Serif, "liberation serif" },
-		{ GenericFamily::Serif, "noto serif" },
+		{ GenericFamily::Serif, "times new roman" },
+		{ GenericFamily::Serif, "times" },
 		{ GenericFamily::Serif, "serif" },
-		{ GenericFamily::SansSerif, "arial" },
-		{ GenericFamily::SansSerif, "helvetica" },
+
+		{ GenericFamily::SansSerif, "noto sans" },
 		{ GenericFamily::SansSerif, "dejavu sans" },
 		{ GenericFamily::SansSerif, "liberation sans" },
 		{ GenericFamily::SansSerif, "roboto" },
-		{ GenericFamily::SansSerif, "noto sans" },
+		{ GenericFamily::SansSerif, "arial" },
+		{ GenericFamily::SansSerif, "helvetica" },
 		{ GenericFamily::SansSerif, "sans-serif" },
-		{ GenericFamily::Monospace, "consolas" },
-		{ GenericFamily::Monospace, "menlo" },
+
+		{ GenericFamily::Monospace, "noto sans mono" },
 		{ GenericFamily::Monospace, "dejavu sans mono" },
 		{ GenericFamily::Monospace, "liberation mono" },
 		{ GenericFamily::Monospace, "droid sans mono" },
-		{ GenericFamily::Monospace, "noto sans mono" },
+		{ GenericFamily::Monospace, "consolas" },
+		{ GenericFamily::Monospace, "menlo" },
 		{ GenericFamily::Monospace, "monospace" },
 		{ GenericFamily::Cursive, "comic sans ms" },
 		{ GenericFamily::Cursive, "apple chancery" },

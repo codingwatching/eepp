@@ -1142,7 +1142,7 @@ void AutoCompletePlugin::drawSignatureHelp( UICodeEditor* editor, const Vector2f
 		mBoxPadding.Top + mBoxPadding.Bottom;
 
 	Float vdiff = drawUp ? -boxHeight : mRowHeight;
-	auto offset = editor->getTextPositionOffset( mSignatureHelpPosition );
+	auto offset = editor->getTextPositionOffset( mSignatureHelpPosition ).asFloat();
 
 	Vector2f pos( startScroll.x + offset.x, startScroll.y + offset.y + vdiff );
 	Rectf boxRect( pos, Sizef( boxWidth, boxHeight ) );
@@ -1189,7 +1189,10 @@ void AutoCompletePlugin::drawSignatureHelp( UICodeEditor* editor, const Vector2f
 	mSignatureHelpText.draw( boxRect.getPosition().x + mBoxPadding.Left,
 							 boxRect.getPosition().y + mBoxPadding.Top );
 
-	if ( mSignatureHelpDocumentation && !curSig.documentation.value.empty() ) {
+	bool drawsSuggestions =
+		!( mSuggestions.empty() || !mSuggestionsEditor || mSuggestionsEditor != editor );
+
+	if ( !drawsSuggestions && mSignatureHelpDocumentation && !curSig.documentation.value.empty() ) {
 		mSuggestionDoc.setFillColor( normalStyle.color );
 		mSuggestionDoc.setStyle( normalStyle.style );
 		mSuggestionDoc.setFont( editor->getFont() );
@@ -1197,8 +1200,10 @@ void AutoCompletePlugin::drawSignatureHelp( UICodeEditor* editor, const Vector2f
 		mSuggestionDoc.setLineWrapMode( LineWrapMode::Word );
 		mSuggestionDoc.setLineWrapKeepIndentation( true );
 
-		Rectf docRect = findBestDocumentationPlacement( editor, curSig.documentation, "", boxRect,
-														boxRect, drawUp, lineHeight );
+		Vector2f cursorScreenPos( startScroll.x + offset.x, startScroll.y + offset.y );
+		Rectf docRect =
+			findBestDocumentationPlacement( editor, curSig.documentation, "", boxRect, boxRect,
+											cursorScreenPos, drawUp, lineHeight );
 
 		if ( docRect.getSize().getWidth() > 0 && docRect.getSize().getHeight() > 0 ) {
 			primitives.setColor(
@@ -1339,11 +1344,14 @@ void AutoCompletePlugin::postDraw( UICodeEditor* editor, const Vector2f& startSc
 			mSuggestionDoc.setLineWrapMode( LineWrapMode::Word );
 			mSuggestionDoc.setLineWrapKeepIndentation( true );
 
+			Vector2f cursorOffset = editor->getTextPositionOffset( cursor ).asFloat();
+			Vector2f cursorScreenPos( startScroll.x + cursorOffset.x,
+									  startScroll.y + cursorOffset.y );
 			Rectf docRect = findBestDocumentationPlacement(
 				editor, suggestion.documentation, suggestion.detail, boxRect,
 				{ { cursorPos.x, cursorPos.y + mRowHeight * count },
 				  { mBoxRect.getWidth(), mRowHeight } },
-				drawUp, lineHeight );
+				cursorScreenPos, drawUp, lineHeight );
 
 			if ( docRect.getSize().getWidth() > 0 && docRect.getSize().getHeight() > 0 ) {
 				primitives.setColor(
@@ -1384,17 +1392,20 @@ void AutoCompletePlugin::postDraw( UICodeEditor* editor, const Vector2f& startSc
 
 Rectf AutoCompletePlugin::findBestDocumentationPlacement(
 	UICodeEditor* editor, const LSPMarkupContent& suggestion, const std::string& detail,
-	const Rectf& anchorBox, const Rectf& rowRect, bool drawUp, Float lineHeight ) {
+	const Rectf& anchorBox, const Rectf& rowRect, const Vector2f& cursorScreenPos, bool,
+	Float lineHeight ) {
 	PopupPlacementConfig config;
 	config.areaRect = editor->getScreenRect();
 	config.targetRect = anchorBox;
 	config.alignRect = rowRect;
-	// The avoidRect is the user's cursor line. This ensures Top/Bottom placement skips the line
-	// being typed.
-	Float cursorLineTop =
-		rowRect.Top - lineHeight; // Approximating cursor location based on the suggestion row
-	config.avoidRect =
-		Rectf( anchorBox.Left, cursorLineTop, editor->getPixelsSize().getWidth(), lineHeight );
+	// Small avoid-rect: just the cursor cell + a few character-widths to the right,
+	// so the documentation can still sit to the right of the cursor text without being moved.
+	Float cursorAvoidX = cursorScreenPos.x + editor->getGlyphWidth() * 4;
+	config.avoidRect = Rectf( Vector2f( cursorScreenPos.x, cursorScreenPos.y ),
+							  Sizef( cursorAvoidX - cursorScreenPos.x + 1, lineHeight ) );
+	// Enable cursor-aware placement: when popup would cover the cursor area, try above target.
+	config.cursorScreenPos = cursorScreenPos;
+	config.cursorLineHeight = lineHeight;
 	config.userMaxWidth = editor->convertLength(
 		StyleSheetLength( mMaxSuggestionDocumentationWidth ), editor->getPixelsSize().getWidth() );
 	config.minHorizontalSpace = PixelDensity::dpToPx( 200.f );

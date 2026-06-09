@@ -228,7 +228,8 @@ class AutoCompletePlugin : public Plugin {
 
 	Rectf findBestDocumentationPlacement( UICodeEditor* editor, const LSPMarkupContent& suggestion,
 										  const std::string& detail, const Rectf& anchorBox,
-										  const Rectf& rowRect, bool drawUp, Float lineHeight );
+										  const Rectf& rowRect, const Vector2f& cursorScreenPos,
+										  bool drawUp, Float lineHeight );
 
 	void updateShortcuts();
 };
