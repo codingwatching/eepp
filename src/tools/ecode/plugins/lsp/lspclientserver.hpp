@@ -274,7 +274,6 @@ class LSPClientServer {
 	String::HashType mId;
 	LSPDefinition mLSP;
 	std::string mRootPath;
-	Process mProcess;
 	TcpSocket* mSocket{ nullptr };
 	std::vector<TextDocument*> mDocs;
 	std::unordered_map<TextDocument*, std::unique_ptr<LSPDocumentClient>> mClients;
@@ -289,8 +288,6 @@ class LSPClientServer {
 	bool mNotifiedServerError{ false };
 	bool mShuttingDown{ false };
 	bool mIsProcessingQueue{ false };
-	bool mReadingStdOut{ false };
-	bool mReadingStdErr{ false };
 	std::atomic<int> mWritingStdIn{ 0 };
 	struct QueueMessage {
 		json msg;
@@ -315,6 +312,7 @@ class LSPClientServer {
 	std::mutex mShutdownMutex;
 	std::condition_variable mShutdownCond;
 	std::atomic<int> mLastMsgId{ 0 };
+	Process mProcess;
 
 	void readStdOut( const char* bytes, size_t n );
 

@@ -2119,7 +2119,6 @@ void LSPClientServer::processRequest( const json& msg ) {
 }
 
 void LSPClientServer::readStdOut( const char* bytes, size_t n ) {
-	BoolScopedOp op( mReadingStdOut );
 	if ( mEnded )
 		return;
 	mReceive.append( bytes, n );
@@ -2261,7 +2260,6 @@ void LSPClientServer::notifyServerError() {
 }
 
 void LSPClientServer::readStdErr( const char* bytes, size_t n ) {
-	BoolScopedOp op( mReadingStdErr );
 	if ( mEnded )
 		return;
 
