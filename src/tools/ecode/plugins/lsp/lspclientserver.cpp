@@ -1291,9 +1291,6 @@ LSPClientServer::~LSPClientServer() {
 		for ( const auto& client : mClients )
 			client.first->unregisterClient( client.second.get() );
 	}
-
-	while ( mReadingStdOut || mReadingStdErr )
-		Sys::sleep( Milliseconds( 1 ) );
 }
 
 bool LSPClientServer::socketConnect() {
