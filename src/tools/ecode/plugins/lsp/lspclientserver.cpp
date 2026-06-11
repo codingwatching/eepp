@@ -1291,6 +1291,9 @@ LSPClientServer::~LSPClientServer() {
 		for ( const auto& client : mClients )
 			client.first->unregisterClient( client.second.get() );
 	}
+
+	while ( mReadingStdOut || mReadingStdErr )
+		Sys::sleep( Milliseconds( 1 ) );
 }
 
 bool LSPClientServer::socketConnect() {
@@ -2119,6 +2122,7 @@ void LSPClientServer::processRequest( const json& msg ) {
 }
 
 void LSPClientServer::readStdOut( const char* bytes, size_t n ) {
+	BoolScopedOp op( mReadingStdOut );
 	if ( mEnded )
 		return;
 	mReceive.append( bytes, n );
@@ -2260,6 +2264,7 @@ void LSPClientServer::notifyServerError() {
 }
 
 void LSPClientServer::readStdErr( const char* bytes, size_t n ) {
+	BoolScopedOp op( mReadingStdErr );
 	if ( mEnded )
 		return;
 

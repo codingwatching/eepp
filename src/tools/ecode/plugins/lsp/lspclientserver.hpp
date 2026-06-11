@@ -289,6 +289,8 @@ class LSPClientServer {
 	bool mNotifiedServerError{ false };
 	bool mShuttingDown{ false };
 	bool mIsProcessingQueue{ false };
+	bool mReadingStdOut{ false };
+	bool mReadingStdErr{ false };
 	std::atomic<int> mWritingStdIn{ 0 };
 	struct QueueMessage {
 		json msg;

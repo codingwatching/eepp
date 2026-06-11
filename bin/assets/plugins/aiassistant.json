@@ -532,7 +532,7 @@
         }
       ]
     },
-    "mimo": {
+    "xiaomimimo": {
       "api_url": "https://api.xiaomimimo.com/v1/chat/completions",
       "display_name": "Xiaomi MiMo",
       "models": [
