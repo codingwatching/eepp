@@ -26,7 +26,22 @@ $sdlDll = if ($isSdl3) { "SDL3.dll" } else { "SDL2.dll" }
 
 & $premakeCmd --windows-vc-build --with-backend=$backendArg $(if ($premakeExtra) { $premakeExtra }) --disable-static-build vs2022
 
-& "$env:MSBUILD_PATH/MSBuild.exe" .\make\windows\eepp.sln -m /t:ecode /p:Platform=$msbuildPlat /p:Configuration=release
+$msbuildInPath = Get-Command msbuild -ErrorAction SilentlyContinue
+
+if ($msbuildInPath) {
+  $msbuildCmd = "msbuild"
+} elseif ($env:MSBUILD_PATH) {
+  $msbuildCmd = "$env:MSBUILD_PATH/MSBuild.exe"
+  if (-not (Test-Path $msbuildCmd)) {
+    Write-Error "MSBuild.exe not found at $msbuildCmd"
+    exit 1
+  }
+} else {
+  Write-Error "msbuild not found in PATH and MSBUILD_PATH is not defined"
+  exit 1
+}
+
+& $msbuildCmd .\make\windows\eepp.sln -m /t:ecode /p:Platform=$msbuildPlat /p:Configuration=release
 .\projects\scripts\copy_ecode_assets.ps1 .\bin .\projects\windows\ecode\ecode
 Copy-Item -Path ".\bin\$sdlDll", ".\libs\windows\$archSuffix\eepp.dll", ".\bin\ecode.exe" -Destination ".\projects\windows\ecode\ecode"
 Compress-Archive -LiteralPath ".\projects\windows\ecode\ecode" -DestinationPath .\projects\windows\ecode\ecode-windows-nightly-msvc-$archSuffix.zip -Force
