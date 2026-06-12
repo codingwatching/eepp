@@ -19,7 +19,7 @@ if ($premakeInPath) {
 $isArm64 = $arch -eq "arm64"
 $isSdl3 = $backend -eq "sdl3"
 $archSuffix = if ($isArm64) { "arm64" } else { "x86_64" }
-$premakeExtra = if ($isArm64) { "--arch=arm64" } else { "" }
+$premakeExtra = if ($isArm64) { "--arch=AARCH64" } else { "" }
 $msbuildPlat = if ($isArm64) { "ARM64" } else { "x64" }
 $backendArg = if ($isSdl3) { "SDL3" } else { "SDL2" }
 $sdlDll = if ($isSdl3) { "SDL3.dll" } else { "SDL2.dll" }
@@ -51,7 +51,8 @@ if ($msbuildInPath) {
   exit 1
 }
 
-& $msbuildCmd .\make\windows\eepp.sln -m /t:ecode /p:Platform=$msbuildPlat /p:Configuration=release
+$slnExt = if ($vsAction -eq "vs2026") { "slnx" } else { "sln" }
+& $msbuildCmd .\make\windows\eepp.$slnExt -m /t:ecode /p:Platform=$msbuildPlat /p:Configuration=release
 .\projects\scripts\copy_ecode_assets.ps1 .\bin .\projects\windows\ecode\ecode
 Copy-Item -Path ".\bin\$sdlDll", ".\libs\windows\$archSuffix\eepp.dll", ".\bin\ecode.exe" -Destination ".\projects\windows\ecode\ecode"
 Compress-Archive -LiteralPath ".\projects\windows\ecode\ecode" -DestinationPath .\projects\windows\ecode\ecode-windows-nightly-msvc-$archSuffix.zip -Force
