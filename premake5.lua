@@ -549,13 +549,13 @@ function build_link_configuration( package_name, use_ee_icon )
 	filter { "options:windows-vc-build", "options:arch=arm64" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib" }
 
-	filter { "options:windows-vc-build", "options:arch=ARM64" }
+	filter { "options:windows-vc-build", "options:arch=aarch64" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib" }
 
 	filter { "options:windows-vc-build", "system:windows", "platforms:x86" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x86" }
 
-	filter { "options:windows-vc-build", "system:windows", "platforms:x86_64", "not options:arch=arm64", "not options:arch=ARM64" }
+	filter { "options:windows-vc-build", "system:windows", "platforms:x86_64", "not options:arch=arm64", "not options:arch=aarch64" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x64" }
 
 	filter { "options:windows-mingw-build", "architecture:x86" }
@@ -569,7 +569,7 @@ function build_link_configuration( package_name, use_ee_icon )
 	filter { "options:windows-mingw-build", "options:arch=arm64" }
 		syslibdirs { get_sdl_arm64_cross_tools_path().. "/lib/" }
 
-	filter { "options:windows-mingw-build", "options:arch=ARM64" }
+	filter { "options:windows-mingw-build", "options:arch=aarch64" }
 		syslibdirs { get_sdl_arm64_cross_tools_path().. "/lib/" }
 
 	filter "system:emscripten"
@@ -1003,7 +1003,7 @@ function build_eepp( build_name )
 	filter { "options:windows-mingw-build", "options:arch=arm64" }
 		incdirs { get_sdl_arm64_cross_tools_path() .. "/include/" }
 
-	filter { "options:windows-mingw-build", "options:arch=ARM64" }
+	filter { "options:windows-mingw-build", "options:arch=aarch64" }
 		incdirs { get_sdl_arm64_cross_tools_path() .. "/include/" }
 
 	filter "action:vs*"
@@ -1040,7 +1040,7 @@ function postsymlinklib_arch(name)
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:ARM" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:AARCH64" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "options:arch=arm64" )
-	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "options:arch=ARM64" )
+	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "options:arch=aarch64" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/universal/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:universal" )
 	if name == "eepp" then
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/x86/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:x86" )
@@ -1048,7 +1048,7 @@ function postsymlinklib_arch(name)
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:ARM" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:AARCH64" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "options:arch=arm64" )
-		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "options:arch=ARM64" )
+		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "options:arch=aarch64" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/universal/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:universal" )
 	end
 end
@@ -1139,7 +1139,7 @@ workspace "eepp"
 		filter { "action:vs*", "options:arch=arm64" }
 			buildoptions{ "/bigobj", "/O1", "/Zm200" }
 
-		filter { "action:vs*", "options:arch=ARM64" }
+		filter { "action:vs*", "options:arch=aarch64" }
 			buildoptions{ "/bigobj", "/O1", "/Zm200" }
 
 	project "mbedtls-static"
@@ -1384,7 +1384,7 @@ workspace "eepp"
 		filter { "options:windows-mingw-build", "options:arch=arm64" }
 			incdirs { get_sdl_arm64_cross_tools_path() .."/include/" }
 
-		filter { "options:windows-mingw-build", "options:arch=ARM64" }
+		filter { "options:windows-mingw-build", "options:arch=aarch64" }
 			incdirs { get_sdl_arm64_cross_tools_path() .."/include/" }
 
 	project "brotli-static"
