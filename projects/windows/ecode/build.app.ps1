@@ -19,7 +19,7 @@ if ($premakeInPath) {
 $isArm64 = $arch -eq "arm64"
 $isSdl3 = $backend -eq "sdl3"
 $archSuffix = if ($isArm64) { "arm64" } else { "x86_64" }
-$premakeExtra = if ($isArm64) { "--arch=AARCH64" } else { "" }
+$premakeExtra = if ($isArm64) { "--arch=arm64" } else { "" }
 $msbuildPlat = if ($isArm64) { "ARM64" } else { "x64" }
 $backendArg = if ($isSdl3) { "SDL3" } else { "SDL2" }
 $sdlDll = if ($isSdl3) { "SDL3.dll" } else { "SDL2.dll" }

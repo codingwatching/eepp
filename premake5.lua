@@ -546,13 +546,13 @@ function build_link_configuration( package_name, use_ee_icon )
 			links { "SDL3" }
 		end
 
-	filter { "options:windows-vc-build", "options:arch=AARCH64" }
+	filter { "options:windows-vc-build", "options:arch=arm64" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib" }
 
 	filter { "options:windows-vc-build", "system:windows", "platforms:x86" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x86" }
 
-	filter { "options:windows-vc-build", "system:windows", "platforms:x86_64", "not options:arch=AARCH64" }
+	filter { "options:windows-vc-build", "system:windows", "platforms:x86_64", "not options:arch=arm64" }
 		syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/lib/x64" }
 
 	filter { "options:windows-mingw-build", "architecture:x86" }
@@ -563,7 +563,7 @@ function build_link_configuration( package_name, use_ee_icon )
 			syslibdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/lib/", "/usr/x86_64-w64-mingw32/sys-root/mingw/lib/" }
 		end
 
-	filter { "options:windows-mingw-build", "options:arch=AARCH64" }
+	filter { "options:windows-mingw-build", "options:arch=arm64" }
 		syslibdirs { get_sdl_arm64_cross_tools_path().. "/lib/" }
 
 	filter "system:emscripten"
@@ -994,7 +994,7 @@ function build_eepp( build_name )
 			incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/include/" }
 		end
 
-	filter { "options:windows-mingw-build", "options:arch=AARCH64" }
+	filter { "options:windows-mingw-build", "options:arch=arm64" }
 		incdirs { get_sdl_arm64_cross_tools_path() .. "/include/" }
 
 	filter "action:vs*"
@@ -1030,14 +1030,14 @@ function postsymlinklib_arch(name)
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/x86_64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:x86_64" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:ARM" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:AARCH64" )
-	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "options:arch=AARCH64" )
+	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/", name, "options:arch=arm64" )
 	postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/universal/", _MAIN_SCRIPT_DIR .. "/bin/", name, "architecture:universal" )
 	if name == "eepp" then
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/x86/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:x86" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/x86_64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:x86_64" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:ARM" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:AARCH64" )
-		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "options:arch=AARCH64" )
+		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/arm64/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "options:arch=arm64" )
 		postsymlinklib( _MAIN_SCRIPT_DIR .. "/libs/" .. os.target() .. "/universal/", _MAIN_SCRIPT_DIR .. "/bin/unit_tests/", name, "architecture:universal" )
 	end
 end
@@ -1125,7 +1125,7 @@ workspace "eepp"
 		incdirs { "include/thirdparty/glew" }
 		build_base_configuration( "glew" )
 		target_dir_thirdparty()
-		filter { "action:vs*", "options:arch=AARCH64" }
+		filter { "action:vs*", "options:arch=arm64" }
 			buildoptions{ "/bigobj", "/O1", "/Zm200" }
 
 	project "mbedtls-static"
@@ -1367,7 +1367,7 @@ workspace "eepp"
 			if not is_arm64_arch() then
 				incdirs { "src/thirdparty/" .. get_sdl_version_dir() .."/x86_64-w64-mingw32/include/" }
 			end
-		filter { "options:windows-mingw-build", "options:arch=AARCH64" }
+		filter { "options:windows-mingw-build", "options:arch=arm64" }
 			incdirs { get_sdl_arm64_cross_tools_path() .."/include/" }
 
 	project "brotli-static"
