@@ -180,7 +180,7 @@ UIFileDialog::UIFileDialog( Uint32 dialogFlags, const std::string& defaultFilePa
 		if ( event->asKeyEvent()->getKeyCode() == KEY_BACKSPACE )
 			goFolderUp();
 	} );
-	mMultiView->on( Event::OnModelEvent, [&]( const Event* event ) {
+	mMultiView->on( Event::OnModelEvent, [this]( const Event* event ) {
 		const ModelEvent* modelEvent = static_cast<const ModelEvent*>( event );
 		if ( modelEvent->getModelEventType() == ModelEventType::Open ) {
 			Variant vPath(
@@ -195,6 +195,7 @@ UIFileDialog::UIFileDialog( Uint32 dialogFlags, const std::string& defaultFilePa
 						shouldOpenFolder = true;
 					}
 				}
+				mMultiView->getCurrentView()->resetSearchText();
 				openFileOrFolder( shouldOpenFolder );
 			}
 		}
