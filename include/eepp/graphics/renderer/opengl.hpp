@@ -37,6 +37,8 @@
 #include <GL/glext.h>
 #elif EE_PLATFORM == EE_PLATFORM_WIN
 typedef char GLchar;
+#endif
+#endif
 
 #ifndef GL_TEXTURE0
 #define GL_TEXTURE0 0x84C0
@@ -145,8 +147,6 @@ typedef char GLchar;
 #endif
 #ifndef GL_NUM_EXTENSIONS
 #define GL_NUM_EXTENSIONS 0x821D
-#endif
-#endif
 #endif
 
 #else
