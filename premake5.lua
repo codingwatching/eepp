@@ -1068,6 +1068,9 @@ workspace "eepp"
 	select_backend()
 	generate_os_links()
 	parse_args()
+
+	defines { "EE_DISABLE_GLEW" }
+
 	location("./make/" .. os.target() .. "/")
 	objdir("obj/" .. os.target() .. "/")
 

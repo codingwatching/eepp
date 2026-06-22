@@ -1116,6 +1116,8 @@ solution "eepp"
 	generate_os_links()
 	parse_args()
 
+	defines { "EE_DISABLE_GLEW" }
+
 	if os.is_real("macosx") then
 		defines { "GL_SILENCE_DEPRECATION" }
 	elseif os.is_real("ios") then
