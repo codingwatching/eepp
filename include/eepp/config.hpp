@@ -196,7 +196,7 @@
 
 #if ( EE_PLATFORM == EE_PLATFORM_WIN || EE_PLATFORM == EE_PLATFORM_MACOS || \
 	  defined( EE_X11_PLATFORM ) ) &&                                       \
-	!defined( EE_GLES ) && !defined( EE_DISABLE_GLEW )
+	!defined( EE_GLES ) && defined( EE_ENABLE_GLEW )
 #define EE_GLEW_AVAILABLE
 #endif
 
