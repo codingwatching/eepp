@@ -2851,6 +2851,12 @@ bool App::loadFileFromPath(
 		openFileFromPath( path );
 	} else {
 		UITab* tab = mSplitter->isDocumentOpen( path );
+		auto onLoadedRestoreState = [this, onLoaded]( UICodeEditor* codeEditor,
+													  const std::string& path ) {
+			restoreClosedDocumentState( codeEditor, path );
+			if ( onLoaded )
+				onLoaded( codeEditor, path );
+		};
 
 		if ( tab && tab->getOwnedWidget()->isType( UI_TYPE_CODEEDITOR ) ) {
 			UICodeEditor* editor = tab->getOwnedWidget()->asType<UICodeEditor>();
@@ -2863,9 +2869,9 @@ bool App::loadFileFromPath(
 			}
 		} else {
 			if ( inNewTab ) {
-				mSplitter->loadAsyncFileFromPathInNewTab( path, onLoaded );
+				mSplitter->loadAsyncFileFromPathInNewTab( path, onLoadedRestoreState );
 			} else {
-				mSplitter->loadAsyncFileFromPath( path, codeEditor, onLoaded );
+				mSplitter->loadAsyncFileFromPath( path, codeEditor, onLoadedRestoreState );
 			}
 		}
 	}
@@ -3180,13 +3186,14 @@ void App::onCodeEditorCreated( UICodeEditor* editor, TextDocument& doc ) {
 			updateNonUniqueTabTitles();
 	} );
 
-	editor->on( Event::OnDocumentClosed, [this]( const Event* event ) {
+	editor->on( Event::OnDocumentClosed, [this, editor]( const Event* event ) {
 		if ( !appInstance )
 			return;
 		const DocEvent* docEvent = static_cast<const DocEvent*>( event );
 		std::string dir( FileSystem::fileRemoveFileName( docEvent->getDoc()->getFilePath() ) );
 		if ( dir.empty() )
 			return;
+		rememberClosedDocumentState( editor );
 		mRecentClosedFiles.push( docEvent->getDoc()->getFilePath() );
 		mSettings->updatedReopenClosedFileState();
 		Lock l( mWatchesLock );
@@ -3456,6 +3463,40 @@ void App::reopenClosedTab() {
 	mSettings->updatedReopenClosedFileState();
 
 	loadFileFromPath( prevTabPath );
+}
+
+std::string App::closedDocumentStateKey( const std::string& path ) const {
+	if ( path.empty() )
+		return {};
+	return FileSystem::fileExists( path ) ? FileSystem::getRealPath( path ) : path;
+}
+
+void App::rememberClosedDocumentState( UICodeEditor* editor ) {
+	if ( !editor || !editor->getDocument().hasFilepath() )
+		return;
+
+	std::string key( closedDocumentStateKey( editor->getDocument().getFilePath() ) );
+	if ( key.empty() )
+		return;
+
+	mClosedDocumentState[key] = editor->getDocument().getSelections();
+}
+
+void App::restoreClosedDocumentState( UICodeEditor* editor, const std::string& path ) {
+	if ( !editor )
+		return;
+
+	std::string key( closedDocumentStateKey( path ) );
+	if ( key.empty() )
+		return;
+
+	auto it = mClosedDocumentState.find( key );
+	if ( it == mClosedDocumentState.end() )
+		return;
+
+	editor->getDocument().setSelection( it->second );
+	editor->scrollToCursor();
+	mClosedDocumentState.erase( it );
 }
 
 void App::updateEditorState() {
@@ -4149,6 +4190,7 @@ void App::loadFolder( std::string path, bool forceNewWindow ) {
 		mSplitter->removeTabWithOwnedWidgetId( "welcome_ecode" );
 		mStatusBar->setVisible( mConfig.ui.showStatusBar );
 	}
+	mClosedDocumentState.clear();
 
 	if ( !mProjectTreeView ) {
 		showSidePanel( mConfig.ui.showSidePanel );

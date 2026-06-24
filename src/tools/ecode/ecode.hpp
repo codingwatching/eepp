@@ -666,6 +666,7 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	UITextView* mDocInfo{ nullptr };
 	std::vector<std::string> mRecentFiles;
 	std::stack<std::string> mRecentClosedFiles;
+	std::unordered_map<std::string, TextRanges> mClosedDocumentState;
 	std::vector<std::string> mRecentFolders;
 	AppConfig mConfig;
 	UISplitter* mProjectSplitter{ nullptr };
@@ -803,6 +804,12 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	void addRemainingTabWidgets( Node* widget );
 
 	void updateEditorState();
+
+	std::string closedDocumentStateKey( const std::string& path ) const;
+
+	void rememberClosedDocumentState( UICodeEditor* editor );
+
+	void restoreClosedDocumentState( UICodeEditor* editor, const std::string& path );
 
 	void saveDoc();
 
