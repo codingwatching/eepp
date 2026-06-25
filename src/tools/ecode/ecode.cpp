@@ -4966,6 +4966,7 @@ void App::init( InitParameters& params ) {
 		mSplitter->setHideTabBarOnSingleTab( mConfig.editor.hideTabBarOnSingleTab );
 		mSplitter->setHideTabBar( mConfig.editor.hideTabBar );
 		mSplitter->setOpenDocumentsInMainSplit( mConfig.editor.openDocumentsInMainSplit );
+		mSplitter->setRestoreEditorSelectionOnFocus( mConfig.editor.restoreEditorSelectionOnFocus );
 		mSplitter->setOnTabWidgetCreateCb( [this]( UITabWidget* tabWidget ) {
 			tabWidget->getTabBar()->onDoubleClick(
 				[this]( const MouseEvent* ) { mSplitter->createEditorInNewTab(); } );

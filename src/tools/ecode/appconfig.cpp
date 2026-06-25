@@ -196,6 +196,8 @@ void AppConfig::load( const std::string& confPath, std::string& keybindingsPath,
 	editor.hideTabBarOnSingleTab = ini.getValueB( "editor", "hide_tab_bar_on_single_tab", false );
 	editor.hideTabBar = ini.getValueB( "editor", "hide_tab_bar", false );
 	editor.tabSwitcher = ini.getValueB( "editor", "tab_switcher", false );
+	editor.restoreEditorSelectionOnFocus =
+		ini.getValueB( "editor", "restore_editor_selection_on_focus", true );
 	editor.tabJumpMode =
 		UITabWidget::tabJumpModefromString( ini.getValue( "editor", "tab_jump_mode", "linear" ) );
 
@@ -388,6 +390,8 @@ void AppConfig::save( const std::vector<std::string>& recentFiles,
 	ini.setValueB( "editor", "hide_tab_bar_on_single_tab", editor.hideTabBarOnSingleTab );
 	ini.setValueB( "editor", "hide_tab_bar", editor.hideTabBar );
 	ini.setValueB( "editor", "tab_switcher", editor.tabSwitcher );
+	ini.setValueB( "editor", "restore_editor_selection_on_focus",
+				   editor.restoreEditorSelectionOnFocus );
 	ini.setValue( "editor", "tab_jump_mode",
 				  UITabWidget::tabJumpModeToString( editor.tabJumpMode ) );
 	ini.setValue( "editor", "new_tab_position", NewTabPosition::toString( editor.newTabPosition ) );

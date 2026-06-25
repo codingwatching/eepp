@@ -2077,6 +2077,15 @@ UIMenu* SettingsMenu::createViewMenu() {
 				  "Synchronizes the current focused document as the selected\nfile in the "
 				  "directory tree." ) )
 		->setId( "sync-project-tree" );
+	mViewMenu
+		->addCheckBox(
+			i18n( "restore_editor_selection_on_focus", "Restore editor selection on focus" ) )
+		->setActive( mApp->getConfig().editor.restoreEditorSelectionOnFocus )
+		->setTooltipText(
+			i18n( "restore_editor_selection_on_focus_tooltip",
+				  "Restores each editor split's last cursor and selection state when it regains "
+				  "focus." ) )
+		->setId( "restore-editor-selection-on-focus" );
 
 	mViewMenu->addSeparator();
 	mViewMenu
@@ -2210,6 +2219,11 @@ UIMenu* SettingsMenu::createViewMenu() {
 		} else if ( item->getId() == "sync-project-tree" ) {
 			mApp->getConfig().editor.syncProjectTreeWithEditor =
 				item->asType<UIMenuCheckBox>()->isActive();
+		} else if ( item->getId() == "restore-editor-selection-on-focus" ) {
+			mApp->getConfig().editor.restoreEditorSelectionOnFocus =
+				item->asType<UIMenuCheckBox>()->isActive();
+			mSplitter->setRestoreEditorSelectionOnFocus(
+				mApp->getConfig().editor.restoreEditorSelectionOnFocus );
 		} else {
 			String text = String( event->getNode()->asType<UIMenuItem>()->getId() ).toLower();
 			String::replaceAll( text, " ", "-" );

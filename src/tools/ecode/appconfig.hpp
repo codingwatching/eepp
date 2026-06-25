@@ -118,6 +118,7 @@ struct CodeEditorConfig {
 	bool hideTabBar{ false };
 	bool tabSwitcher{ false };
 	bool openDocumentsInMainSplit{ false };
+	bool restoreEditorSelectionOnFocus{ true };
 	UITabWidget::TabJumpMode tabJumpMode{ UITabWidget::TabJumpMode::Linear };
 	NewTabPosition::Position newTabPosition{ NewTabPosition::Last };
 
