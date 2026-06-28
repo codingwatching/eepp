@@ -121,6 +121,7 @@ struct CodeEditorConfig {
 	bool restoreEditorSelectionOnFocus{ true };
 	UITabWidget::TabJumpMode tabJumpMode{ UITabWidget::TabJumpMode::Linear };
 	NewTabPosition::Position newTabPosition{ NewTabPosition::Last };
+	std::string customDateFormat{ "%d.%m.%Y %H:%M:%S" };
 
 	bool singleClickNavigation{ false };
 	bool syncProjectTreeWithEditor{ true };

@@ -31,6 +31,7 @@ namespace ecode {
 class AutoCompletePlugin;
 class LinterPlugin;
 class FormatterPlugin;
+class DateTimeController;
 class SettingsMenu;
 class UITreeViewFS;
 
@@ -748,6 +749,7 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	std::unique_ptr<TerminalManager> mTerminalManager;
 	std::unique_ptr<PluginManager> mPluginManager;
 	std::unique_ptr<SettingsMenu> mSettings;
+	std::unique_ptr<DateTimeController> mDateTimeController;
 	std::string mFileToOpen;
 	UITheme* mTheme{ nullptr };
 	UIStatusBar* mStatusBar{ nullptr };

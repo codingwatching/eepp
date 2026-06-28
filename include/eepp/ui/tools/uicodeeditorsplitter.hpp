@@ -435,6 +435,7 @@ class EE_API UICodeEditorSplitter {
 	Float mVisualSplitEdgePercent{ 0.1 };
 	TabTryCloseCallback mTabTryCloseCb;
 	std::function<bool( SplitDirection direction, UIWidget* widget )> mCanCreateSplitFn;
+	std::unordered_map<Node*, std::vector<Uint32>> mEventCbs;
 
 	UICodeEditorSplitter( UICodeEditorSplitter::Client* client, UISceneNode* sceneNode,
 						  std::shared_ptr<ThreadPool> threadPool,

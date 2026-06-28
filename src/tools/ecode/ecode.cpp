@@ -1,6 +1,7 @@
 #include "ecode.hpp"
 #include "colorschemetranslator.hpp"
 #include "customwidgets.hpp"
+#include "datetimecontroller.hpp"
 #include "featureshealth.hpp"
 #include "keybindingshelper.hpp"
 #include "pathhelper.hpp"
@@ -1107,6 +1108,7 @@ App::App( const size_t& jobs, const std::vector<std::string>& args ) :
 	mArgs( args ),
 	mThreadPool(
 		ThreadPool::createShared( jobs > 0 ? jobs : eemax<int>( 4, Sys::getCPUCount() ) ) ),
+	mDateTimeController( std::make_unique<DateTimeController>( this ) ),
 	mSettingsActions( std::make_unique<SettingsActions>( this ) ) {}
 
 static void fsRemoveAll( const std::string& fpath ) {
@@ -2311,6 +2313,7 @@ std::vector<std::string> App::getUnlockedCommands() {
 		"maximize-tab-widget",
 		"restore-maximized-tab-widget",
 		"close-folder",
+		"set-custom-date-format",
 	};
 }
 
@@ -3112,6 +3115,7 @@ void App::onCodeEditorCreated( UICodeEditor* editor, TextDocument& doc ) {
 			}
 		}
 	} );
+	mDateTimeController->registerCommands( doc );
 	registerUnlockedCommands( doc );
 
 	editor->on( Event::OnDocumentSave, [this]( const Event* event ) {
