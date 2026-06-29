@@ -35,6 +35,8 @@ class EE_API FontTrueType : public Font {
 
 	const Font::Info& getInfo() const;
 
+	const Uint32& getFaceIndex() const { return mFaceIndex; }
+
 	Glyph getGlyph( Uint32 codePoint, unsigned int characterSize, bool bold, bool italic,
 					Float outlineThickness = 0 ) const;
 
