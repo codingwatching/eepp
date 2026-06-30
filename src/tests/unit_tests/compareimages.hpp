@@ -14,6 +14,8 @@ using namespace EE::System;
 using namespace EE::Graphics;
 using namespace EE::Window;
 
+static constexpr Uint32 VisualTestWindowStyle = WindowStyle::Borderless;
+
 static void compareImages( utest_state_s& utest_state, int* utest_result, EE::Window::Window* win,
 						   const std::string& imageName,
 						   const std::string& imagesFolder = "fontrendering",

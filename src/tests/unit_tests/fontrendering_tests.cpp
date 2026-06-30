@@ -69,8 +69,8 @@ UTEST( FontRendering, fontsTest ) {
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 650, "eepp - Fonts", WindowStyle::Default, WindowBackend::Default, 32,
-						{}, 1, false, true ) );
+		WindowSettings( 1024, 650, "eepp - Fonts", VisualTestWindowStyle, WindowBackend::Default,
+						32, {}, 1, false, true ) );
 
 	ASSERT_TRUE_MSG( win->isOpen(), "Failed to create Window" );
 
@@ -322,7 +322,7 @@ UTEST( FontRendering, loadFontFaceDataURI ) {
 UTEST( FontRendering, editorTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - CodeEditor", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - CodeEditor", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -354,7 +354,7 @@ UTEST( FontRendering, editorTest ) {
 UTEST( FontRendering, textEditTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - TextEdit", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - TextEdit", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -386,7 +386,7 @@ UTEST( FontRendering, textEditTest ) {
 UTEST( FontRendering, tabsTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - Tabs Test", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - Tabs Test", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -419,7 +419,7 @@ UTEST( FontRendering, tabsTest ) {
 UTEST( FontRendering, tabStopTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - Tab Stop Test", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - Tab Stop Test", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -453,7 +453,7 @@ UTEST( FontRendering, tabStopTest ) {
 UTEST( FontRendering, tabsTextEditTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - TextEdit - Tabs Test", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - TextEdit - Tabs Test", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -485,7 +485,7 @@ UTEST( FontRendering, tabsTextEditTest ) {
 UTEST( FontRendering, tabStopTextEditTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - TextEdit - Tab Stop Test", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - TextEdit - Tab Stop Test", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -517,7 +517,7 @@ UTEST( FontRendering, tabStopTextEditTest ) {
 
 UTEST( FontRendering, textViewTest ) {
 	const auto runTest = [&]() {
-		UIApplication app( WindowSettings( 1024, 650, "eepp - TextView", WindowStyle::Default,
+		UIApplication app( WindowSettings( 1024, 650, "eepp - TextView", VisualTestWindowStyle,
 										   WindowBackend::Default, 32, {}, 1, false, true ),
 						   UIApplication::Settings(
 							   Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1.5f ) );
@@ -552,7 +552,7 @@ UTEST( FontRendering, textViewTest ) {
 UTEST( FontRendering, textEditBengaliTest ) {
 	BoolScopedOp op( Text::TextShaperEnabled, true );
 	UIApplication app(
-		WindowSettings( 1024, 650, "eepp - TextEdit Bengali", WindowStyle::Default,
+		WindowSettings( 1024, 650, "eepp - TextEdit Bengali", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1.5f ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -572,7 +572,7 @@ UTEST( FontRendering, textEditBengaliTest ) {
 UTEST( FontRendering, textEditArabicTest ) {
 	BoolScopedOp op( Text::TextShaperEnabled, true );
 	UIApplication app(
-		WindowSettings( 1024, 650, "eepp - TextEdit Arabic", WindowStyle::Default,
+		WindowSettings( 1024, 650, "eepp - TextEdit Arabic", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1.5f ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -592,7 +592,7 @@ UTEST( FontRendering, textEditArabicTest ) {
 UTEST( FontRendering, textEditHebrewTest ) {
 	BoolScopedOp op( Text::TextShaperEnabled, true );
 	UIApplication app(
-		WindowSettings( 1024, 650, "eepp - TextEdit Hebrew", WindowStyle::Default,
+		WindowSettings( 1024, 650, "eepp - TextEdit Hebrew", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1.5f ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -918,7 +918,7 @@ UTEST( FontRendering, textSetFillColor ) {
 UTEST( FontRendering, UITextTest ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - UI Text Test", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - UI Text Test", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -1162,7 +1162,7 @@ UTEST( FontRendering, TextHardWrap ) {
 
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - Text Hard Wrap", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - Text Hard Wrap", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(), 1 ) );
 		FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -1205,7 +1205,7 @@ UTEST( FontRendering, TextHardWrap ) {
 UTEST( FontRendering, UITextViewWrappedSelection ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - TextView Wrapped Selection", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - TextView Wrapped Selection", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(),
 									 1.5f ) );
@@ -1245,7 +1245,7 @@ UTEST( FontRendering, UITextViewWrappedSelection ) {
 UTEST( FontRendering, UITextViewWrappedSelection2 ) {
 	const auto runTest = [&]() {
 		UIApplication app(
-			WindowSettings( 1024, 650, "eepp - TextView Wrapped Selection", WindowStyle::Default,
+			WindowSettings( 1024, 650, "eepp - TextView Wrapped Selection", VisualTestWindowStyle,
 							WindowBackend::Default, 32, {}, 1, false, true ),
 			UIApplication::Settings( Sys::getProcessPath() + ".." + FileSystem::getOSSlash(),
 									 1.5f ) );

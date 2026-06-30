@@ -101,8 +101,8 @@ static String uiHtmlLineText( const RichText& richText, size_t lineIndex ) {
 
 UTEST( UIHTMLTable, complexLayout ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "HTML Tables Test", WindowStyle::Default, WindowBackend::Default,
-						32, {}, 1, false, true ),
+		WindowSettings( 1024, 653, "HTML Tables Test", VisualTestWindowStyle,
+						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
 
@@ -162,7 +162,7 @@ UTEST( UIHTMLTable, complexLayout ) {
 
 UTEST( UIHTMLTable, complexLayout2 ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 650, "HTML Tables Test 2", WindowStyle::Default,
+		WindowSettings( 1024, 650, "HTML Tables Test 2", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -1241,7 +1241,7 @@ UTEST( UIHTML, InlineBlockVerticalAlignDoesNotInflateOwnTextLine ) {
 
 UTEST( UIHTMLTable, complexLayout3 ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 650, "HTML Tables Test 3", WindowStyle::Default,
+		WindowSettings( 1024, 650, "HTML Tables Test 3", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2479,7 +2479,7 @@ UTEST( UIHTMLDetails, lobstersInlineBlockCachesWidth ) {
 
 UTEST( UIBorder, renderingVariations ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "Border Rendering Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Border Rendering Test", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -2513,7 +2513,7 @@ UTEST( UIBorder, renderingVariations ) {
 
 UTEST( UIBorder, renderingVariations2 ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "Border Rendering Test 2", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Border Rendering Test 2", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -3025,7 +3025,7 @@ UTEST( UIHTML, ContactFormLayout ) {
 
 UTEST( UIBackground, imageAtlasPositioning ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "Background Atlas Test", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
@@ -3140,7 +3140,7 @@ UTEST( UIBackground, inlineSpanColorRendersBehindBackgroundImage ) {
 
 UTEST( UIBackground, imageAtlasPositioningPixelDensity2 ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "Background Atlas Test PD2", WindowStyle::Default,
+		WindowSettings( 1024, 653, "Background Atlas Test PD2", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	EE::Graphics::PixelDensity::setPixelDensity( 2.0f );
@@ -3214,7 +3214,7 @@ UTEST( UIBackground, cssFileRelativeSpriteUrlAndNegativePosition ) {
 
 UTEST( UIBackground, InlineBlockImageSpans ) {
 	auto win = Engine::instance()->createWindow(
-		WindowSettings( 1024, 653, "inline-block image spans", WindowStyle::Default,
+		WindowSettings( 1024, 653, "inline-block image spans", VisualTestWindowStyle,
 						WindowBackend::Default, 32, {}, 1, false, true ),
 		ContextSettings( false, 0, 0, GLv_default, true, false ) );
 	FileSystem::changeWorkingDirectory( Sys::getProcessPath() );
