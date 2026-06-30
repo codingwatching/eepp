@@ -23,6 +23,7 @@
 #include <eepp/ui/uitheme.hpp>
 #include <eepp/ui/uithememanager.hpp>
 #include <set>
+#include <unordered_map>
 
 using namespace EE::UI::Abstract;
 using namespace EE::UI::Models;
@@ -60,6 +61,9 @@ static const char* FONT_PICKER_STYLE = R"css(
 }
 #font_picker .color_button {
 	min-width: 48dp;
+	border-color: var(--button-border);
+	border-radius: var(--button-radius);
+	border-width: var(--border-width);
 }
 #font_picker .options_panel {
 	background-color: var(--list-back);
@@ -108,7 +112,7 @@ static const char* FONT_PICKER_LAYOUT = R"xml(
 		<CheckBox id="strike_through" layout_width="wrap_content" layout_height="wrap_content" layout_gravity="center" margin-left="16dp" text='@string(font_picker_strikeout, "Strikeout")' />
 		<Widget class="separator" layout_width="1dp" layout_height="match_parent" layout_gravity="center" margin-left="16dp" />
 		<TextView id="color_label" layout_width="wrap_content" layout_height="wrap_content" layout_gravity="center" margin-left="16dp" text='@string(font_picker_color, "Color:")' gravity="center" />
-		<PushButton id="color_button" class="color_button" layout_width="48dp" layout_height="wrap_content" layout_gravity="center" margin-left="8dp" />
+		<Widget id="color_button" class="color_button" layout_width="48dp" layout_height="20dp" layout_gravity="center" margin-left="8dp" />
 	</LinearLayout>
 	<TextView id="details_text" class="details" layout_width="match_parent" layout_height="wrap_content" text="" />
 	<LinearLayout class="footer" orientation="horizontal" layout_width="match_parent" layout_height="wrap_content" clip="none">
@@ -151,23 +155,57 @@ static Uint64 loadFontsTaskTag( const UIFontPickerDialog* dialog ) {
 	return reinterpret_cast<Uint64>( dialog );
 }
 
-static std::string styleLabel( const FontDesc& desc ) {
-	std::string label;
-	if ( desc.weight == FontWeight::Normal ) {
-		label = desc.italic ? "Italic" : "Regular";
-	} else {
-		label = Text::fontWeightToString( desc.weight );
-		std::replace( label.begin(), label.end(), '-', ' ' );
-		if ( !label.empty() ) {
-			label[0] = static_cast<char>( std::toupper( label[0] ) );
-			for ( size_t i = 1; i < label.size(); i++ ) {
-				if ( label[i - 1] == ' ' )
-					label[i] = static_cast<char>( std::toupper( label[i] ) );
-			}
-		}
-		if ( desc.italic )
-			label += " Italic";
+static std::string titleCaseStyleName( std::string label ) {
+	std::replace( label.begin(), label.end(), '-', ' ' );
+	for ( size_t i = 0; i < label.size(); i++ ) {
+		if ( i == 0 || label[i - 1] == ' ' )
+			label[i] = static_cast<char>( std::toupper( label[i] ) );
 	}
+	return label;
+}
+
+static std::string stretchLabel( FontStretch stretch ) {
+	switch ( stretch ) {
+		case FontStretch::UltraCondensed:
+			return "Ultra Condensed";
+		case FontStretch::ExtraCondensed:
+			return "Extra Condensed";
+		case FontStretch::Condensed:
+			return "Condensed";
+		case FontStretch::SemiCondensed:
+			return "Semi Condensed";
+		case FontStretch::Normal:
+			return "";
+		case FontStretch::SemiExpanded:
+			return "Semi Expanded";
+		case FontStretch::Expanded:
+			return "Expanded";
+		case FontStretch::ExtraExpanded:
+			return "Extra Expanded";
+		case FontStretch::UltraExpanded:
+			return "Ultra Expanded";
+	}
+	return "";
+}
+
+static std::string styleLabel( const FontDesc& desc ) {
+	std::string label( stretchLabel( desc.stretch ) );
+
+	if ( desc.weight != FontWeight::Normal ) {
+		if ( !label.empty() )
+			label += " ";
+		label += titleCaseStyleName( Text::fontWeightToString( desc.weight ) );
+	}
+
+	if ( desc.italic ) {
+		if ( !label.empty() )
+			label += " ";
+		label += "Italic";
+	}
+
+	if ( label.empty() )
+		label = "Regular";
+
 	if ( desc.faceIndex != 0 )
 		label += " #" + String::toString( desc.faceIndex );
 	return label;
@@ -209,6 +247,8 @@ UIFontPickerDialog::UIFontPickerDialog( Uint32 flags ) : UIWindow(), mFlags( fla
 	loadWidgets();
 	if ( getUISceneNode()->getUIThemeManager()->getDefaultTheme() )
 		setTheme( getUISceneNode()->getUIThemeManager()->getDefaultTheme() );
+	else
+		updateDefaultSelectionColor();
 	selectInitialRows();
 	loadFonts();
 }
@@ -259,6 +299,7 @@ void UIFontPickerDialog::setTheme( UITheme* theme ) {
 	}
 
 	onThemeLoaded();
+	updateDefaultSelectionColor();
 }
 
 void UIFontPickerDialog::loadWidgets() {
@@ -397,16 +438,17 @@ void UIFontPickerDialog::loadFonts() {
 
 void UIFontPickerDialog::setFonts( std::vector<FontDesc> fonts ) {
 	FontDesc selectedFont = mSelection.font;
+	mergeFontManagerFonts( fonts );
 	for ( const auto& font : mFonts ) {
-		auto found = std::find_if( fonts.begin(), fonts.end(), [&]( const auto& desc ) {
-			return desc.path == font.path && desc.faceIndex == font.faceIndex;
-		} );
-		if ( found == fonts.end() )
+		if ( std::find_if( fonts.begin(), fonts.end(), [&]( const FontDesc& desc ) {
+				 return desc.sameFile( font );
+			 } ) == fonts.end() )
 			fonts.push_back( font );
 	}
 
 	mFonts = std::move( fonts );
 	sortFonts();
+	updateFontTags();
 	setFontsLoading( false );
 	updateFamilies();
 	if ( !selectedFont.path.empty() || !selectedFont.family.empty() )
@@ -429,6 +471,42 @@ void UIFontPickerDialog::sortFonts() {
 	} );
 }
 
+void UIFontPickerDialog::mergeFontManagerFonts( std::vector<FontDesc>& fonts ) {
+	FontManager::instance()->each( [&]( const auto& res ) {
+		if ( res.second == nullptr || res.second->getType() != FontType::TTF )
+			return;
+
+		FontDesc desc;
+		if ( !static_cast<FontTrueType*>( res.second )->getFontDesc( desc ) )
+			return;
+
+		mLoadedFontKeys.insert( desc.getFileKey() );
+		if ( std::find_if( fonts.begin(), fonts.end(), [&]( const FontDesc& font ) {
+				 return font.sameFile( desc );
+			 } ) == fonts.end() )
+			fonts.push_back( desc );
+	} );
+}
+
+void UIFontPickerDialog::updateFontTags() {
+	mFontTags.clear();
+
+	std::unordered_map<std::string, Uint32> styleCounts;
+	for ( const auto& font : mFonts )
+		styleCounts[font.getStyleKey()]++;
+
+	for ( const auto& font : mFonts ) {
+		const auto styleCountIt = styleCounts.find( font.getStyleKey() );
+		if ( styleCountIt == styleCounts.end() || styleCountIt->second < 2 )
+			continue;
+		if ( mLoadedFontKeys.find( font.getFileKey() ) == mLoadedFontKeys.end() )
+			continue;
+
+		const std::string fileName( FileSystem::fileNameFromPath( font.path ) );
+		mFontTags[font.getFileKey()] = fileName.empty() ? font.path : fileName;
+	}
+}
+
 void UIFontPickerDialog::setFontsLoading( bool loading ) {
 	mLoadingFonts = loading;
 	if ( mFontContent )
@@ -443,6 +521,11 @@ void UIFontPickerDialog::setFontsLoading( bool loading ) {
 		mButtonOK->setEnabled( !loading );
 	if ( mButtonApply )
 		mButtonApply->setEnabled( !loading && ( mFlags & ShowApplyButton ) != 0 );
+}
+
+void UIFontPickerDialog::updateDefaultSelectionColor() {
+	if ( !mSelectionColorExplicit && mPreviewText )
+		mSelection.color = mPreviewText->getFontColor();
 }
 
 bool UIFontPickerDialog::wantsMonospaceOnly() const {
@@ -488,8 +571,13 @@ void UIFontPickerDialog::updateStyles() {
 		if ( row >= 0 && row < static_cast<Int64>( mFamilies.size() ) ) {
 			const std::string& family = mFamilies[row];
 			for ( const auto& font : mFonts ) {
-				if ( font.family == family && ( !wantsMonospaceOnly() || font.monospace ) )
-					mStyles.push_back( { styleLabel( font ), font } );
+				if ( font.family == family && ( !wantsMonospaceOnly() || font.monospace ) ) {
+					std::string label( styleLabel( font ) );
+					auto tagIt = mFontTags.find( font.getFileKey() );
+					if ( tagIt != mFontTags.end() )
+						label += " [" + tagIt->second + "]";
+					mStyles.push_back( { label, font } );
+				}
 			}
 		}
 	}
@@ -500,13 +588,18 @@ void UIFontPickerDialog::updateStyles() {
 	mUpdating = false;
 
 	if ( !mStyles.empty() ) {
-		selectStyle( mSelection.font );
+		const std::string selectedFamily( mStyles.front().desc.family );
+		if ( selectedFamily == mSelection.font.family )
+			selectStyle( mSelection.font );
+		else
+			selectRegularStyle();
 		if ( mStyleList->getSelection().isEmpty() )
 			mStyleList->setSelection( mStyleModel->index( 0 ) );
 	}
 }
 
-void UIFontPickerDialog::updateSelectionFromLists() {
+void UIFontPickerDialog::updateSelectionFromLists( bool notify ) {
+	UIFontSelection previousSelection = mSelection;
 	if ( !mStyleList->getSelection().isEmpty() ) {
 		const Int64 row = mStyleList->getSelection().first().row();
 		if ( row >= 0 && row < static_cast<Int64>( mStyles.size() ) )
@@ -520,6 +613,15 @@ void UIFontPickerDialog::updateSelectionFromLists() {
 	mSelection.antialiasing = mAntialiasing->isChecked();
 	mSelection.underline = mUnderline->isChecked();
 	mSelection.strikeThrough = mStrikeThrough->isChecked();
+
+	if ( notify && previousSelection != mSelection )
+		emitSelectionChanged();
+}
+
+void UIFontPickerDialog::emitSelectionChanged() {
+	if ( mFontSelectionChangedCb )
+		mFontSelectionChangedCb( mSelection );
+	sendCommonEvent( Event::OnValueChange );
 }
 
 void UIFontPickerDialog::updatePreview() {
@@ -574,13 +676,25 @@ void UIFontPickerDialog::selectFamily( const std::string& family ) {
 	}
 }
 
+void UIFontPickerDialog::selectRegularStyle() {
+	if ( !mStyleModel )
+		return;
+
+	for ( size_t i = 0; i < mStyles.size(); i++ ) {
+		const auto& style = mStyles[i].desc;
+		if ( style.weight == FontWeight::Normal && !style.italic ) {
+			mStyleList->setSelection( mStyleModel->index( i ) );
+			return;
+		}
+	}
+}
+
 void UIFontPickerDialog::selectStyle( const FontDesc& desc ) {
 	if ( desc.family.empty() || !mStyleModel )
 		return;
 	for ( size_t i = 0; i < mStyles.size(); i++ ) {
 		const auto& style = mStyles[i].desc;
-		if ( style.path == desc.path && style.faceIndex == desc.faceIndex &&
-			 style.weight == desc.weight && style.italic == desc.italic ) {
+		if ( style.sameFile( desc ) && style.sameStyle( desc ) ) {
 			mStyleList->setSelection( mStyleModel->index( i ) );
 			return;
 		}
@@ -612,9 +726,11 @@ void UIFontPickerDialog::pickColor() {
 
 	mColorPicker = UIColorPicker::NewWindow( [this]( Color color ) {
 		mSelection.color = color;
+		mSelectionColorExplicit = true;
 		updatePreview();
 	} );
 	mColorPicker->setColor( mSelection.color );
+	mColorPicker->getUIWindow()->center();
 	mColorPickerCloseCb =
 		mColorPicker->getUIWindow()->on( Event::OnWindowClose, [this]( const Event* ) {
 			mColorPicker = nullptr;
@@ -654,7 +770,7 @@ bool UIFontPickerDialog::addExternalFont( const std::string& path, Uint32 faceIn
 		return false;
 
 	auto found = std::find_if( mFonts.begin(), mFonts.end(), [&]( const auto& desc ) {
-		return desc.path == path && desc.faceIndex == faceIndex;
+		return desc.sameFile( path, faceIndex );
 	} );
 
 	if ( found != mFonts.end() ) {
@@ -673,16 +789,16 @@ bool UIFontPickerDialog::addExternalFont( const std::string& path, Uint32 faceIn
 	}
 
 	FontDesc desc;
-	desc.family = font->getInfo().family.empty() ? fontName : font->getInfo().family;
-	desc.path = path;
-	desc.faceIndex = font->getFaceIndex();
-	desc.weight = font->isBold() || font->isBoldItalic() ? FontWeight::Bold : FontWeight::Normal;
-	desc.italic = font->isItalic() || font->isBoldItalic();
-	desc.monospace = font->isIdentifiedAsMonospace();
+	if ( !font->getFontDesc( desc ) ) {
+		eeSAFE_DELETE( font );
+		return false;
+	}
 	eeSAFE_DELETE( font );
 
+	mLoadedFontKeys.insert( desc.getFileKey() );
 	mFonts.push_back( desc );
 	sortFonts();
+	updateFontTags();
 
 	if ( !mSearchInput->getText().empty() )
 		mSearchInput->setText( "" );
@@ -706,11 +822,11 @@ void UIFontPickerDialog::clearBrowseDialog() {
 }
 
 void UIFontPickerDialog::setSelectedFont( const FontDesc& desc ) {
+	UIFontSelection previousSelection = mSelection;
 	FontDesc selection = desc;
 	if ( !desc.path.empty() ) {
-		auto found = std::find_if( mFonts.begin(), mFonts.end(), [&]( const auto& font ) {
-			return font.path == desc.path && font.faceIndex == desc.faceIndex;
-		} );
+		auto found = std::find_if( mFonts.begin(), mFonts.end(),
+								   [&]( const auto& font ) { return font.sameFile( desc ); } );
 		if ( found == mFonts.end() && addExternalFont( desc.path, desc.faceIndex ) )
 			return;
 		if ( found != mFonts.end() )
@@ -723,12 +839,15 @@ void UIFontPickerDialog::setSelectedFont( const FontDesc& desc ) {
 	selectFamily( selection.family );
 	updateStyles();
 	selectStyle( selection );
+	updateSelectionFromLists( false );
+	if ( previousSelection != mSelection )
+		emitSelectionChanged();
 	updatePreview();
 }
 
 void UIFontPickerDialog::setSelectedFont( const std::string& path, Uint32 faceIndex ) {
 	auto found = std::find_if( mFonts.begin(), mFonts.end(), [&]( const auto& desc ) {
-		return desc.path == path && desc.faceIndex == faceIndex;
+		return desc.sameFile( path, faceIndex );
 	} );
 	if ( found != mFonts.end() ) {
 		setSelectedFont( *found );
@@ -744,6 +863,7 @@ const UIFontSelection& UIFontPickerDialog::getSelection() const {
 
 void UIFontPickerDialog::setSelection( const UIFontSelection& selection ) {
 	mSelection = selection;
+	mSelectionColorExplicit = true;
 	if ( mAntialiasing )
 		mAntialiasing->setChecked( selection.antialiasing );
 	if ( mUnderline )
@@ -756,6 +876,10 @@ void UIFontPickerDialog::setSelection( const UIFontSelection& selection ) {
 
 void UIFontPickerDialog::setOnFontPicked( FontPickedCb cb ) {
 	mFontPickedCb = std::move( cb );
+}
+
+void UIFontPickerDialog::setOnFontSelectionChanged( FontSelectionChangedCb cb ) {
+	mFontSelectionChangedCb = std::move( cb );
 }
 
 UIPushButton* UIFontPickerDialog::getButtonOK() const {

@@ -32,6 +32,7 @@ class AutoCompletePlugin;
 class LinterPlugin;
 class FormatterPlugin;
 class DateTimeController;
+class FontPickerController;
 class SettingsMenu;
 class UITreeViewFS;
 
@@ -655,6 +656,8 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	size_t getMenuIconSize() const { return mMenuIconSize; }
 
   protected:
+	friend class FontPickerController;
+
 	std::vector<std::string> mArgs;
 	EE::Window::Window* mWindow{ nullptr };
 	UISceneNode* mUISceneNode{ nullptr };
@@ -750,6 +753,7 @@ class App : public UICodeEditorSplitter::Client, public PluginContextProvider {
 	std::unique_ptr<PluginManager> mPluginManager;
 	std::unique_ptr<SettingsMenu> mSettings;
 	std::unique_ptr<DateTimeController> mDateTimeController;
+	std::unique_ptr<FontPickerController> mFontPickerController;
 	std::string mFileToOpen;
 	UITheme* mTheme{ nullptr };
 	UIStatusBar* mStatusBar{ nullptr };

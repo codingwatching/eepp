@@ -13,6 +13,8 @@ class IOStream;
 
 namespace EE { namespace Graphics {
 
+struct FontDesc;
+
 class EE_API FontTrueType : public Font {
   public:
 	static FontTrueType* New( const std::string& FontName );
@@ -34,6 +36,8 @@ class EE_API FontTrueType : public Font {
 	bool loadFromPack( Pack* pack, std::string filePackPath, Uint32 faceIndex = 0 );
 
 	const Font::Info& getInfo() const;
+
+	bool getFontDesc( FontDesc& desc ) const;
 
 	const Uint32& getFaceIndex() const { return mFaceIndex; }
 

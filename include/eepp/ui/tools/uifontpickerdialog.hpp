@@ -33,11 +33,20 @@ struct UIFontSelection {
 	bool strikeThrough{ false };
 	bool antialiasing{ true };
 	Color color{ Color::White };
+
+	bool operator==( const UIFontSelection& other ) const {
+		return font == other.font && size == other.size && underline == other.underline &&
+			   strikeThrough == other.strikeThrough && antialiasing == other.antialiasing &&
+			   color == other.color;
+	}
+
+	bool operator!=( const UIFontSelection& other ) const { return !( *this == other ); }
 };
 
 class EE_API UIFontPickerDialog : public UIWindow {
   public:
 	using FontPickedCb = std::function<void( const UIFontSelection& )>;
+	using FontSelectionChangedCb = std::function<void( const UIFontSelection& )>;
 
 	enum Flags {
 		MonospaceOnly = 1 << 0,
@@ -73,6 +82,8 @@ class EE_API UIFontPickerDialog : public UIWindow {
 
 	void setOnFontPicked( FontPickedCb cb );
 
+	void setOnFontSelectionChanged( FontSelectionChangedCb cb );
+
 	UIPushButton* getButtonOK() const;
 
 	UIPushButton* getButtonCancel() const;
@@ -100,10 +111,13 @@ class EE_API UIFontPickerDialog : public UIWindow {
 	KeyBindings::Shortcut mCloseShortcut{ KEY_UNKNOWN };
 	UIFontSelection mSelection;
 	FontPickedCb mFontPickedCb;
+	FontSelectionChangedCb mFontSelectionChangedCb;
 	std::vector<FontDesc> mFonts;
 	std::vector<std::string> mFamilies;
 	std::vector<FontStyleEntry> mStyles;
 	std::vector<Uint32> mSizes;
+	UnorderedSet<std::string> mLoadedFontKeys;
+	UnorderedMap<std::string, std::string> mFontTags;
 	std::shared_ptr<Models::Model> mFamilyModel;
 	std::shared_ptr<Models::Model> mStyleModel;
 	std::shared_ptr<Models::Model> mSizeModel;
@@ -125,13 +139,14 @@ class EE_API UIFontPickerDialog : public UIWindow {
 	UICheckBox* mAntialiasing{ nullptr };
 	UICheckBox* mUnderline{ nullptr };
 	UICheckBox* mStrikeThrough{ nullptr };
-	UIPushButton* mColorButton{ nullptr };
+	UIWidget* mColorButton{ nullptr };
 	UIPushButton* mButtonOK{ nullptr };
 	UIPushButton* mButtonCancel{ nullptr };
 	UIPushButton* mButtonApply{ nullptr };
 	UIPushButton* mButtonBrowse{ nullptr };
 	bool mUpdating{ false };
 	bool mLoadingFonts{ false };
+	bool mSelectionColorExplicit{ false };
 	Uint64 mLoadFontsTaskId{ 0 };
 
 	struct LoadFontsRequest {
@@ -156,19 +171,29 @@ class EE_API UIFontPickerDialog : public UIWindow {
 
 	void sortFonts();
 
+	void mergeFontManagerFonts( std::vector<FontDesc>& fonts );
+
+	void updateFontTags();
+
 	void setFontsLoading( bool loading );
+
+	void updateDefaultSelectionColor();
 
 	void updateFamilies();
 
 	void updateStyles();
 
-	void updateSelectionFromLists();
+	void updateSelectionFromLists( bool notify = true );
+
+	void emitSelectionChanged();
 
 	void updatePreview();
 
 	void selectInitialRows();
 
 	void selectFamily( const std::string& family );
+
+	void selectRegularStyle();
 
 	void selectStyle( const FontDesc& desc );
 
